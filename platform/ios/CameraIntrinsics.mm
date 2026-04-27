@@ -1,0 +1,48 @@
+#import <AVFoundation/AVFoundation.h>
+#include "CameraIntrinsics.h"
+#include <cmath>
+
+CameraIntrinsicsData readCameraIntrinsics(int captureWidth, int captureHeight)
+{
+    CameraIntrinsicsData result;
+    result.width  = captureWidth;
+    result.height = captureHeight;
+    result.cx     = captureWidth  / 2.0;
+    result.cy     = captureHeight / 2.0;
+
+    // Locate the back wide-angle camera
+    AVCaptureDevice *device = nil;
+    if (@available(iOS 13.0, *)) {
+        device = [AVCaptureDevice
+            defaultDeviceWithDeviceType:AVCaptureDeviceTypeBuiltInWideAngleCamera
+                              mediaType:AVMediaTypeVideo
+                               position:AVCaptureDevicePositionBack];
+    }
+    if (!device)
+        device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+
+    if (!device) {
+        // Conservative fallback: iPhone wide-angle is ~69° HFOV
+        double hFovRad = 69.0 * M_PI / 180.0;
+        result.fx = result.fy = (captureWidth / 2.0) / std::tan(hFovRad / 2.0);
+        result.valid = false;
+        return result;
+    }
+
+    // videoFieldOfView is the horizontal FOV in degrees for the active format.
+    // It is set once the capture session has started.
+    float hFovDeg = device.activeFormat.videoFieldOfView;
+    if (hFovDeg < 1.0f) {
+        // Session not started yet or format not set — use fallback
+        double hFovRad = 69.0 * M_PI / 180.0;
+        result.fx = result.fy = (captureWidth / 2.0) / std::tan(hFovRad / 2.0);
+        result.valid = false;
+        return result;
+    }
+
+    double hFovRad = hFovDeg * M_PI / 180.0;
+    result.fx    = (captureWidth / 2.0) / std::tan(hFovRad / 2.0);
+    result.fy    = result.fx; // iPhone pixels are square
+    result.valid = true;
+    return result;
+}

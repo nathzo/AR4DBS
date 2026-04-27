@@ -1,0 +1,13 @@
+{
+    "comment": "Replace with your camera's real values from calibrate_camera.py",
+    "image_width":  1280,
+    "image_height": 720,
+    "fx": 900.0,
+    "fy": 900.0,
+    "cx": 640.0,
+    "cy": 360.0,
+    "k1": 0.0,
+    "k2": 0.0,
+    "p1": 0.0,
+    "p2": 0.0
+}

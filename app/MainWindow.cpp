@@ -1,0 +1,242 @@
+#include "MainWindow.h"
+#include "AppController.h"
+#include "core/rendering/GLWidget.h"
+
+#include <QMessageBox>
+#include <QCoreApplication>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QCloseEvent>
+#include <cmath>
+
+// Two test targets centred between the tags (X=0), 10 cm above the tag plane (Z=0.10 m).
+// Left at X=-5 cm, right at X=+5 cm; both tilted slightly outward so the
+// trajectories are visually distinct when switching with "Cible suivante".
+static SurgicalPlan defaultTestPlan()
+{
+    SurgicalPlan p;
+
+    p.left.x_mm     = -50;   // 5 cm left of centre
+    p.left.y_mm     =   0;
+    p.left.z_mm     = 100;   // 10 cm above tag plane
+    p.left.arc_deg  =  20;   // 20° tilt from vertical
+    p.left.ring_deg = 270;   // tilted toward the left tag
+    p.left.valid    = true;
+
+    p.right.x_mm     =  50;   // 5 cm right of centre
+    p.right.y_mm     =   0;
+    p.right.z_mm     = 100;
+    p.right.arc_deg  =  20;
+    p.right.ring_deg =  90;   // tilted toward the right tag
+    p.right.valid    = true;
+
+    return p;
+}
+
+#ifdef Q_OS_IOS
+#  include "platform/ios/IOSCamera.h"
+#else
+#  include "platform/desktop/DesktopCamera.h"
+#endif
+
+#ifdef FEATURE_PLAN_SCANNER
+#  include <QStackedWidget>
+#  include "app/StartScreen.h"
+#  include "app/ScanScreen.h"
+#  include "app/ConfirmPlanDialog.h"
+#endif
+
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent)
+{
+    // ── Controller ────────────────────────────────────────────────────────────
+    m_controller = new AppController(this);
+
+    const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
+
+#ifdef FEATURE_PLAN_SCANNER
+    // With the scanner: init without a plan path (plan comes from the wizard)
+    if (!m_controller->init(":/resources/calibration.json",
+                            ":/resources/tag_config.json",
+                            /*planPath=*/QString(),
+                            depthModel)) {
+        QMessageBox::critical(this, "Init failed",
+            "Could not initialise. Check resources/ folder.");
+        return;
+    }
+#else
+    // Without the scanner: load the fallback JSON plan directly
+    if (!m_controller->init(":/resources/calibration.json",
+                            ":/resources/tag_config.json",
+                            ":/resources/surgical_plan.json",
+                            depthModel)) {
+        QMessageBox::critical(this, "Init failed",
+            "Could not initialise. Check resources/ folder.");
+        return;
+    }
+#endif
+
+    // ── AR camera (used in the AR phase) ─────────────────────────────────────
+#ifdef Q_OS_IOS
+    m_arCamera = new IOSCamera(1280, 720, this);
+    connect(m_arCamera, &IOSCamera::calibrationReady,
+            m_controller, &AppController::setCalibration);
+    connect(m_arCamera, &IOSCamera::frameReady,
+            m_controller, &AppController::onNewFrame);
+#else
+    m_arCamera = new DesktopCamera(0, this);
+    connect(m_arCamera, &DesktopCamera::frameReady,
+            m_controller, &AppController::onNewFrame);
+#endif
+
+    // ── AR display widget + "Next target" button ─────────────────────────────
+    auto *arContainer = new QWidget(this);
+    auto *arLayout    = new QVBoxLayout(arContainer);
+    arLayout->setContentsMargins(0, 0, 0, 0);
+    arLayout->setSpacing(0);
+
+    m_glWidget = new GLWidget(arContainer);
+    arLayout->addWidget(m_glWidget, 1);
+
+    auto arBtnStyle = [](const char *bg, const char *fg = "white") {
+        return QString(
+            "QPushButton { background:%1; color:%2; border:none;"
+            "  padding:14px; font-size:14pt; font-weight:bold; }"
+            "QPushButton:pressed { opacity:0.8; }"
+        ).arg(bg, fg);
+    };
+
+    // Button row at the bottom of the AR view
+    auto *arBtnRow = new QWidget(arContainer);
+    arBtnRow->setStyleSheet("background: #1a1b1d;");
+    auto *arBtnLayout = new QHBoxLayout(arBtnRow);
+    arBtnLayout->setContentsMargins(0, 0, 0, 0);
+    arBtnLayout->setSpacing(0);
+
+    m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
+    m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE
+    m_btnEditPlan->setVisible(false);
+
+    m_btnNextTarget = new QPushButton("Cible suivante →", arBtnRow);
+    m_btnNextTarget->setStyleSheet(arBtnStyle("#c45255")); // IMPULSE_RED
+    m_btnNextTarget->setVisible(false);
+
+    arBtnLayout->addWidget(m_btnEditPlan,   1);
+    arBtnLayout->addWidget(m_btnNextTarget, 1);
+    arLayout->addWidget(arBtnRow);
+
+    connect(m_controller, &AppController::frameReady,
+            m_glWidget,   &GLWidget::setFrame);
+    connect(m_controller, &AppController::targetChanged,
+            this, [this](int /*index*/, int total) {
+        m_btnNextTarget->setVisible(total > 1);
+    });
+    connect(m_btnNextTarget, &QPushButton::clicked,
+            m_controller,    &AppController::nextTarget);
+    connect(m_btnEditPlan, &QPushButton::clicked,
+            this, [this]() {
+#ifdef FEATURE_PLAN_SCANNER
+        editPlan();
+#endif
+    });
+
+#ifdef FEATURE_PLAN_SCANNER
+    // ── Wizard flow ───────────────────────────────────────────────────────────
+    m_stack       = new QStackedWidget(this);
+    m_startScreen = new StartScreen(this);
+    m_scanScreen  = new ScanScreen(this);
+
+    m_stack->addWidget(m_startScreen);  // index 0
+    m_stack->addWidget(m_scanScreen);   // index 1
+    m_stack->addWidget(arContainer);    // index 2
+    m_stack->setCurrentIndex(0);
+    setCentralWidget(m_stack);
+
+    // Start screen → scan
+    connect(m_startScreen, &StartScreen::newSurgeryRequested, this, [this]() {
+        m_stack->setCurrentIndex(1);
+        m_scanScreen->startCamera();
+    });
+
+    // Start screen → direct AR (testing shortcut — loads default test targets)
+    connect(m_startScreen, &StartScreen::directARRequested, this, [this]() {
+        m_currentPlan = defaultTestPlan();
+        m_controller->setSurgicalPlan(m_currentPlan);
+        m_btnEditPlan->setVisible(true);
+        startAR();
+    });
+
+    // Scan screen → confirm dialog
+    connect(m_scanScreen, &ScanScreen::planDetected,
+            this, &MainWindow::onPlanDetected);
+
+    // Scan screen → back to start
+    connect(m_scanScreen, &ScanScreen::cancelled, this, [this]() {
+        m_scanScreen->stopCamera();
+        m_stack->setCurrentIndex(0);
+    });
+
+#else
+    // No wizard: go straight to AR with default test targets
+    m_controller->setSurgicalPlan(defaultTestPlan());
+    setCentralWidget(arContainer);
+    m_arCamera->start();
+#endif
+}
+
+MainWindow::~MainWindow() {}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    // Stop all cameras and disconnect signals before Qt destroys child widgets.
+    // This prevents timer callbacks from firing into half-destroyed objects.
+    if (m_arCamera) {
+        m_arCamera->disconnect();
+        m_arCamera->stop();
+    }
+#ifdef FEATURE_PLAN_SCANNER
+    if (m_scanScreen) m_scanScreen->stopCamera();
+#endif
+    if (m_controller) m_controller->disconnect();
+    event->accept();
+}
+
+#ifdef FEATURE_PLAN_SCANNER
+void MainWindow::startAR()
+{
+    m_stack->setCurrentIndex(2);
+    m_arCamera->start();
+}
+
+void MainWindow::onPlanDetected(const SurgicalPlan &detected)
+{
+    m_scanScreen->stopCamera();
+
+    ConfirmPlanDialog dlg(detected, this);
+    if (dlg.exec() != QDialog::Accepted) {
+        // User cancelled — go back to scan screen
+        m_stack->setCurrentIndex(1);
+        m_scanScreen->startCamera();
+        return;
+    }
+
+    m_currentPlan = dlg.plan();
+    m_controller->setSurgicalPlan(m_currentPlan);
+    m_btnEditPlan->setVisible(true);
+    startAR();
+}
+
+void MainWindow::editPlan()
+{
+    m_arCamera->stop();
+
+    ConfirmPlanDialog dlg(m_currentPlan, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        m_currentPlan = dlg.plan();
+        m_controller->setSurgicalPlan(m_currentPlan);
+    }
+
+    m_arCamera->start();
+}
+#endif

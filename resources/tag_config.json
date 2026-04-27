@@ -1,0 +1,29 @@
+{
+    "comment": "Positions of each tag in the frame coordinate system (origin = frame centre).",
+    "dictionary":    "DICT_4X4_50",
+    "marker_size_m": 0.05,
+    "tags": [
+        {
+            "id": 0,
+            "name": "left",
+            "comment": "Tag 0 is on the left side of the frame — update tx/ty/tz/rx/ry/rz to match your physical setup",
+            "tx_m":   -0.10,
+            "ty_m":    0.00,
+            "tz_m":    0.00,
+            "rx_rad":  0.00,
+            "ry_rad":  0.00,
+            "rz_rad":  0.00
+        },
+        {
+            "id": 1,
+            "name": "right",
+            "comment": "Tag 1 is on the right side of the frame",
+            "tx_m":    0.10,
+            "ty_m":    0.00,
+            "tz_m":    0.00,
+            "rx_rad":  0.00,
+            "ry_rad":  0.00,
+            "rz_rad":  0.00
+        }
+    ]
+}

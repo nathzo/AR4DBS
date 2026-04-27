@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>DBS AR</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>DBS AR</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>ch.epfl.neurorestore.dbsar</string>
+
+    <key>CFBundleVersion</key>
+    <string>@PROJECT_VERSION@</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>@PROJECT_VERSION@</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>camera-flash</string>
+    </array>
+
+    <!-- Camera permission — required or the app is rejected by the OS -->
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is required to overlay the surgical plan on the patient.</string>
+
+    <!-- Support all orientations so the surgeon can hold the phone any way -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- Prevent screen from sleeping during a procedure -->
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+</dict>
+</plist>
