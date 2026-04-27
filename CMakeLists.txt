@@ -202,6 +202,14 @@ qt_add_resources(DBSAR "assets"
         resources/surgical_plan.json
 )
 
+# On iOS the ONNX model must be a real file in the bundle (not a Qt resource)
+# because ONNX Runtime opens it with fopen().  On desktop it sits next to the exe.
+if(IOS)
+    set_source_files_properties(resources/model-small.onnx PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(DBSAR PRIVATE resources/model-small.onnx)
+endif()
+
 # ─── Include paths ────────────────────────────────────────────────────────────
 target_include_directories(DBSAR PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -221,6 +229,9 @@ target_link_libraries(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>
     $<$<BOOL:${onnxruntime_FOUND}>:${ONNXRUNTIME_TARGET}>
     $<$<BOOL:${Tesseract_FOUND}>:Tesseract::libtesseract>
+    # iOS system frameworks required by ONNX Runtime CoreML provider
+    $<$<PLATFORM_ID:iOS>:-framework CoreML>
+    $<$<PLATFORM_ID:iOS>:-framework Foundation>
 )
 
 # ─── iOS bundle settings ──────────────────────────────────────────────────────
