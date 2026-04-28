@@ -46,12 +46,15 @@ jobs:
           unzip -q ort-ios.zip -d $HOME/onnxruntime-ios
 
       - name: Configure CMake
+        env:
+          QT_IOS_PATH: ${{ steps.install-qt-ios.outputs.qt-path }}
         run: |
+          echo "Qt iOS path: $QT_IOS_PATH"
           cmake -S . -B build-ios \
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
-            -DCMAKE_PREFIX_PATH="${{ steps.install-qt-ios.outputs.qt-path }}" \
+            -DCMAKE_PREFIX_PATH="$QT_IOS_PATH" \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
             -DFEATURE_PLAN_SCANNER=ON
