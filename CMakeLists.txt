@@ -49,7 +49,9 @@ if(OPENCV_FRAMEWORK)
             "  ${OPENCV_FRAMEWORK}\n"
             "Make sure the path points to the folder that *contains* opencv2.framework.")
     endif()
-    set(OpenCV_INCLUDE_DIRS "${OPENCV_FRAMEWORK}/opencv2.framework/Headers")
+    # iOS frameworks have flat headers: Headers/core.hpp (not Headers/opencv2/core.hpp).
+    # Use -F (framework search path) so <opencv2/foo.hpp> resolves via the framework mechanism.
+    set(OpenCV_INCLUDE_DIRS "")
     set(OpenCV_LIBS          "-framework opencv2")
     message(STATUS "OpenCV framework: ${OPENCV_FRAMEWORK}/opencv2.framework")
 elseif(IOS)
@@ -237,9 +239,10 @@ target_include_directories(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_INCLUDE_DIRS}>
 )
 
-# Tell the linker where to find opencv2.framework when using the framework path
+# Tell both the compiler and linker where to find opencv2.framework
 if(OPENCV_FRAMEWORK)
-    target_link_directories(DBSAR PRIVATE "${OPENCV_FRAMEWORK}")
+    target_compile_options(DBSAR PRIVATE "-F${OPENCV_FRAMEWORK}")
+    target_link_options(DBSAR PRIVATE "-F${OPENCV_FRAMEWORK}")
 endif()
 
 # ─── Link libraries ───────────────────────────────────────────────────────────
