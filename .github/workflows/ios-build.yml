@@ -24,6 +24,7 @@ jobs:
           cache: true
 
       - name: Install Qt (iOS)
+        id: install-qt-ios
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.11.0'
@@ -50,6 +51,7 @@ jobs:
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+            -DCMAKE_PREFIX_PATH="${{ steps.install-qt-ios.outputs.qt-path }}" \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
             -DFEATURE_PLAN_SCANNER=ON
