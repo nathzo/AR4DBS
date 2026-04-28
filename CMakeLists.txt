@@ -31,8 +31,11 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     Multimedia
     MultimediaWidgets
-    Concurrent
 )
+# QtConcurrent is part of qtbase on desktop; on iOS the kit may omit it
+if(NOT IOS)
+    find_package(Qt6 REQUIRED COMPONENTS Concurrent)
+endif()
 
 # ─── OpenCV (ArUco / AprilTag detection) ─────────────────────────────────────
 # On iOS and macOS we can use the pre-built opencv2.framework directly.
@@ -246,7 +249,7 @@ target_link_libraries(DBSAR PRIVATE
     Qt6::Widgets
     Qt6::Multimedia
     Qt6::MultimediaWidgets
-    Qt6::Concurrent
+    $<$<NOT:$<PLATFORM_ID:iOS>>:Qt6::Concurrent>
     ${OpenCV_LIBS}
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>
     $<$<BOOL:${onnxruntime_FOUND}>:${ONNXRUNTIME_TARGET}>
