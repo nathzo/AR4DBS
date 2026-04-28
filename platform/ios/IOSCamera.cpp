@@ -2,6 +2,7 @@
 #include "CameraIntrinsics.h"
 
 #include <QCamera>
+#include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QVideoSink>
 #include <QVideoFrame>
@@ -11,11 +12,12 @@
 #include <opencv2/imgproc.hpp>
 
 struct IOSCamera::Impl {
-    QCamera    *camera        = nullptr;
-    QVideoSink *sink          = nullptr;
-    int         captureWidth  = 1280;
-    int         captureHeight = 720;
-    bool        calibEmitted  = false;
+    QCamera              *camera        = nullptr;
+    QVideoSink           *sink          = nullptr;
+    QMediaCaptureSession  session;
+    int                   captureWidth  = 1280;
+    int                   captureHeight = 720;
+    bool                  calibEmitted  = false;
 };
 
 IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
@@ -39,7 +41,8 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
         : new QCamera(backDevice, this);
 
     m_impl->sink = new QVideoSink(this);
-    m_impl->camera->setVideoSink(m_impl->sink);
+    m_impl->session.setCamera(m_impl->camera);
+    m_impl->session.setVideoSink(m_impl->sink);
 
     connect(m_impl->sink, &QVideoSink::videoFrameChanged,
             this, [this](const QVideoFrame &frame) {
