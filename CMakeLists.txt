@@ -229,7 +229,7 @@ qt_add_resources(DBSAR "assets"
 # iOS kit download, so the linker can't resolve sws_* symbols.
 if(IOS)
     qt_import_plugins(DBSAR
-        INCLUDE_BY_TYPE mediabackend Qt6::AVFMediaPlugin
+        EXCLUDE Qt6::FFmpegMediaPlugin
     )
 endif()
 
@@ -270,8 +270,14 @@ target_link_libraries(DBSAR PRIVATE
 
 # iOS system frameworks — use find_library so the linker gets a proper .framework path
 if(IOS)
-    find_library(FW_FOUNDATION  Foundation REQUIRED)
-    target_link_libraries(DBSAR PRIVATE ${FW_FOUNDATION})
+    find_library(FW_FOUNDATION   Foundation   REQUIRED)
+    find_library(FW_AVFOUNDATION AVFoundation REQUIRED)
+    find_library(FW_UIKIT        UIKit        REQUIRED)
+    target_link_libraries(DBSAR PRIVATE
+        ${FW_FOUNDATION}
+        ${FW_AVFOUNDATION}
+        ${FW_UIKIT}
+    )
     if(onnxruntime_FOUND)
         find_library(FW_COREML CoreML REQUIRED)
         target_link_libraries(DBSAR PRIVATE ${FW_COREML})
@@ -293,12 +299,8 @@ if(IOS)
         XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY              "iPhone Developer"
         XCODE_ATTRIBUTE_ENABLE_BITCODE                  "NO"   # ONNX Runtime has no bitcode
 
-        # Camera permission — required for App Store submission
-        XCODE_ATTRIBUTE_INFOPLIST_KEY_NSCameraUsageDescription
-            "Camera access is required to overlay the surgical plan on the patient."
-
         # Tell Xcode where to find opencv2.framework
         XCODE_ATTRIBUTE_FRAMEWORK_SEARCH_PATHS
-            "${OPENCV_IOS_FRAMEWORK} $(inherited)"
+            "${OPENCV_FRAMEWORK} $(inherited)"
     )
 endif()
