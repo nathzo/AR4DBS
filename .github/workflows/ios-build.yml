@@ -13,10 +13,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install Qt (macOS desktop — required by iOS kit)
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.11.0'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          modules: 'qtmultimedia'
+          cache: true
+
       - name: Install Qt (iOS)
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.8.0'
+          version: '6.11.0'
           host: 'mac'
           target: 'ios'
           modules: 'qtmultimedia'
