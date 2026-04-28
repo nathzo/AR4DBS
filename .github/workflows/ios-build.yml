@@ -1,0 +1,69 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # lets you trigger manually from the GitHub website
+
+jobs:
+  build-ios:
+    runs-on: macos-15   # latest macOS with Xcode 17, supports iOS 26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Qt (iOS)
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.11.0'
+          host: 'mac'
+          target: 'ios'
+          modules: 'qtmultimedia qtconcurrent'
+          cache: true
+
+      - name: Download OpenCV iOS framework
+        run: |
+          curl -L https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-ios-framework.zip \
+               -o opencv-ios.zip
+          unzip -q opencv-ios.zip -d $HOME/opencv-ios
+
+      - name: Download ONNX Runtime iOS
+        run: |
+          curl -L https://onnxruntimepackages.z14.web.core.windows.net/pod-archive-onnxruntime-mobile-c-1.18.0.zip \
+               -o ort-ios.zip
+          unzip -q ort-ios.zip -d $HOME/onnxruntime-ios
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build-ios \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+            -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
+            -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
+            -DFEATURE_PLAN_SCANNER=ON
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project build-ios/DBSAR.xcodeproj \
+            -scheme DBSAR \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build-ios/Release-iphoneos/DBSAR.app Payload/
+          zip -r DBSAR.ipa Payload/
+          rm -rf Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DBSAR-ios
+          path: DBSAR.ipa
+          retention-days: 7

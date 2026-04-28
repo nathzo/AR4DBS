@@ -72,35 +72,35 @@ endif()
 
 # ─── ONNX Runtime (monocular depth inference) ────────────────────────────────
 # iOS: depth is disabled — ONNX Runtime is only available via CocoaPods on iOS,
-# which conflicts with CMake.  The AR overlay works fine without occlusion masking.
-# Desktop: set ONNXRUNTIME_ROOT to a pre-built v1.18.1 folder to enable depth.
-if(IOS)
-    set(ONNXRUNTIME_ROOT "" CACHE PATH "Unused on iOS" FORCE)
-    set(onnxruntime_FOUND FALSE)
-    set(ONNXRUNTIME_TARGET "")
-    message(STATUS "ONNX Runtime: disabled on iOS (depth estimation not available)")
-endif()
+# Desktop: set ONNXRUNTIME_ROOT to a pre-built folder to enable depth.
+# iOS:     set ONNXRUNTIME_ROOT to the extracted pod-archive-onnxruntime-mobile-c-x.x.x folder.
+#          Expected layout (matches the CocoaPods pod archive):
+#            <ONNXRUNTIME_ROOT>/Headers/                      ← C API headers
+#            <ONNXRUNTIME_ROOT>/onnxruntime.xcframework/
+#              ios-arm64/onnxruntime.framework/onnxruntime    ← arm64 device binary
 
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Root of a pre-built ONNX Runtime (include/ and lib/)")
 
 if(ONNXRUNTIME_ROOT)
     if(IOS)
-        # iOS: static library extracted from the XCFramework arm64-iphoneos slice
+        # iOS CocoaPod layout: framework binary + top-level Headers/
         add_library(_onnxruntime_manual STATIC IMPORTED)
         set_target_properties(_onnxruntime_manual PROPERTIES
-            IMPORTED_LOCATION "${ONNXRUNTIME_ROOT}/lib/libonnxruntime.a")
+            IMPORTED_LOCATION
+                "${ONNXRUNTIME_ROOT}/onnxruntime.xcframework/ios-arm64/onnxruntime.framework/onnxruntime")
+        target_include_directories(_onnxruntime_manual INTERFACE "${ONNXRUNTIME_ROOT}/Headers")
     elseif(WIN32)
         add_library(_onnxruntime_manual SHARED IMPORTED)
         set_target_properties(_onnxruntime_manual PROPERTIES
             IMPORTED_LOCATION "${ONNXRUNTIME_ROOT}/lib/onnxruntime.dll"
             IMPORTED_IMPLIB   "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
+        target_include_directories(_onnxruntime_manual INTERFACE "${ONNXRUNTIME_ROOT}/include")
     else()
         # macOS host build
         add_library(_onnxruntime_manual SHARED IMPORTED)
         set_target_properties(_onnxruntime_manual PROPERTIES
             IMPORTED_LOCATION "${ONNXRUNTIME_ROOT}/lib/libonnxruntime.dylib")
     endif()
-    target_include_directories(_onnxruntime_manual INTERFACE "${ONNXRUNTIME_ROOT}/include")
     set(ONNXRUNTIME_TARGET _onnxruntime_manual)
     set(onnxruntime_FOUND TRUE)
     message(STATUS "ONNX Runtime: using pre-built from ${ONNXRUNTIME_ROOT}")
@@ -251,8 +251,9 @@ target_link_libraries(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>
     $<$<BOOL:${onnxruntime_FOUND}>:${ONNXRUNTIME_TARGET}>
     $<$<BOOL:${Tesseract_FOUND}>:Tesseract::libtesseract>
-    # iOS system frameworks (add CoreML here if ONNX Runtime is enabled later)
+    # iOS system frameworks
     $<$<PLATFORM_ID:iOS>:-framework Foundation>
+    $<$<AND:$<PLATFORM_ID:iOS>,$<BOOL:${onnxruntime_FOUND}>>:-framework CoreML>
 )
 
 # ─── iOS bundle settings ──────────────────────────────────────────────────────
