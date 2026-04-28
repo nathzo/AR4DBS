@@ -7,7 +7,7 @@ endif()
 
 # iOS deployment target must be set before project() on Apple platforms
 if(IOS)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0" CACHE STRING "" FORCE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "17.0" CACHE STRING "" FORCE)
 endif()
 
 project(DBSAR VERSION 0.1 LANGUAGES CXX)
@@ -228,9 +228,22 @@ qt_add_resources(DBSAR "assets"
 # FFmpeg is the default in Qt 6.x but its static libs are not bundled in the
 # iOS kit download, so the linker can't resolve sws_* symbols.
 if(IOS)
+    # Exclude FFmpeg plugin — Qt6::QFFmpegMediaPlugin is the canonical CMake target name.
+    # If excluded successfully, AVFoundation backend is used instead.
+    # Also link Qt's bundled FFmpeg as a safety net in case the plugin is pulled in anyway.
     qt_import_plugins(DBSAR
-        EXCLUDE Qt6::FFmpegMediaPlugin
+        EXCLUDE Qt6::QFFmpegMediaPlugin
     )
+    # Qt6_DIR = .../ios/lib/cmake/Qt6  →  ../../.. = .../ios/lib
+    get_filename_component(_qt_lib_dir "${Qt6_DIR}/../../.." ABSOLUTE)
+    find_library(QT_BUNDLED_FFMPEG Qt6BundledFFmpeg
+        PATHS "${_qt_lib_dir}" NO_DEFAULT_PATH QUIET)
+    if(QT_BUNDLED_FFMPEG)
+        target_link_libraries(DBSAR PRIVATE ${QT_BUNDLED_FFMPEG})
+        message(STATUS "Qt bundled FFmpeg: ${QT_BUNDLED_FFMPEG}")
+    else()
+        message(STATUS "Qt6BundledFFmpeg not found in ${_qt_lib_dir} — FFmpeg plugin excluded")
+    endif()
 endif()
 
 # On iOS the ONNX model must be a real file in the bundle (not a Qt resource)
@@ -293,7 +306,7 @@ if(IOS)
         MACOSX_BUNDLE_INFO_PLIST        "${CMAKE_SOURCE_DIR}/platform/ios/Info.plist.in"
 
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY          "1"    # 1 = iPhone, 1,2 = iPhone+iPad
-        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET      "16.0"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET      "17.0"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER       "ch.epfl.neurorestore.dbsar"
         XCODE_ATTRIBUTE_DEVELOPMENT_TEAM                "53M8KPV935"     # ← paste your 10-char Team ID here
         XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY              "iPhone Developer"
