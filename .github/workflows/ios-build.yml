@@ -14,7 +14,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Qt (macOS desktop — required by iOS kit)
-        id: install-qt-desktop
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.11.0'
@@ -22,16 +21,17 @@ jobs:
           target: 'desktop'
           arch: 'clang_64'
           modules: 'qtmultimedia'
+          dir: '${{ github.workspace }}/qt'
           cache: true
 
       - name: Install Qt (iOS)
-        id: install-qt-ios
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.11.0'
           host: 'mac'
           target: 'ios'
           modules: 'qtmultimedia'
+          dir: '${{ github.workspace }}/qt'
           cache: true
 
       - name: Download OpenCV iOS framework
@@ -47,18 +47,18 @@ jobs:
           unzip -q ort-ios.zip -d $HOME/onnxruntime-ios
 
       - name: Configure CMake
-        env:
-          QT_IOS_PATH: ${{ steps.install-qt-ios.outputs.qt-path }}
-          QT_HOST_PATH: ${{ steps.install-qt-desktop.outputs.qt-path }}
         run: |
-          echo "Qt iOS  path: $QT_IOS_PATH"
-          echo "Qt host path: $QT_HOST_PATH"
+          QT_IOS="${{ github.workspace }}/qt/Qt/6.11.0/ios"
+          QT_HOST="${{ github.workspace }}/qt/Qt/6.11.0/macos"
+          echo "Qt iOS  path: $QT_IOS"
+          echo "Qt host path: $QT_HOST"
+          ls "$QT_IOS/lib/cmake/Qt6/" | head -5 || echo "iOS cmake dir not found"
           cmake -S . -B build-ios \
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
-            -DCMAKE_PREFIX_PATH="$QT_IOS_PATH" \
-            -DQT_HOST_PATH="$QT_HOST_PATH" \
+            -DCMAKE_PREFIX_PATH="$QT_IOS" \
+            -DQT_HOST_PATH="$QT_HOST" \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
             -DFEATURE_PLAN_SCANNER=ON
