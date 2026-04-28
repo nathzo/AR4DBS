@@ -16,10 +16,10 @@ jobs:
       - name: Install Qt (iOS)
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.11.0'
+          version: '6.8.0'
           host: 'mac'
           target: 'ios'
-          modules: 'qtmultimedia qtconcurrent'
+          modules: 'qtmultimedia'
           cache: true
 
       - name: Download OpenCV iOS framework
