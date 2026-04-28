@@ -35,22 +35,31 @@ find_package(Qt6 REQUIRED COMPONENTS
 )
 
 # ─── OpenCV (ArUco / AprilTag detection) ─────────────────────────────────────
-# On iOS we use the official pre-built opencv2.framework; on desktop find_package works.
-if(IOS)
-    # Set OPENCV_IOS_FRAMEWORK to the *directory that contains* opencv2.framework, e.g.:
-    #   ~/dev/opencv-ios     (so the full path is ~/dev/opencv-ios/opencv2.framework)
-    set(OPENCV_IOS_FRAMEWORK "" CACHE PATH "Directory containing opencv2.framework for iOS")
-    if(NOT OPENCV_IOS_FRAMEWORK)
-        message(FATAL_ERROR "OPENCV_IOS_FRAMEWORK must be set when building for iOS.\n"
-            "Download opencv-4.x.x-ios-framework.zip from github.com/opencv/opencv/releases\n"
-            "and set OPENCV_IOS_FRAMEWORK to the folder that contains opencv2.framework.")
+# On iOS and macOS we can use the pre-built opencv2.framework directly.
+# Set OPENCV_FRAMEWORK to the directory that *contains* opencv2.framework.
+# Leave it empty on desktop to fall back to a system install (e.g. Homebrew).
+set(OPENCV_FRAMEWORK "" CACHE PATH "Directory containing opencv2.framework (iOS and macOS)")
+
+if(OPENCV_FRAMEWORK)
+    if(NOT EXISTS "${OPENCV_FRAMEWORK}/opencv2.framework")
+        message(FATAL_ERROR "OPENCV_FRAMEWORK is set but opencv2.framework was not found in:\n"
+            "  ${OPENCV_FRAMEWORK}\n"
+            "Make sure the path points to the folder that *contains* opencv2.framework.")
     endif()
-    # Expose headers and remember search path for Xcode
-    set(OpenCV_INCLUDE_DIRS "${OPENCV_IOS_FRAMEWORK}/opencv2.framework/Headers")
+    set(OpenCV_INCLUDE_DIRS "${OPENCV_FRAMEWORK}/opencv2.framework/Headers")
     set(OpenCV_LIBS          "-framework opencv2")
-    message(STATUS "OpenCV iOS framework: ${OPENCV_IOS_FRAMEWORK}/opencv2.framework")
+    message(STATUS "OpenCV framework: ${OPENCV_FRAMEWORK}/opencv2.framework")
+elseif(IOS)
+    message(FATAL_ERROR "OPENCV_FRAMEWORK must be set when building for iOS.\n"
+        "Download opencv-4.x.x-ios-framework.zip from github.com/opencv/opencv/releases\n"
+        "and set OPENCV_FRAMEWORK to the folder that contains opencv2.framework.")
 else()
     find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect calib3d aruco videoio)
+endif()
+
+# Keep the old iOS-specific variable working as an alias
+if(IOS AND NOT OPENCV_FRAMEWORK AND OPENCV_IOS_FRAMEWORK)
+    set(OPENCV_FRAMEWORK "${OPENCV_IOS_FRAMEWORK}" CACHE PATH "" FORCE)
 endif()
 
 # ─── ViSP (edge-based model tracker) — optional for now ──────────────────────
@@ -62,8 +71,16 @@ else()
 endif()
 
 # ─── ONNX Runtime (monocular depth inference) ────────────────────────────────
-# ONNXRUNTIME_ROOT takes priority over vcpkg — use it to pin a specific
-# pre-built release (recommended: v1.18.1 from github.com/microsoft/onnxruntime/releases)
+# iOS: depth is disabled — ONNX Runtime is only available via CocoaPods on iOS,
+# which conflicts with CMake.  The AR overlay works fine without occlusion masking.
+# Desktop: set ONNXRUNTIME_ROOT to a pre-built v1.18.1 folder to enable depth.
+if(IOS)
+    set(ONNXRUNTIME_ROOT "" CACHE PATH "Unused on iOS" FORCE)
+    set(onnxruntime_FOUND FALSE)
+    set(ONNXRUNTIME_TARGET "")
+    message(STATUS "ONNX Runtime: disabled on iOS (depth estimation not available)")
+endif()
+
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Root of a pre-built ONNX Runtime (include/ and lib/)")
 
 if(ONNXRUNTIME_ROOT)
@@ -217,6 +234,11 @@ target_include_directories(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_INCLUDE_DIRS}>
 )
 
+# Tell the linker where to find opencv2.framework when using the framework path
+if(OPENCV_FRAMEWORK)
+    target_link_directories(DBSAR PRIVATE "${OPENCV_FRAMEWORK}")
+endif()
+
 # ─── Link libraries ───────────────────────────────────────────────────────────
 target_link_libraries(DBSAR PRIVATE
     Qt6::Core
@@ -229,8 +251,7 @@ target_link_libraries(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>
     $<$<BOOL:${onnxruntime_FOUND}>:${ONNXRUNTIME_TARGET}>
     $<$<BOOL:${Tesseract_FOUND}>:Tesseract::libtesseract>
-    # iOS system frameworks required by ONNX Runtime CoreML provider
-    $<$<PLATFORM_ID:iOS>:-framework CoreML>
+    # iOS system frameworks (add CoreML here if ONNX Runtime is enabled later)
     $<$<PLATFORM_ID:iOS>:-framework Foundation>
 )
 
@@ -245,7 +266,7 @@ if(IOS)
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY          "1"    # 1 = iPhone, 1,2 = iPhone+iPad
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET      "16.0"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER       "ch.epfl.neurorestore.dbsar"
-        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM                ""     # ← paste your 10-char Team ID here
+        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM                "53M8KPV935"     # ← paste your 10-char Team ID here
         XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY              "iPhone Developer"
         XCODE_ATTRIBUTE_ENABLE_BITCODE                  "NO"   # ONNX Runtime has no bitcode
 
