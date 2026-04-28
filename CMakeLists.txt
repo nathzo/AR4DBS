@@ -224,6 +224,15 @@ qt_add_resources(DBSAR "assets"
         resources/surgical_plan.json
 )
 
+# On iOS use AVFoundation as the multimedia backend instead of FFmpeg.
+# FFmpeg is the default in Qt 6.x but its static libs are not bundled in the
+# iOS kit download, so the linker can't resolve sws_* symbols.
+if(IOS)
+    qt_import_plugins(DBSAR
+        INCLUDE_BY_TYPE mediabackend Qt6::AVFMediaPlugin
+    )
+endif()
+
 # On iOS the ONNX model must be a real file in the bundle (not a Qt resource)
 # because ONNX Runtime opens it with fopen().  On desktop it sits next to the exe.
 if(IOS)
