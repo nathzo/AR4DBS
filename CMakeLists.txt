@@ -257,10 +257,17 @@ target_link_libraries(DBSAR PRIVATE
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>
     $<$<BOOL:${onnxruntime_FOUND}>:${ONNXRUNTIME_TARGET}>
     $<$<BOOL:${Tesseract_FOUND}>:Tesseract::libtesseract>
-    # iOS system frameworks
-    $<$<PLATFORM_ID:iOS>:-framework Foundation>
-    $<$<AND:$<PLATFORM_ID:iOS>,$<BOOL:${onnxruntime_FOUND}>>:-framework CoreML>
 )
+
+# iOS system frameworks — use find_library so the linker gets a proper .framework path
+if(IOS)
+    find_library(FW_FOUNDATION  Foundation REQUIRED)
+    target_link_libraries(DBSAR PRIVATE ${FW_FOUNDATION})
+    if(onnxruntime_FOUND)
+        find_library(FW_COREML CoreML REQUIRED)
+        target_link_libraries(DBSAR PRIVATE ${FW_COREML})
+    endif()
+endif()
 
 # ─── iOS bundle settings ──────────────────────────────────────────────────────
 if(IOS)
