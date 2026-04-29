@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QTabWidget>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -74,7 +75,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     : QDialog(parent)
 {
     setWindowTitle("Confirmer le plan chirurgical");
-    setMinimumWidth(640);
+    // No fixed minimum width — must fit a vertical iPhone screen
     setStyleSheet(
         "QDialog, QGroupBox, QWidget {"
         "  background-color: #1a1b1d;"
@@ -90,6 +91,25 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  color: #75D0C5;"
         "}"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
+        "QTabWidget::pane {"
+        "  border: 1px solid #75D0C5;"
+        "  border-radius: 6px;"
+        "}"
+        "QTabBar::tab {"
+        "  background: #2a2b2d;"
+        "  color: #e0e0e0;"
+        "  padding: 12px 28px;"
+        "  font-size: 12pt;"
+        "  border: 1px solid #444;"
+        "  border-bottom: none;"
+        "  border-top-left-radius: 6px;"
+        "  border-top-right-radius: 6px;"
+        "}"
+        "QTabBar::tab:selected {"
+        "  background: #75D0C5;"
+        "  color: #1a1b1d;"
+        "  font-weight: bold;"
+        "}"
         "QDoubleSpinBox {"
         "  background: #2a2b2d;"
         "  color: #e0e0e0;"
@@ -122,17 +142,27 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     }
     mainLayout->addWidget(banner);
 
-    // Two side-by-side columns
-    auto *sidesLayout = new QHBoxLayout;
-    mainLayout->addLayout(sidesLayout);
+    // Two tabs — one per side — so the form fits a vertical iPhone screen
+    auto *tabs = new QTabWidget(this);
+    mainLayout->addWidget(tabs);
 
-    // Build widgets (they create their own QGroupBox internally)
-    // We need a temporary parent widget to host the group boxes
-    m_left  = buildSide("Gauche (G)", initial.left,  this);
-    m_right = buildSide("Droite (D)", initial.right, this);
+    // Left side tab
+    auto *leftPage = new QWidget(tabs);
+    auto *leftLayout = new QVBoxLayout(leftPage);
+    leftLayout->setContentsMargins(8, 8, 8, 8);
+    m_left = buildSide("Gauche (G)", initial.left, leftPage);
+    leftLayout->addWidget(findChild<QGroupBox *>("Gauche (G)"));
+    leftLayout->addStretch();
+    tabs->addTab(leftPage, "Gauche (G)");
 
-    sidesLayout->addWidget(findChild<QGroupBox *>("Gauche (G)"));
-    sidesLayout->addWidget(findChild<QGroupBox *>("Droite (D)"));
+    // Right side tab
+    auto *rightPage = new QWidget(tabs);
+    auto *rightLayout = new QVBoxLayout(rightPage);
+    rightLayout->setContentsMargins(8, 8, 8, 8);
+    m_right = buildSide("Droite (D)", initial.right, rightPage);
+    rightLayout->addWidget(findChild<QGroupBox *>("Droite (D)"));
+    rightLayout->addStretch();
+    tabs->addTab(rightPage, "Droite (D)");
 
     // Buttons
     auto *buttons = new QDialogButtonBox(

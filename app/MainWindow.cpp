@@ -50,6 +50,10 @@ static SurgicalPlan defaultTestPlan()
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    // Force dark background on the root window so nothing system-coloured shows
+    // through during transitions or around safe-area insets on iOS.
+    setStyleSheet("QMainWindow { background-color: #1a1b1d; }");
+
     // ── Controller ────────────────────────────────────────────────────────────
     m_controller = new AppController(this);
 
@@ -114,6 +118,9 @@ MainWindow::MainWindow(QWidget *parent)
     arBtnLayout->setContentsMargins(0, 0, 0, 0);
     arBtnLayout->setSpacing(0);
 
+    m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
+    m_btnBackToMenu->setStyleSheet(arBtnStyle("#3a3b3d")); // neutral dark
+
     m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
     m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE
     m_btnEditPlan->setVisible(false);
@@ -122,6 +129,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_btnNextTarget->setStyleSheet(arBtnStyle("#c45255")); // IMPULSE_RED
     m_btnNextTarget->setVisible(false);
 
+    arBtnLayout->addWidget(m_btnBackToMenu, 1);
     arBtnLayout->addWidget(m_btnEditPlan,   1);
     arBtnLayout->addWidget(m_btnNextTarget, 1);
     arLayout->addWidget(arBtnRow);
@@ -142,6 +150,14 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
 #ifdef FEATURE_PLAN_SCANNER
+    // ── Back-to-menu button (AR → start screen) ───────────────────────────────
+    connect(m_btnBackToMenu, &QPushButton::clicked, this, [this]() {
+        m_arCamera->stop();
+        m_btnEditPlan->setVisible(false);
+        m_btnNextTarget->setVisible(false);
+        m_stack->setCurrentIndex(0);
+    });
+
     // ── Wizard flow ───────────────────────────────────────────────────────────
     m_stack       = new QStackedWidget(this);
     m_startScreen = new StartScreen(this);

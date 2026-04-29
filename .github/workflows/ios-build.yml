@@ -70,8 +70,8 @@ jobs:
         run: |
           echo "=== ffmpeg/ xcframeworks ==="
           ls "$QT_IOS/lib/ffmpeg/"
-          echo "=== libavcodec.xcframework internal layout ==="
-          find "$QT_IOS/lib/ffmpeg/libavcodec.xcframework" -name "*.a" | sort
+          echo "=== libavcodec.xcframework full tree ==="
+          find "$QT_IOS/lib/ffmpeg/libavcodec.xcframework" | head -40
 
       - name: Configure CMake
         run: |
