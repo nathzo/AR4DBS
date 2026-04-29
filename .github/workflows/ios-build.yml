@@ -68,10 +68,10 @@ jobs:
 
       - name: Inspect Qt iOS lib (FFmpeg discovery)
         run: |
-          echo "=== Qt iOS lib dir ==="
-          ls "$QT_IOS/lib/" | grep -iE "ffmpeg|avcodec|avformat|avutil|swscale|swresample|bundled" || echo "(no FFmpeg-related files found by name)"
-          echo "=== Qt6::BundledFFmpeg cmake target ==="
-          find "$QT_IOS" -name "*.cmake" | xargs grep -l "BundledFFmpeg" 2>/dev/null | head -5 || echo "(no cmake file mentions BundledFFmpeg)"
+          echo "=== Qt iOS lib/ffmpeg/ ==="
+          ls "$QT_IOS/lib/ffmpeg/" 2>/dev/null || echo "(no ffmpeg/ subdirectory)"
+          echo "=== Qt iOS lib/ (FFmpeg-related) ==="
+          ls "$QT_IOS/lib/" | grep -iE "ffmpeg|avcodec|avformat|avutil|swscale|swresample|bundled" || echo "(no FFmpeg files in lib/)"
 
       - name: Configure CMake
         run: |

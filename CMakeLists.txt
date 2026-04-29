@@ -240,10 +240,19 @@ if(IOS)
         target_link_libraries(DBSAR PRIVATE Qt6::BundledFFmpeg)
         message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
-        # Fallback: search the Qt lib directory for any FFmpeg-related static libs
-        # (covers older/differently-packaged Qt iOS kits)
+        # Qt 6.11.0 iOS ships individual FFmpeg static libs in <Qt>/lib/ffmpeg/
+        # There is no combined Qt6BundledFFmpeg.a and no CMake target for it.
         get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
         file(GLOB _qt_ffmpeg_libs
+            # Qt 6.11+ layout: individual libs in lib/ffmpeg/
+            "${_qt_lib_dir}/ffmpeg/libavcodec*.a"
+            "${_qt_lib_dir}/ffmpeg/libavformat*.a"
+            "${_qt_lib_dir}/ffmpeg/libavutil*.a"
+            "${_qt_lib_dir}/ffmpeg/libswscale*.a"
+            "${_qt_lib_dir}/ffmpeg/libswresample*.a"
+            "${_qt_lib_dir}/ffmpeg/libavfilter*.a"
+            "${_qt_lib_dir}/ffmpeg/libavdevice*.a"
+            # Older layout: libs directly in lib/
             "${_qt_lib_dir}/libQt6BundledFFmpeg*.a"
             "${_qt_lib_dir}/libavcodec*.a"
             "${_qt_lib_dir}/libavformat*.a"
@@ -252,11 +261,11 @@ if(IOS)
             "${_qt_lib_dir}/libswresample*.a"
         )
         if(_qt_ffmpeg_libs)
-            message(STATUS "Qt FFmpeg libs (fallback glob): ${_qt_ffmpeg_libs}")
+            message(STATUS "Qt FFmpeg libs: ${_qt_ffmpeg_libs}")
             target_link_libraries(DBSAR PRIVATE ${_qt_ffmpeg_libs})
         else()
             message(WARNING
-                "Qt6::BundledFFmpeg target not found and no FFmpeg .a files in "
+                "Qt6::BundledFFmpeg target not found and no FFmpeg .a files found under "
                 "${_qt_lib_dir} — sws_*/av_* symbols will be unresolved at link time.")
         endif()
     endif()
