@@ -13,32 +13,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Qt (macOS desktop — required by iOS kit)
-        uses: jurplel/install-qt-action@v3
+      # ── Qt installation (cached with a fixed key so it never drifts) ──────────
+      # We manage the cache ourselves rather than relying on install-qt-action's
+      # built-in caching, whose key changes with the runner image and action
+      # internals, causing an 8-minute re-download on every run.
+      - name: Restore Qt from cache
+        id: qt-cache
+        uses: actions/cache@v4
         with:
-          version: '6.11.0'
-          host: 'mac'
-          target: 'desktop'
-          arch: 'clang_64'
-          modules: 'qtmultimedia'
-          cache: true
+          path: ~/Qt
+          key: qt-6.11.0-macos-ios-qtmultimedia-v1
 
-      - name: Install Qt (iOS)
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.11.0'
-          host: 'mac'
-          target: 'ios'
-          modules: 'qtmultimedia'
-          cache: true
+      - name: Install Qt (desktop + iOS)
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        run: |
+          pip install aqtinstall
+          aqt install-qt mac desktop 6.11.0 clang_64 -m qtmultimedia -O ~/Qt
+          aqt install-qt mac ios     6.11.0 ios      -m qtmultimedia -O ~/Qt
 
       - name: Locate Qt paths
         run: |
-          echo "=== All Qt6Config.cmake files ==="
-          find /Users/runner /opt -name "Qt6Config.cmake" 2>/dev/null | head -10
-
-          IOS_CMAKE=$(find /Users/runner /opt -name "Qt6Config.cmake" -path "*/ios/*" 2>/dev/null | head -1)
-          HOST_CMAKE=$(find /Users/runner /opt -name "Qt6Config.cmake" \( -path "*/macos/*" -o -path "*/clang_64/*" \) 2>/dev/null | head -1)
+          IOS_CMAKE=$(find ~/Qt -name "Qt6Config.cmake" -path "*/ios/*" | head -1)
+          HOST_CMAKE=$(find ~/Qt -name "Qt6Config.cmake" \( -path "*/macos/*" -o -path "*/clang_64/*" \) | head -1)
 
           if [ -z "$IOS_CMAKE" ]; then
             echo "ERROR: could not find iOS Qt6Config.cmake"
@@ -54,25 +50,36 @@ jobs:
           echo "QT_IOS=$QT_IOS"   >> $GITHUB_ENV
           echo "QT_HOST=$QT_HOST" >> $GITHUB_ENV
 
+      # ── Third-party dependencies (also cached) ────────────────────────────────
+      - name: Restore OpenCV iOS from cache
+        id: opencv-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/opencv-ios
+          key: opencv-4.10.0-ios-framework
+
       - name: Download OpenCV iOS framework
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
         run: |
           curl -L https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-ios-framework.zip \
                -o opencv-ios.zip
-          unzip -q opencv-ios.zip -d $HOME/opencv-ios
+          unzip -q opencv-ios.zip -d ~/opencv-ios
+
+      - name: Restore ONNX Runtime iOS from cache
+        id: onnx-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/onnxruntime-ios
+          key: onnxruntime-mobile-c-1.18.0-ios
 
       - name: Download ONNX Runtime iOS
+        if: steps.onnx-cache.outputs.cache-hit != 'true'
         run: |
           curl -L https://onnxruntimepackages.z14.web.core.windows.net/pod-archive-onnxruntime-mobile-c-1.18.0.zip \
                -o ort-ios.zip
-          unzip -q ort-ios.zip -d $HOME/onnxruntime-ios
+          unzip -q ort-ios.zip -d ~/onnxruntime-ios
 
-      - name: Inspect Qt iOS lib (FFmpeg discovery)
-        run: |
-          echo "=== ffmpeg/ xcframeworks ==="
-          ls "$QT_IOS/lib/ffmpeg/"
-          echo "=== libavcodec.xcframework full tree ==="
-          find "$QT_IOS/lib/ffmpeg/libavcodec.xcframework" | head -40
-
+      # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
         run: |
           cmake -S . -B build-ios \
@@ -84,14 +91,15 @@ jobs:
             -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
             -DFEATURE_PLAN_SCANNER=ON \
             2>&1 | tee cmake-configure.log
-          # Fail immediately if FFmpeg was not resolved — saves 30 min waiting for link errors
-          if grep -q "sws_\|av_\* symbols will be unresolved\|FFmpeg xcframework slices found" cmake-configure.log; then
+          # Fail immediately if FFmpeg was not resolved — saves 30 min on link errors
+          if grep -q "symbols will be unresolved\|no FFmpeg frameworks found" cmake-configure.log; then
             echo "ERROR: FFmpeg not linked — check cmake-configure.log above"
             exit 1
           fi
           echo "=== FFmpeg discovery result ==="
           grep "Qt FFmpeg:" cmake-configure.log || echo "(no Qt FFmpeg lines — check for warnings above)"
 
+      # ── Build ─────────────────────────────────────────────────────────────────
       - name: Build
         run: |
           xcodebuild \

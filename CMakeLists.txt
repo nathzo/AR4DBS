@@ -241,28 +241,31 @@ if(IOS)
         message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
         # Qt 6.11.0 iOS ships FFmpeg as xcframeworks in <Qt>/lib/ffmpeg/.
-        # Each xcframework has a framework-style layout — no .a files:
-        #   lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>   ← device binary
-        # Link via -F <slice-dir> -framework lib<n> for each one.
+        # Layout: lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>
+        # Use find_library so CMake handles -F / -framework correctly with
+        # the Xcode generator (passing raw flags via target_link_options splits
+        # the -framework / name pair and the linker sees bare names as file paths).
         get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
         set(_ffmpeg_dir "${_qt_lib_dir}/ffmpeg")
-        set(_ffmpeg_link_opts "")
+        set(_ffmpeg_found 0)
 
         foreach(_ff avcodec avformat avutil swresample swscale)
             set(_slice "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64")
-            if(EXISTS "${_slice}/lib${_ff}.framework")
-                list(APPEND _ffmpeg_link_opts "-F${_slice}" "-framework" "lib${_ff}")
-                message(STATUS "Qt FFmpeg: -F${_slice} -framework lib${_ff}")
+            find_library(_qt_ff_${_ff} "lib${_ff}"
+                PATHS "${_slice}"
+                NO_DEFAULT_PATH)
+            if(_qt_ff_${_ff})
+                target_link_libraries(DBSAR PRIVATE "${_qt_ff_${_ff}}")
+                message(STATUS "Qt FFmpeg: ${_qt_ff_${_ff}}")
+                math(EXPR _ffmpeg_found "${_ffmpeg_found}+1")
             else()
-                message(WARNING "Qt FFmpeg framework not found at ${_slice}/lib${_ff}.framework")
+                message(WARNING "Qt FFmpeg: lib${_ff} not found in ${_slice}")
             endif()
         endforeach()
 
-        if(_ffmpeg_link_opts)
-            target_link_options(DBSAR PRIVATE ${_ffmpeg_link_opts})
-        else()
+        if(_ffmpeg_found EQUAL 0)
             message(WARNING
-                "Qt6::BundledFFmpeg target not found and no FFmpeg xcframework slices found "
+                "Qt6::BundledFFmpeg target not found and no FFmpeg frameworks found "
                 "in ${_ffmpeg_dir} — sws_*/av_* symbols will be unresolved at link time.")
         endif()
     endif()
