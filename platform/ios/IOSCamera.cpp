@@ -2,6 +2,7 @@
 #include "CameraIntrinsics.h"
 
 #include <QCamera>
+#include <QDebug>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QVideoSink>
