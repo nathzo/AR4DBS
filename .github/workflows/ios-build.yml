@@ -82,7 +82,15 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DONNXRUNTIME_ROOT=$HOME/onnxruntime-ios \
-            -DFEATURE_PLAN_SCANNER=ON
+            -DFEATURE_PLAN_SCANNER=ON \
+            2>&1 | tee cmake-configure.log
+          # Fail immediately if FFmpeg was not resolved — saves 30 min waiting for link errors
+          if grep -q "sws_\|av_\* symbols will be unresolved\|FFmpeg xcframework slices found" cmake-configure.log; then
+            echo "ERROR: FFmpeg not linked — check cmake-configure.log above"
+            exit 1
+          fi
+          echo "=== FFmpeg discovery result ==="
+          grep "Qt FFmpeg:" cmake-configure.log || echo "(no Qt FFmpeg lines — check for warnings above)"
 
       - name: Build
         run: |

@@ -240,37 +240,29 @@ if(IOS)
         target_link_libraries(DBSAR PRIVATE Qt6::BundledFFmpeg)
         message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
-        # Qt 6.11.0 iOS ships FFmpeg as XCFrameworks in <Qt>/lib/ffmpeg/.
-        # Each xcframework contains the static lib for the device slice at:
-        #   lib<name>.xcframework/ios-arm64/lib<name>.a
+        # Qt 6.11.0 iOS ships FFmpeg as xcframeworks in <Qt>/lib/ffmpeg/.
+        # Each xcframework has a framework-style layout — no .a files:
+        #   lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>   ← device binary
+        # Link via -F <slice-dir> -framework lib<n> for each one.
         get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
         set(_ffmpeg_dir "${_qt_lib_dir}/ffmpeg")
-        set(_ffmpeg_device_libs "")
+        set(_ffmpeg_link_opts "")
 
         foreach(_ff avcodec avformat avutil swresample swscale)
-            set(_xcfw "${_ffmpeg_dir}/lib${_ff}.xcframework")
-            if(EXISTS "${_xcfw}")
-                # Find the device (not simulator) arm64 static lib inside the xcframework
-                file(GLOB_RECURSE _candidates "${_xcfw}/*.a")
-                # ios-arm64/ slice — exclude simulator (ios-arm64_x86_64-simulator)
-                list(FILTER _candidates INCLUDE REGEX "/ios-arm64/lib${_ff}\\.a$")
-                if(_candidates)
-                    list(GET _candidates 0 _lib)
-                    list(APPEND _ffmpeg_device_libs "${_lib}")
-                    message(STATUS "Qt FFmpeg: ${_lib}")
-                else()
-                    message(WARNING "No ios-arm64 .a found inside ${_xcfw}")
-                endif()
+            set(_slice "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64")
+            if(EXISTS "${_slice}/lib${_ff}.framework")
+                list(APPEND _ffmpeg_link_opts "-F${_slice}" "-framework" "lib${_ff}")
+                message(STATUS "Qt FFmpeg: -F${_slice} -framework lib${_ff}")
             else()
-                message(WARNING "Qt FFmpeg xcframework not found: ${_xcfw}")
+                message(WARNING "Qt FFmpeg framework not found at ${_slice}/lib${_ff}.framework")
             endif()
         endforeach()
 
-        if(_ffmpeg_device_libs)
-            target_link_libraries(DBSAR PRIVATE ${_ffmpeg_device_libs})
+        if(_ffmpeg_link_opts)
+            target_link_options(DBSAR PRIVATE ${_ffmpeg_link_opts})
         else()
             message(WARNING
-                "Qt6::BundledFFmpeg target not found and no FFmpeg xcframework libs found "
+                "Qt6::BundledFFmpeg target not found and no FFmpeg xcframework slices found "
                 "in ${_ffmpeg_dir} — sws_*/av_* symbols will be unresolved at link time.")
         endif()
     endif()
