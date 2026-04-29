@@ -244,7 +244,7 @@ if(IOS)
         # Layout: lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>  (Mach-O dylib)
         #
         # Three things must happen for the app to run on device:
-        #   1. Link: -F <slice-dir> -framework lib<n>  (find_library handles this)
+        #   1. Link: -F <slice-dir> -framework lib<n>  (same pattern as OpenCV)
         #   2. Embed: copy lib<n>.framework into DBSAR.app/Frameworks/
         #   3. Rpath:  @executable_path/Frameworks so dyld finds them at runtime
         #
@@ -257,15 +257,17 @@ if(IOS)
         set(_ffmpeg_fws "")   # list of .framework dirs to embed
 
         foreach(_ff avcodec avformat avutil swresample swscale)
-            set(_fw_dir
-                "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64/lib${_ff}.framework")
+            set(_fw_slice "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64")
+            set(_fw_dir   "${_fw_slice}/lib${_ff}.framework")
             if(EXISTS "${_fw_dir}/lib${_ff}")
-                # find_library locates lib<n>.framework and generates the correct
-                # -F <ios-arm64-dir> -framework lib<n> linker flags automatically.
-                find_library(_ffmpeg_fw_${_ff} lib${_ff}
-                    PATHS "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64"
-                    NO_DEFAULT_PATH REQUIRED)
-                target_link_libraries(DBSAR PRIVATE "${_ffmpeg_fw_${_ff}}")
+                # Use the same two-step pattern that already works for OpenCV:
+                #   target_link_options  → adds "-F/path/ios-arm64" as one token  ← proven
+                #   target_link_libraries → adds "-framework lib<n>"               ← same as OpenCV_LIBS
+                # find_library is NOT used because with the Xcode generator it adds
+                # the path to FRAMEWORK_SEARCH_PATHS but that setting does NOT always
+                # propagate to the linker's -F flags in practice.
+                target_link_options(DBSAR PRIVATE "-F${_fw_slice}")
+                target_link_libraries(DBSAR PRIVATE "-framework lib${_ff}")
                 list(APPEND _ffmpeg_fws "${_fw_dir}")
                 message(STATUS "Qt FFmpeg: ${_fw_dir}")
                 math(EXPR _ffmpeg_found "${_ffmpeg_found}+1")
