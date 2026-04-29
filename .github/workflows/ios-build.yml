@@ -110,6 +110,57 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      # ── Verify binary before packaging ───────────────────────────────────────
+      - name: Verify dynamic library linking
+        run: |
+          APP_BIN="build-ios/Release-iphoneos/DBSAR.app/DBSAR"
+          if [ ! -f "$APP_BIN" ]; then
+            echo "ERROR: binary not found at $APP_BIN"
+            exit 1
+          fi
+
+          echo "=== Dynamic library dependencies (otool -L) ==="
+          otool -L "$APP_BIN"
+          echo ""
+
+          echo "=== LC_RPATH entries ==="
+          otool -l "$APP_BIN" | grep -A2 "LC_RPATH" || echo "(no LC_RPATH entries)"
+          echo ""
+
+          echo "=== Frameworks embedded in app bundle ==="
+          ls build-ios/Release-iphoneos/DBSAR.app/Frameworks/ 2>/dev/null \
+            || echo "(Frameworks/ directory not present — nothing embedded)"
+          echo ""
+
+          # --- Decision logic ---
+          if otool -L "$APP_BIN" | grep -q "libavcodec"; then
+            echo "FFmpeg is dynamically linked."
+
+            # Check 1: @executable_path/Frameworks must be in LC_RPATH
+            if otool -l "$APP_BIN" | grep -q "@executable_path/Frameworks"; then
+              echo "OK  LC_RPATH contains @executable_path/Frameworks"
+            else
+              echo "FAIL @executable_path/Frameworks is NOT in LC_RPATH"
+              echo "     dyld will not find the embedded frameworks on device — app will crash."
+              exit 1
+            fi
+
+            # Check 2: the framework must actually be in the bundle
+            if [ -d "build-ios/Release-iphoneos/DBSAR.app/Frameworks/libavcodec.framework" ]; then
+              echo "OK  libavcodec.framework is embedded in the app bundle"
+            else
+              echo "FAIL libavcodec.framework is NOT in DBSAR.app/Frameworks/"
+              echo "     XCODE_EMBED_FRAMEWORKS did not run — app will crash."
+              exit 1
+            fi
+
+            echo ""
+            echo "All checks passed — sideloaded app should NOT crash at launch."
+          else
+            echo "FFmpeg appears to be statically linked (no libavcodec in otool -L)."
+            echo "No embedding checks needed."
+          fi
+
       - name: Package IPA
         run: |
           mkdir -p Payload

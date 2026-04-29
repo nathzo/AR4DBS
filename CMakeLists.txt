@@ -240,38 +240,58 @@ if(IOS)
         target_link_libraries(DBSAR PRIVATE Qt6::BundledFFmpeg)
         message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
-        # Qt 6.11.0 iOS ships FFmpeg as xcframeworks in <Qt>/lib/ffmpeg/.
-        # Layout: lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>
-        # Use find_library so CMake handles -F / -framework correctly with
-        # the Xcode generator (passing raw flags via target_link_options splits
-        # the -framework / name pair and the linker sees bare names as file paths).
+        # Qt 6.11.0 iOS ships FFmpeg as *dynamic* xcframeworks in <Qt>/lib/ffmpeg/.
+        # Layout: lib<n>.xcframework/ios-arm64/lib<n>.framework/lib<n>  (Mach-O dylib)
+        #
+        # Three things must happen for the app to run on device:
+        #   1. Link: -F <slice-dir> -framework lib<n>  (find_library handles this)
+        #   2. Embed: copy lib<n>.framework into DBSAR.app/Frameworks/
+        #   3. Rpath:  @executable_path/Frameworks so dyld finds them at runtime
+        #
+        # XCODE_EMBED_FRAMEWORKS triggers Xcode's "Embed Frameworks" build phase which
+        # does step 2 and normally adds the rpath automatically. We also set
+        # LD_RUNPATH_SEARCH_PATHS explicitly as a belt-and-suspenders measure.
         get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
         set(_ffmpeg_dir "${_qt_lib_dir}/ffmpeg")
         set(_ffmpeg_found 0)
+        set(_ffmpeg_fws "")   # list of .framework dirs to embed
 
-        # Link each FFmpeg library the same way ONNX Runtime is linked:
-        # STATIC IMPORTED pointing directly at the binary inside the xcframework.
-        # This avoids dynamic load commands and rpath entries entirely — the
-        # symbols are statically linked into DBSAR, no embedding needed.
         foreach(_ff avcodec avformat avutil swresample swscale)
-            set(_fw_bin
-                "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64/lib${_ff}.framework/lib${_ff}")
-            if(EXISTS "${_fw_bin}")
-                add_library(_qt_ffmpeg_${_ff} STATIC IMPORTED GLOBAL)
-                set_target_properties(_qt_ffmpeg_${_ff} PROPERTIES
-                    IMPORTED_LOCATION "${_fw_bin}")
-                target_link_libraries(DBSAR PRIVATE _qt_ffmpeg_${_ff})
-                message(STATUS "Qt FFmpeg (static): ${_fw_bin}")
+            set(_fw_dir
+                "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64/lib${_ff}.framework")
+            if(EXISTS "${_fw_dir}/lib${_ff}")
+                # find_library locates lib<n>.framework and generates the correct
+                # -F <ios-arm64-dir> -framework lib<n> linker flags automatically.
+                find_library(_ffmpeg_fw_${_ff} lib${_ff}
+                    PATHS "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64"
+                    NO_DEFAULT_PATH REQUIRED)
+                target_link_libraries(DBSAR PRIVATE "${_ffmpeg_fw_${_ff}}")
+                list(APPEND _ffmpeg_fws "${_fw_dir}")
+                message(STATUS "Qt FFmpeg: ${_fw_dir}")
                 math(EXPR _ffmpeg_found "${_ffmpeg_found}+1")
             else()
-                message(WARNING "Qt FFmpeg: binary not found at ${_fw_bin}")
+                message(WARNING "Qt FFmpeg: framework not found at ${_fw_dir}/lib${_ff}")
             endif()
         endforeach()
 
-        if(_ffmpeg_found EQUAL 0)
+        if(_ffmpeg_found GREATER 0)
+            # Embed every framework into DBSAR.app/Frameworks/ at build time.
+            # Xcode's Embed Frameworks phase also adds @executable_path/Frameworks
+            # to the binary's LC_RPATH automatically.
+            set_target_properties(DBSAR PROPERTIES
+                XCODE_EMBED_FRAMEWORKS                        "${_ffmpeg_fws}"
+                XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY      YES
+                XCODE_EMBED_FRAMEWORKS_REMOVE_HEADERS_ON_COPY YES)
+            # Belt-and-suspenders: set the rpath explicitly so dyld can resolve
+            # @rpath/lib<n>.framework/lib<n> to the embedded copy at runtime.
+            set_target_properties(DBSAR PROPERTIES
+                XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS
+                    "@executable_path/Frameworks $(inherited)")
+            message(STATUS "Qt FFmpeg: ${_ffmpeg_found}/5 frameworks will be embedded")
+        else()
             message(WARNING
-                "Qt6::BundledFFmpeg target not found and no FFmpeg binaries found "
-                "in ${_ffmpeg_dir} — sws_*/av_* symbols will be unresolved at link time.")
+                "Qt6::BundledFFmpeg target not found and no FFmpeg frameworks found "
+                "in ${_ffmpeg_dir} — multimedia will not work on device.")
         endif()
     endif()
 endif()
