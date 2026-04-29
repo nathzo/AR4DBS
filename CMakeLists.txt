@@ -224,24 +224,41 @@ qt_add_resources(DBSAR "assets"
         resources/surgical_plan.json
 )
 
-# On iOS use AVFoundation as the multimedia backend instead of FFmpeg.
-# FFmpeg is the default in Qt 6.x but its static libs are not bundled in the
-# iOS kit download, so the linker can't resolve sws_* symbols.
+# On iOS, Qt 6.4+ uses FFmpeg as the ONLY multimedia backend (AVFoundation is
+# integrated inside it via VideoToolbox).  For a static iOS build we must:
+#   1. Force-import the FFmpeg media plugin so the linker includes it.
+#   2. Link Qt's bundled FFmpeg CMake target so sws_*/av_* symbols resolve.
 if(IOS)
-    # Qt 6.4+ uses FFmpeg as the ONLY multimedia backend on iOS (AVFoundation is
-    # integrated inside it via VideoToolbox). Do NOT exclude the FFmpeg plugin.
-    # Instead, link Qt's bundled FFmpeg static library so the linker can resolve
-    # the av_* / sws_* symbols inside libQt6FFmpegMediaPluginImpl.a
-    #
-    # Qt6_DIR = .../ios/lib/cmake/Qt6  →  ../.. = .../ios/lib
-    get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
-    find_library(QT_BUNDLED_FFMPEG Qt6BundledFFmpeg
-        PATHS "${_qt_lib_dir}" NO_DEFAULT_PATH QUIET)
-    if(QT_BUNDLED_FFMPEG)
-        target_link_libraries(DBSAR PRIVATE ${QT_BUNDLED_FFMPEG})
-        message(STATUS "Qt bundled FFmpeg: ${QT_BUNDLED_FFMPEG}")
+    # Force the static FFmpeg plugin to be linked (required for static Qt builds)
+    qt_import_plugins(DBSAR
+        INCLUDE Qt6::QFFmpegMediaPlugin
+    )
+
+    # Qt exposes its bundled FFmpeg as the CMake imported target Qt6::BundledFFmpeg.
+    # Linking it directly is more reliable than find_library on the .a file.
+    if(TARGET Qt6::BundledFFmpeg)
+        target_link_libraries(DBSAR PRIVATE Qt6::BundledFFmpeg)
+        message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
-        message(STATUS "Qt6BundledFFmpeg not found in ${_qt_lib_dir}")
+        # Fallback: search the Qt lib directory for any FFmpeg-related static libs
+        # (covers older/differently-packaged Qt iOS kits)
+        get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
+        file(GLOB _qt_ffmpeg_libs
+            "${_qt_lib_dir}/libQt6BundledFFmpeg*.a"
+            "${_qt_lib_dir}/libavcodec*.a"
+            "${_qt_lib_dir}/libavformat*.a"
+            "${_qt_lib_dir}/libavutil*.a"
+            "${_qt_lib_dir}/libswscale*.a"
+            "${_qt_lib_dir}/libswresample*.a"
+        )
+        if(_qt_ffmpeg_libs)
+            message(STATUS "Qt FFmpeg libs (fallback glob): ${_qt_ffmpeg_libs}")
+            target_link_libraries(DBSAR PRIVATE ${_qt_ffmpeg_libs})
+        else()
+            message(WARNING
+                "Qt6::BundledFFmpeg target not found and no FFmpeg .a files in "
+                "${_qt_lib_dir} — sws_*/av_* symbols will be unresolved at link time.")
+        endif()
     endif()
 endif()
 

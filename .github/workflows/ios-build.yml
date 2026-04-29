@@ -66,6 +66,13 @@ jobs:
                -o ort-ios.zip
           unzip -q ort-ios.zip -d $HOME/onnxruntime-ios
 
+      - name: Inspect Qt iOS lib (FFmpeg discovery)
+        run: |
+          echo "=== Qt iOS lib dir ==="
+          ls "$QT_IOS/lib/" | grep -iE "ffmpeg|avcodec|avformat|avutil|swscale|swresample|bundled" || echo "(no FFmpeg-related files found by name)"
+          echo "=== Qt6::BundledFFmpeg cmake target ==="
+          find "$QT_IOS" -name "*.cmake" | xargs grep -l "BundledFFmpeg" 2>/dev/null | head -5 || echo "(no cmake file mentions BundledFFmpeg)"
+
       - name: Configure CMake
         run: |
           cmake -S . -B build-ios \
