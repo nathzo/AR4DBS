@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <QElapsedTimer>
 #include <opencv2/core.hpp>
 #include <memory>
 #include <optional>
@@ -69,4 +70,7 @@ private:
     // nullptr means that side is inactive
     std::unique_ptr<IncisionLine> m_lines[2];
     int                           m_activeIndex = 0;
+
+    QElapsedTimer m_frameTimer;   // measures wall time of the last onNewFrame call
+    qint64        m_lastFrameMs = 0;
 };

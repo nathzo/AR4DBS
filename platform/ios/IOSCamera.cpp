@@ -3,6 +3,7 @@
 
 #include <QCamera>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QVideoSink>
@@ -12,6 +13,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+static constexpr qint64 MIN_FRAME_MS = 32; // ~31 fps max
+
 struct IOSCamera::Impl {
     QCamera              *camera        = nullptr;
     QVideoSink           *sink          = nullptr;
@@ -19,6 +22,7 @@ struct IOSCamera::Impl {
     int                   captureWidth  = 1280;
     int                   captureHeight = 720;
     bool                  calibEmitted  = false;
+    QElapsedTimer         frameTimer;   // throttle to MIN_FRAME_MS
 };
 
 IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
@@ -63,6 +67,13 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
 
         if (!frame.isValid()) return;
 
+        // Throttle: drop frames that arrive faster than MIN_FRAME_MS to prevent
+        // the main-thread event queue from growing unboundedly on 60 fps cameras.
+        if (m_impl->frameTimer.isValid() &&
+            m_impl->frameTimer.elapsed() < MIN_FRAME_MS)
+            return;
+        m_impl->frameTimer.restart();
+
         QVideoFrame mapped = frame;
         if (!mapped.map(QVideoFrame::ReadOnly)) return;
 
@@ -75,7 +86,7 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
                     static_cast<size_t>(img.bytesPerLine()));
         cv::Mat bgr;
         cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
-        emit frameReady(bgr.clone());
+        emit frameReady(bgr);
     });
 }
 

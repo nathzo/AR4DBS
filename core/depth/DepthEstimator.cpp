@@ -1,5 +1,6 @@
 #include "DepthEstimator.h"
 #include <opencv2/imgproc.hpp>
+#include <cstring>
 
 #ifdef HAVE_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
@@ -47,12 +48,18 @@ cv::Mat DepthEstimator::estimate(const cv::Mat &bgr)
     cv::resize(rgb, resized, {MIDAS_SIZE, MIDAS_SIZE});
     resized.convertTo(fp, CV_32FC3, 1.f / 255.f);
 
-    std::vector<float> tensor(1 * 3 * MIDAS_SIZE * MIDAS_SIZE);
-    for (int c = 0; c < 3; ++c)
-        for (int y = 0; y < MIDAS_SIZE; ++y)
-            for (int x = 0; x < MIDAS_SIZE; ++x)
-                tensor[c * MIDAS_SIZE * MIDAS_SIZE + y * MIDAS_SIZE + x] =
-                    (fp.at<cv::Vec3f>(y, x)[c] - MEAN[c]) / STD[c];
+    // Split HWC → three HW planes, normalize each, then pack into CHW tensor.
+    // cv::Mat arithmetic uses NEON on arm64; much faster than the triple loop.
+    static const float INV_STD[3] = {1.f/STD[0], 1.f/STD[1], 1.f/STD[2]};
+    std::vector<cv::Mat> ch(3);
+    cv::split(fp, ch);
+    std::vector<float> tensor(3 * MIDAS_SIZE * MIDAS_SIZE);
+    for (int c = 0; c < 3; ++c) {
+        ch[c] = (ch[c] - MEAN[c]) * INV_STD[c];
+        std::memcpy(tensor.data() + c * MIDAS_SIZE * MIDAS_SIZE,
+                    ch[c].data,
+                    MIDAS_SIZE * MIDAS_SIZE * sizeof(float));
+    }
 
     Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     std::array<int64_t, 4> inputShape = {1, 3, MIDAS_SIZE, MIDAS_SIZE};

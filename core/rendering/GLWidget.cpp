@@ -13,12 +13,12 @@ GLWidget::GLWidget(QWidget *parent)
 
 void GLWidget::setFrame(const cv::Mat &bgr)
 {
-    // Convert BGR → RGB and take a deep copy so the cv::Mat can be freed
-    cv::Mat rgb;
-    cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
-    m_image = QImage(rgb.data, rgb.cols, rgb.rows,
-                     static_cast<int>(rgb.step),
-                     QImage::Format_RGB888).copy();
+    // Convert BGR → RGB into m_rgb (member), then wrap without deep copy.
+    // m_rgb keeps the pixel data alive for the lifetime of m_image.
+    cv::cvtColor(bgr, m_rgb, cv::COLOR_BGR2RGB);
+    m_image = QImage(m_rgb.data, m_rgb.cols, m_rgb.rows,
+                     static_cast<int>(m_rgb.step),
+                     QImage::Format_RGB888);
     update();
 }
 

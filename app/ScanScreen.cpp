@@ -91,7 +91,7 @@ ScanScreen::ScanScreen(QWidget *parent)
             &DesktopCamera::frameReady,
 #endif
             this, [this](const cv::Mat &frame) {
-        m_impl->lastFrame = frame.clone();
+        m_impl->lastFrame = frame;          // cv::Mat is ref-counted, no deep copy needed
         m_impl->preview->setFrame(frame);
     });
 }

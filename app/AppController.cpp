@@ -96,9 +96,11 @@ void AppController::nextTarget()
 
 void AppController::onNewFrame(const cv::Mat &frame)
 {
+    m_frameTimer.restart();
+
     cv::Mat out = frame.clone();
 
-    const auto detections = m_tracker->detect(out);
+    const auto detections = m_tracker->detect(frame);
     m_tracker->drawAxes(out, detections);
 
     const cv::Mat T_cam_frame = fusePoses(detections);
@@ -116,12 +118,13 @@ void AppController::onNewFrame(const cv::Mat &frame)
     }
     const auto &line = *m_lines[m_activeIndex];
 
-    // Depth map
+    // Depth map — skipped when the previous frame already took > 50 ms so that
+    // ONNX inference does not compound latency on slower devices.
     cv::Mat depthMap;
     cv::Point2f tagPx;
     double tagMetricDepth = 0;
     float  relTag = 0.f;
-    if (m_depth && !detections.empty()) {
+    if (m_depth && !detections.empty() && m_lastFrameMs < 50) {
         depthMap       = m_depth->estimate(frame);
         tagMetricDepth = cv::norm(detections[0].tvec);
         tagPx          = PoseUtils::project(
@@ -198,6 +201,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
         m_renderer->endFrame();
     }
 
+    m_lastFrameMs = m_frameTimer.elapsed();
     emit frameReady(out);
 }
 

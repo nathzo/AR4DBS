@@ -20,5 +20,6 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    QImage m_image;
+    cv::Mat m_rgb;    // kept alive so QImage can wrap it without a deep copy
+    QImage  m_image;
 };
