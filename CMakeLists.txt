@@ -250,22 +250,34 @@ if(IOS)
         set(_ffmpeg_found 0)
 
         foreach(_ff avcodec avformat avutil swresample swscale)
-            set(_slice "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64")
-            # find_library generates the correct -framework lib<n> flag via
-            # target_link_libraries, but CMake adds the parent dir as -rpath,
-            # not -F.  Add -F explicitly — a single token, so no splitting issue.
+            set(_xcfw  "${_ffmpeg_dir}/lib${_ff}.xcframework")
+            set(_slice "${_xcfw}/ios-arm64")
             find_library(_qt_ff_${_ff} "lib${_ff}"
                 PATHS "${_slice}"
                 NO_DEFAULT_PATH)
             if(_qt_ff_${_ff})
+                # -F lets the linker find the framework at build time
                 target_link_options(DBSAR PRIVATE "-F${_slice}")
                 target_link_libraries(DBSAR PRIVATE "${_qt_ff_${_ff}}")
-                message(STATUS "Qt FFmpeg: -F${_slice} -framework lib${_ff}")
+                list(APPEND _ffmpeg_xcfws "${_xcfw}")
+                message(STATUS "Qt FFmpeg: ${_xcfw}")
                 math(EXPR _ffmpeg_found "${_ffmpeg_found}+1")
             else()
                 message(WARNING "Qt FFmpeg: lib${_ff} not found in ${_slice}")
             endif()
         endforeach()
+
+        # The FFmpeg frameworks are dynamic — they MUST be embedded in the app
+        # bundle or dyld will crash at launch trying to load them from the CI
+        # runner's disk path (which doesn't exist on the device).
+        if(_ffmpeg_xcfws)
+            set_target_properties(DBSAR PROPERTIES
+                XCODE_EMBED_FRAMEWORKS                        "${_ffmpeg_xcfws}"
+                XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY      "NO"
+                XCODE_EMBED_FRAMEWORKS_REMOVE_HEADERS_ON_COPY "YES"
+            )
+            message(STATUS "Qt FFmpeg: ${_ffmpeg_found} xcframeworks will be embedded in bundle")
+        endif()
 
         if(_ffmpeg_found EQUAL 0)
             message(WARNING
