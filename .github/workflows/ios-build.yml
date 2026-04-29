@@ -68,10 +68,10 @@ jobs:
 
       - name: Inspect Qt iOS lib (FFmpeg discovery)
         run: |
-          echo "=== Qt iOS lib/ffmpeg/ ==="
-          ls "$QT_IOS/lib/ffmpeg/" 2>/dev/null || echo "(no ffmpeg/ subdirectory)"
-          echo "=== Qt iOS lib/ (FFmpeg-related) ==="
-          ls "$QT_IOS/lib/" | grep -iE "ffmpeg|avcodec|avformat|avutil|swscale|swresample|bundled" || echo "(no FFmpeg files in lib/)"
+          echo "=== ffmpeg/ xcframeworks ==="
+          ls "$QT_IOS/lib/ffmpeg/"
+          echo "=== libavcodec.xcframework internal layout ==="
+          find "$QT_IOS/lib/ffmpeg/libavcodec.xcframework" -name "*.a" | sort
 
       - name: Configure CMake
         run: |

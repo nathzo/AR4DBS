@@ -240,33 +240,38 @@ if(IOS)
         target_link_libraries(DBSAR PRIVATE Qt6::BundledFFmpeg)
         message(STATUS "Qt bundled FFmpeg: Qt6::BundledFFmpeg target linked")
     else()
-        # Qt 6.11.0 iOS ships individual FFmpeg static libs in <Qt>/lib/ffmpeg/
-        # There is no combined Qt6BundledFFmpeg.a and no CMake target for it.
+        # Qt 6.11.0 iOS ships FFmpeg as XCFrameworks in <Qt>/lib/ffmpeg/.
+        # Each xcframework contains the static lib for the device slice at:
+        #   lib<name>.xcframework/ios-arm64/lib<name>.a
         get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
-        file(GLOB _qt_ffmpeg_libs
-            # Qt 6.11+ layout: individual libs in lib/ffmpeg/
-            "${_qt_lib_dir}/ffmpeg/libavcodec*.a"
-            "${_qt_lib_dir}/ffmpeg/libavformat*.a"
-            "${_qt_lib_dir}/ffmpeg/libavutil*.a"
-            "${_qt_lib_dir}/ffmpeg/libswscale*.a"
-            "${_qt_lib_dir}/ffmpeg/libswresample*.a"
-            "${_qt_lib_dir}/ffmpeg/libavfilter*.a"
-            "${_qt_lib_dir}/ffmpeg/libavdevice*.a"
-            # Older layout: libs directly in lib/
-            "${_qt_lib_dir}/libQt6BundledFFmpeg*.a"
-            "${_qt_lib_dir}/libavcodec*.a"
-            "${_qt_lib_dir}/libavformat*.a"
-            "${_qt_lib_dir}/libavutil*.a"
-            "${_qt_lib_dir}/libswscale*.a"
-            "${_qt_lib_dir}/libswresample*.a"
-        )
-        if(_qt_ffmpeg_libs)
-            message(STATUS "Qt FFmpeg libs: ${_qt_ffmpeg_libs}")
-            target_link_libraries(DBSAR PRIVATE ${_qt_ffmpeg_libs})
+        set(_ffmpeg_dir "${_qt_lib_dir}/ffmpeg")
+        set(_ffmpeg_device_libs "")
+
+        foreach(_ff avcodec avformat avutil swresample swscale)
+            set(_xcfw "${_ffmpeg_dir}/lib${_ff}.xcframework")
+            if(EXISTS "${_xcfw}")
+                # Find the device (not simulator) arm64 static lib inside the xcframework
+                file(GLOB_RECURSE _candidates "${_xcfw}/*.a")
+                # ios-arm64/ slice — exclude simulator (ios-arm64_x86_64-simulator)
+                list(FILTER _candidates INCLUDE REGEX "/ios-arm64/lib${_ff}\\.a$")
+                if(_candidates)
+                    list(GET _candidates 0 _lib)
+                    list(APPEND _ffmpeg_device_libs "${_lib}")
+                    message(STATUS "Qt FFmpeg: ${_lib}")
+                else()
+                    message(WARNING "No ios-arm64 .a found inside ${_xcfw}")
+                endif()
+            else()
+                message(WARNING "Qt FFmpeg xcframework not found: ${_xcfw}")
+            endif()
+        endforeach()
+
+        if(_ffmpeg_device_libs)
+            target_link_libraries(DBSAR PRIVATE ${_ffmpeg_device_libs})
         else()
             message(WARNING
-                "Qt6::BundledFFmpeg target not found and no FFmpeg .a files found under "
-                "${_qt_lib_dir} — sws_*/av_* symbols will be unresolved at link time.")
+                "Qt6::BundledFFmpeg target not found and no FFmpeg xcframework libs found "
+                "in ${_ffmpeg_dir} — sws_*/av_* symbols will be unresolved at link time.")
         endif()
     endif()
 endif()
