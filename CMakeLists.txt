@@ -228,21 +228,20 @@ qt_add_resources(DBSAR "assets"
 # FFmpeg is the default in Qt 6.x but its static libs are not bundled in the
 # iOS kit download, so the linker can't resolve sws_* symbols.
 if(IOS)
-    # Exclude FFmpeg plugin — Qt6::QFFmpegMediaPlugin is the canonical CMake target name.
-    # If excluded successfully, AVFoundation backend is used instead.
-    # Also link Qt's bundled FFmpeg as a safety net in case the plugin is pulled in anyway.
-    qt_import_plugins(DBSAR
-        EXCLUDE Qt6::QFFmpegMediaPlugin
-    )
-    # Qt6_DIR = .../ios/lib/cmake/Qt6  →  ../../.. = .../ios/lib
-    get_filename_component(_qt_lib_dir "${Qt6_DIR}/../../.." ABSOLUTE)
+    # Qt 6.4+ uses FFmpeg as the ONLY multimedia backend on iOS (AVFoundation is
+    # integrated inside it via VideoToolbox). Do NOT exclude the FFmpeg plugin.
+    # Instead, link Qt's bundled FFmpeg static library so the linker can resolve
+    # the av_* / sws_* symbols inside libQt6FFmpegMediaPluginImpl.a
+    #
+    # Qt6_DIR = .../ios/lib/cmake/Qt6  →  ../.. = .../ios/lib
+    get_filename_component(_qt_lib_dir "${Qt6_DIR}/../.." ABSOLUTE)
     find_library(QT_BUNDLED_FFMPEG Qt6BundledFFmpeg
         PATHS "${_qt_lib_dir}" NO_DEFAULT_PATH QUIET)
     if(QT_BUNDLED_FFMPEG)
         target_link_libraries(DBSAR PRIVATE ${QT_BUNDLED_FFMPEG})
         message(STATUS "Qt bundled FFmpeg: ${QT_BUNDLED_FFMPEG}")
     else()
-        message(STATUS "Qt6BundledFFmpeg not found in ${_qt_lib_dir} — FFmpeg plugin excluded")
+        message(STATUS "Qt6BundledFFmpeg not found in ${_qt_lib_dir}")
     endif()
 endif()
 
