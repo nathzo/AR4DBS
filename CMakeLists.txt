@@ -251,12 +251,16 @@ if(IOS)
 
         foreach(_ff avcodec avformat avutil swresample swscale)
             set(_slice "${_ffmpeg_dir}/lib${_ff}.xcframework/ios-arm64")
+            # find_library generates the correct -framework lib<n> flag via
+            # target_link_libraries, but CMake adds the parent dir as -rpath,
+            # not -F.  Add -F explicitly — a single token, so no splitting issue.
             find_library(_qt_ff_${_ff} "lib${_ff}"
                 PATHS "${_slice}"
                 NO_DEFAULT_PATH)
             if(_qt_ff_${_ff})
+                target_link_options(DBSAR PRIVATE "-F${_slice}")
                 target_link_libraries(DBSAR PRIVATE "${_qt_ff_${_ff}}")
-                message(STATUS "Qt FFmpeg: ${_qt_ff_${_ff}}")
+                message(STATUS "Qt FFmpeg: -F${_slice} -framework lib${_ff}")
                 math(EXPR _ffmpeg_found "${_ffmpeg_found}+1")
             else()
                 message(WARNING "Qt FFmpeg: lib${_ff} not found in ${_slice}")
