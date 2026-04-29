@@ -1,6 +1,7 @@
 #import <AVFoundation/AVFoundation.h>
 #include "CameraIntrinsics.h"
 #include <cmath>
+#include <functional>
 
 CameraIntrinsicsData readCameraIntrinsics(int captureWidth, int captureHeight)
 {
@@ -45,4 +46,32 @@ CameraIntrinsicsData readCameraIntrinsics(int captureWidth, int captureHeight)
     result.fy    = result.fx; // iPhone pixels are square
     result.valid = true;
     return result;
+}
+
+void requestCameraAccess(std::function<void(bool)> callback)
+{
+    AVAuthorizationStatus status =
+        [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+
+    if (status == AVAuthorizationStatusAuthorized) {
+        // Already granted — proceed immediately
+        callback(true);
+        return;
+    }
+
+    if (status == AVAuthorizationStatusNotDetermined) {
+        // First time — show the system permission prompt.
+        // The completion block may be called on a background thread; dispatch to
+        // main so Qt camera start() runs on the same thread that owns the QObject.
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo
+                               completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                callback(granted);
+            });
+        }];
+        return;
+    }
+
+    // Denied or restricted — inform caller so it can show a message
+    callback(false);
 }

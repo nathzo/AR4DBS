@@ -87,7 +87,17 @@ IOSCamera::~IOSCamera()
 void IOSCamera::start()
 {
     m_impl->calibEmitted = false; // allow re-read if restarted
-    m_impl->camera->start();
+
+    // On iOS 14+ the camera session delivers no frames and never appears in
+    // Settings unless we explicitly request permission before starting.
+    // The Qt FFmpeg multimedia plugin does not do this automatically.
+    requestCameraAccess([this](bool granted) {
+        if (granted) {
+            m_impl->camera->start();
+        } else {
+            qWarning() << "IOSCamera: camera permission denied — no frames will be delivered";
+        }
+    });
 }
 
 void IOSCamera::stop()

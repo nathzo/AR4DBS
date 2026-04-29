@@ -161,6 +161,22 @@ jobs:
             echo "No embedding checks needed."
           fi
 
+          # --- Info.plist checks ---
+          PLIST="build-ios/Release-iphoneos/DBSAR.app/Info.plist"
+          echo ""
+          echo "=== Info.plist privacy keys ==="
+          if [ ! -f "$PLIST" ]; then
+            echo "FAIL Info.plist not found in app bundle"
+            exit 1
+          fi
+          if /usr/libexec/PlistBuddy -c "Print NSCameraUsageDescription" "$PLIST" 2>/dev/null; then
+            echo "OK  NSCameraUsageDescription is present — camera permission prompt will appear"
+          else
+            echo "FAIL NSCameraUsageDescription is MISSING from Info.plist"
+            echo "     iOS will crash the app the moment camera access is attempted."
+            exit 1
+          fi
+
       - name: Package IPA
         run: |
           mkdir -p Payload
