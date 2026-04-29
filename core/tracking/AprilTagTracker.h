@@ -26,4 +26,14 @@ private:
     float   m_markerSize;
     std::vector<cv::Point3f> m_objPts;
     cv::aruco::ArucoDetector m_detector;
+
+    // --- Optimisation additions ---
+    static constexpr float kDetectScale = 0.4f;  // downscale factor for detection
+
+    cv::Mat m_grey;   // reused grayscale buffer
+    cv::Mat m_small;  // reused downscaled buffer
+
+    std::vector<std::vector<cv::Point2f>> m_corners;   // reused detection output
+    std::vector<std::vector<cv::Point2f>> m_rejected;  // reused rejection output
+    std::vector<int>                      m_ids;       // reused ID output
 };
