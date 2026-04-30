@@ -20,12 +20,13 @@ public:
     void start();
     void stop();
 
+    struct Impl;
+
 signals:
     void frameReady(const cv::Mat &bgr, const cv::Mat &world_T_camera);
     void calibrationReady(const cv::Mat &K);
 
 private:
-    struct Impl;
     Impl *m_impl;
 };
 
