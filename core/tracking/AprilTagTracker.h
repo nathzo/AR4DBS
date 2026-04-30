@@ -27,13 +27,27 @@ private:
     std::vector<cv::Point3f> m_objPts;
     cv::aruco::ArucoDetector m_detector;
 
-    // --- Optimisation additions ---
     static constexpr float kDetectScale = 0.4f;  // downscale factor for detection
+    // ROI padding in scaled-image pixels around the last known tag centre.
+    // 80 px at 0.4× ≈ 200 px in full-res — enough for moderate motion at 30 fps.
+    static constexpr int   kRoiPad      = 80;
 
     cv::Mat m_grey;   // reused grayscale buffer
     cv::Mat m_small;  // reused downscaled buffer
 
-    std::vector<std::vector<cv::Point2f>> m_corners;   // reused detection output
-    std::vector<std::vector<cv::Point2f>> m_rejected;  // reused rejection output
-    std::vector<int>                      m_ids;       // reused ID output
+    std::vector<std::vector<cv::Point2f>> m_corners;
+    std::vector<std::vector<cv::Point2f>> m_rejected;
+    std::vector<int>                      m_ids;
+
+    // ROI state — updated each frame
+    bool    m_roiActive = false;
+    cv::Rect m_roi;                 // in m_small coordinates
+    cv::Point2f m_roiOffset;        // top-left of the ROI in m_small coordinates
+
+    // Run detection inside a sub-image; returns false on a miss (caller does full scan)
+    bool detectInRoi(std::vector<std::vector<cv::Point2f>> &corners,
+                     std::vector<int>                      &ids);
+    // Update m_roi from the detected corners (in m_small coordinates)
+    void updateRoi(const std::vector<std::vector<cv::Point2f>> &corners,
+                   cv::Size smallSize);
 };

@@ -1,7 +1,7 @@
 {
     "comment": "Positions of each tag in the frame coordinate system (origin = frame centre).",
     "dictionary":    "DICT_4X4_50",
-    "marker_size_m": 0.05,
+    "marker_size_m": 0.03,
     "tags": [
         {
             "id": 0,

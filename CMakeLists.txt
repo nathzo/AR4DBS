@@ -143,7 +143,7 @@ if(FEATURE_PLAN_SCANNER)
         core/math/SurgicalPlan.h
     )
 
-    # Optional OCR backend — desktop only (no Tesseract for iOS)
+    # Optional OCR backend
     if(NOT IOS)
         find_package(Tesseract QUIET)
         if(Tesseract_FOUND)
@@ -154,7 +154,14 @@ if(FEATURE_PLAN_SCANNER)
             message(STATUS "  To enable OCR: vcpkg install tesseract:x64-windows")
         endif()
     else()
-        message(STATUS "Tesseract: skipped on iOS — manual coordinate entry only")
+        # Use Apple Vision framework (built into iOS 13+) instead of Tesseract
+        find_library(FW_VISION Vision REQUIRED)
+        add_compile_definitions(HAVE_IOS_OCR)
+        list(APPEND PLATFORM_SOURCES
+            platform/ios/IOSOCREngine.h
+            platform/ios/IOSOCREngine.mm
+        )
+        message(STATUS "OCR: using Apple Vision framework (HAVE_IOS_OCR)")
     endif()
 else()
     message(STATUS "Plan scanner: disabled (FEATURE_PLAN_SCANNER=OFF)")
@@ -342,6 +349,7 @@ if(IOS)
         ${FW_FOUNDATION}
         ${FW_AVFOUNDATION}
         ${FW_UIKIT}
+        $<$<BOOL:${FW_VISION}>:${FW_VISION}>
     )
     if(onnxruntime_FOUND)
         find_library(FW_COREML CoreML REQUIRED)

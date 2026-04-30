@@ -54,8 +54,15 @@ MainWindow::MainWindow(QWidget *parent)
     // through during transitions or around safe-area insets on iOS.
     setStyleSheet("QMainWindow { background-color: #1a1b1d; }");
 
-    // ── Controller ────────────────────────────────────────────────────────────
-    m_controller = new AppController(this);
+    // ── Controller — runs on a dedicated thread so detect+blend never block UI ─
+    m_controller       = new AppController;   // no parent — will be moved to thread
+    m_controllerThread = new QThread(this);
+    m_controller->moveToThread(m_controllerThread);
+    // Destroy the controller when the thread finishes, and quit the thread when
+    // the window closes (see closeEvent).
+    connect(m_controllerThread, &QThread::finished,
+            m_controller,       &QObject::deleteLater);
+    m_controllerThread->start();
 
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
 
@@ -83,7 +90,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // ── AR camera (used in the AR phase) ─────────────────────────────────────
 #ifdef Q_OS_IOS
-    m_arCamera = new IOSCamera(1280, 720, this);
+    m_arCamera = new IOSCamera(854, 480, this);
     connect(m_arCamera, &IOSCamera::calibrationReady,
             m_controller, &AppController::setCalibration);
     connect(m_arCamera, &IOSCamera::frameReady,
@@ -125,23 +132,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE
     m_btnEditPlan->setVisible(false);
 
-    m_btnNextTarget = new QPushButton("Cible suivante →", arBtnRow);
-    m_btnNextTarget->setStyleSheet(arBtnStyle("#c45255")); // IMPULSE_RED
-    m_btnNextTarget->setVisible(false);
-
     arBtnLayout->addWidget(m_btnBackToMenu, 1);
     arBtnLayout->addWidget(m_btnEditPlan,   1);
-    arBtnLayout->addWidget(m_btnNextTarget, 1);
     arLayout->addWidget(arBtnRow);
 
     connect(m_controller, &AppController::frameReady,
             m_glWidget,   &GLWidget::setFrame);
-    connect(m_controller, &AppController::targetChanged,
-            this, [this](int /*index*/, int total) {
-        m_btnNextTarget->setVisible(total > 1);
-    });
-    connect(m_btnNextTarget, &QPushButton::clicked,
-            m_controller,    &AppController::nextTarget);
     connect(m_btnEditPlan, &QPushButton::clicked,
             this, [this]() {
 #ifdef FEATURE_PLAN_SCANNER
@@ -154,7 +150,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_btnBackToMenu, &QPushButton::clicked, this, [this]() {
         m_arCamera->stop();
         m_btnEditPlan->setVisible(false);
-        m_btnNextTarget->setVisible(false);
         m_stack->setCurrentIndex(0);
     });
 
@@ -205,8 +200,7 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // Stop all cameras and disconnect signals before Qt destroys child widgets.
-    // This prevents timer callbacks from firing into half-destroyed objects.
+    // Stop cameras first so no more frames are queued at the controller.
     if (m_arCamera) {
         m_arCamera->disconnect();
         m_arCamera->stop();
@@ -214,7 +208,17 @@ void MainWindow::closeEvent(QCloseEvent *event)
 #ifdef FEATURE_PLAN_SCANNER
     if (m_scanScreen) m_scanScreen->stopCamera();
 #endif
+
+    // Disconnect controller signals before asking the thread to quit so no
+    // cross-thread calls land on a half-destroyed controller.
     if (m_controller) m_controller->disconnect();
+
+    // Shut down the worker thread; deleteLater on m_controller fires when finished.
+    if (m_controllerThread) {
+        m_controllerThread->quit();
+        m_controllerThread->wait();
+    }
+
     event->accept();
 }
 

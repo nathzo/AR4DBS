@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QThread>
 #include "core/math/SurgicalPlan.h"
 
 class QStackedWidget;
@@ -40,11 +41,11 @@ private:
     QStackedWidget *m_stack        = nullptr;
 #endif
 
-    GLWidget       *m_glWidget        = nullptr;
-    AppController  *m_controller      = nullptr;
-    QPushButton    *m_btnNextTarget   = nullptr;
-    QPushButton    *m_btnEditPlan     = nullptr;
-    QPushButton    *m_btnBackToMenu   = nullptr;
+    GLWidget       *m_glWidget         = nullptr;
+    AppController  *m_controller       = nullptr;
+    QThread        *m_controllerThread = nullptr;
+    QPushButton    *m_btnEditPlan      = nullptr;
+    QPushButton    *m_btnBackToMenu    = nullptr;
     SurgicalPlan    m_currentPlan;
 
 #ifdef Q_OS_IOS

@@ -72,54 +72,33 @@ void AppController::setSurgicalPlan(const SurgicalPlan &plan)
     m_lines[1] = plan.hasRight()
         ? std::make_unique<IncisionLine>(IncisionLine::fromLeksell(plan.right))
         : nullptr;
-
-    // Start on the first active target
-    m_activeIndex = m_lines[0] ? 0 : 1;
-
-    int total = (m_lines[0] ? 1 : 0) + (m_lines[1] ? 1 : 0);
-    emit targetChanged(m_activeIndex, total);
-}
-
-void AppController::nextTarget()
-{
-    // Collect active indices
-    int active[2] = {-1, -1};
-    int count = 0;
-    for (int i = 0; i < 2; ++i)
-        if (m_lines[i]) active[count++] = i;
-    if (count < 2) return; // nothing to switch
-
-    // Advance to the other one
-    m_activeIndex = (m_activeIndex == active[0]) ? active[1] : active[0];
-    emit targetChanged(m_activeIndex, count);
 }
 
 void AppController::onNewFrame(const cv::Mat &frame)
 {
     m_frameTimer.restart();
 
-    cv::Mat out = frame.clone();
-
     const auto detections = m_tracker->detect(frame);
-    m_tracker->drawAxes(out, detections);
-
     const cv::Mat T_cam_frame = fusePoses(detections);
-    if (T_cam_frame.empty()) {
-        emit frameReady(out);
+
+    const bool anyLine = m_lines[0] || m_lines[1];
+    if (T_cam_frame.empty() || !anyLine) {
+        m_lastFrameMs = m_frameTimer.elapsed();
+        emit frameReady(frame);
         return;
     }
+
+    cv::Mat out = frame.clone();
+
+#ifndef NDEBUG
+    m_tracker->drawAxes(out, detections);
+#endif
 
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
 
-    if (m_activeIndex < 0 || m_activeIndex >= 2 || !m_lines[m_activeIndex]) {
-        emit frameReady(out);
-        return;
-    }
-    const auto &line = *m_lines[m_activeIndex];
-
-    // Depth map — skipped when the previous frame already took > 50 ms so that
-    // ONNX inference does not compound latency on slower devices.
+    // Depth map computed once and shared across both trajectories.
+    // Skipped when the previous frame already took > 50 ms.
     cv::Mat depthMap;
     cv::Point2f tagPx;
     double tagMetricDepth = 0;
@@ -134,73 +113,73 @@ void AppController::onNewFrame(const cv::Mat &frame)
 
     const bool hasDepth = !depthMap.empty() && relTag > 1e-4f;
 
+    m_renderer->beginFrame(out);
+
     if (!hasDepth) {
-        // No depth available — draw the full trajectory unconditionally
-        m_renderer->draw(out, line.target(), line.lineEnd(),
-                         nullptr, m_K, rvec, tvec);
+        // Simple mode: draw both trajectories fully
+        for (int i = 0; i < 2; ++i) {
+            if (!m_lines[i]) continue;
+            const auto &line = *m_lines[i];
+            m_renderer->drawSegment(line.lineEnd(), line.target(), m_K, rvec, tvec);
+            m_renderer->drawTargetMarker(line.target(), m_K, rvec, tvec);
+        }
     } else {
-        // Occlusion-aware rendering ───────────────────────────────────────────
-        // Pre-compute camera rotation matrix once
+        // Occlusion-aware mode — R, lambdas computed once, reused for both lines
         cv::Mat R;
         cv::Rodrigues(rvec, R);
 
-        // Returns metric depth of the closest surface at pixel p
         auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
             const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec);
             const float rel = sampleDepthAt(depthMap, px);
-            if (rel < 1e-4f) return 1e9; // no surface data → treat as far away
+            if (rel < 1e-4f) return 1e9;
             return tagMetricDepth * relTag / rel;
         };
 
-        // Returns metric depth of a 3-D point in the camera frame
         auto cameraDepth = [&](const cv::Point3d &pt) -> double {
             const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
             const cv::Mat ptCam = R * v + tvec.reshape(1,3);
             return ptCam.at<double>(2);
         };
 
-        // A point is visible when the surface in front of it is farther away
-        // (5 % tolerance prevents flickering exactly at the surface)
         auto visible = [&](const cv::Point3d &pt) -> bool {
             const double cd = cameraDepth(pt);
             if (cd <= 0) return false;
             return surfaceDepth(pt) >= cd * 0.95;
         };
 
-        // Walk the trajectory from lineEnd (skull side) toward target,
-        // drawing only segments where both endpoints are visible
-        const cv::Point3d &tgt = line.target();
-        const cv::Point3d &end = line.lineEnd();
+        for (int i = 0; i < 2; ++i) {
+            if (!m_lines[i]) continue;
+            const auto &line = *m_lines[i];
+            const cv::Point3d &tgt = line.target();
+            const cv::Point3d &end = line.lineEnd();
 
-        m_renderer->beginFrame(out);
+            for (int s = 0; s < RAY_SAMPLES; ++s) {
+                const double t0 = static_cast<double>(s)   / RAY_SAMPLES;
+                const double t1 = static_cast<double>(s+1) / RAY_SAMPLES;
+                const cv::Point3d p0 = {
+                    end.x + t0*(tgt.x-end.x),
+                    end.y + t0*(tgt.y-end.y),
+                    end.z + t0*(tgt.z-end.z)
+                };
+                const cv::Point3d p1 = {
+                    end.x + t1*(tgt.x-end.x),
+                    end.y + t1*(tgt.y-end.y),
+                    end.z + t1*(tgt.z-end.z)
+                };
+                if (visible(p0) && visible(p1))
+                    m_renderer->drawSegment(p0, p1, m_K, rvec, tvec);
+            }
 
-        for (int i = 0; i < RAY_SAMPLES; ++i) {
-            const double t0 = static_cast<double>(i)   / RAY_SAMPLES;
-            const double t1 = static_cast<double>(i+1) / RAY_SAMPLES;
-            const cv::Point3d p0 = {
-                end.x + t0*(tgt.x-end.x),
-                end.y + t0*(tgt.y-end.y),
-                end.z + t0*(tgt.z-end.z)
-            };
-            const cv::Point3d p1 = {
-                end.x + t1*(tgt.x-end.x),
-                end.y + t1*(tgt.y-end.y),
-                end.z + t1*(tgt.z-end.z)
-            };
-            if (visible(p0) && visible(p1))
-                m_renderer->drawSegment(p0, p1, m_K, rvec, tvec);
+            if (visible(tgt))
+                m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
+
+            auto hit = findIncisionPoint(depthMap, rvec, tvec, tagPx, tagMetricDepth, line);
+            if (hit.has_value())
+                m_renderer->drawIncisionMarker(hit.value(), m_K, rvec, tvec);
         }
-
-        if (visible(tgt))
-            m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
-
-        auto hit = findIncisionPoint(depthMap, rvec, tvec, tagPx, tagMetricDepth);
-        if (hit.has_value())
-            m_renderer->drawIncisionMarker(hit.value(), m_K, rvec, tvec);
-
-        m_renderer->endFrame();
     }
 
+    m_renderer->endFrame();
     m_lastFrameMs = m_frameTimer.elapsed();
     emit frameReady(out);
 }
@@ -224,7 +203,8 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
     const cv::Mat     &rvec,
     const cv::Mat     &tvec,
     const cv::Point2f &tagPx,
-    double             tagMetricDepth) const
+    double             tagMetricDepth,
+    const IncisionLine &line) const
 {
     if (depthMap.empty()) return std::nullopt;
 
@@ -234,13 +214,8 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
     cv::Mat R;
     cv::Rodrigues(rvec, R);
 
-    const IncisionLine *activeLine =
-        (m_activeIndex >= 0 && m_lines[m_activeIndex])
-        ? m_lines[m_activeIndex].get() : nullptr;
-    if (!activeLine) return std::nullopt;
-
-    const cv::Point3d &tgt = activeLine->target();
-    const cv::Point3d &end = activeLine->lineEnd();
+    const cv::Point3d &tgt = line.target();
+    const cv::Point3d &end = line.lineEnd();
 
     for (int i = 0; i <= RAY_SAMPLES; ++i) {
         const double t = static_cast<double>(i) / RAY_SAMPLES;

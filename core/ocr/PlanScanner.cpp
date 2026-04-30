@@ -7,13 +7,15 @@
 #ifdef HAVE_TESSERACT
 #  include <tesseract/baseapi.h>
 #  include <leptonica/allheaders.h>
+#elif defined(HAVE_IOS_OCR)
+#  include "platform/ios/IOSOCREngine.h"
 #endif
 
 // ── Availability ─────────────────────────────────────────────────────────────
 
 bool PlanScanner::isAvailable()
 {
-#ifdef HAVE_TESSERACT
+#if defined(HAVE_TESSERACT) || defined(HAVE_IOS_OCR)
     return true;
 #else
     return false;
@@ -118,9 +120,18 @@ SurgicalPlan PlanScanner::scan(const cv::Mat &frame)
     pixDestroy(&pix);
 
     return parseText(text);
+
+#elif defined(HAVE_IOS_OCR)
+    // Perspective-correct to the monitor face first, then hand the cropped
+    // image to Apple Vision.  extractScreen() falls back to the full frame
+    // if no bright rectangle is found.
+    cv::Mat screen = extractScreen(frame);
+    std::string text = IOSOCREngine::recognize(screen);
+    return parseText(text);
+
 #else
     (void)frame;
-    return {}; // Tesseract not compiled in — caller opens manual-entry form
+    return {}; // no OCR backend — caller opens manual-entry form
 #endif
 }
 

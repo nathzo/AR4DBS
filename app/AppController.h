@@ -37,14 +37,9 @@ public slots:
     void onNewFrame(const cv::Mat &frame);
     void setCalibration(const cv::Mat &K);
     void setSurgicalPlan(const SurgicalPlan &plan);
-    // Advance to the next active target (cycles when at the last one).
-    void nextTarget();
 
 signals:
     void frameReady(const cv::Mat &annotated);
-    // Emitted when the plan changes or nextTarget() is called.
-    // total = number of active targets (0, 1, or 2).
-    void targetChanged(int activeIndex, int total);
 
 private:
     cv::Mat                        loadCalibration(const QString &path);
@@ -57,7 +52,8 @@ private:
         const cv::Mat     &rvec,
         const cv::Mat     &tvec,
         const cv::Point2f &tagPx,
-        double             tagMetricDepth) const;
+        double             tagMetricDepth,
+        const IncisionLine &line) const;
 
     cv::Mat m_K;
     cv::Mat m_dist;
@@ -69,8 +65,7 @@ private:
     // Up to two active trajectories: [0]=left, [1]=right
     // nullptr means that side is inactive
     std::unique_ptr<IncisionLine> m_lines[2];
-    int                           m_activeIndex = 0;
 
-    QElapsedTimer m_frameTimer;   // measures wall time of the last onNewFrame call
+    QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
 };
