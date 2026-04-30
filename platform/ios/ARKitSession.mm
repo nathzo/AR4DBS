@@ -66,8 +66,16 @@ struct ARKitSession::Impl {
     // Emit calibration once, scaled to actual capture resolution.
     if (!impl->calibEmitted) {
         impl->calibEmitted = true;
-        matrix_float3x3 intr =
-            [frame.camera intrinsicsForViewportSize:CGSizeMake(w, h)];
+        matrix_float3x3 intr = frame.camera.intrinsics;
+        CGSize imageRes = frame.camera.imageResolution;
+
+        float scaleX = w / imageRes.width;
+        float scaleY = h / imageRes.height;
+
+        intr.columns[0][0] *= scaleX;  // fx
+        intr.columns[2][0] *= scaleX;  // cx
+        intr.columns[1][1] *= scaleY;  // fy
+        intr.columns[2][1] *= scaleY;  // cy
         // columns[col][row]
         cv::Mat K = (cv::Mat_<double>(3, 3)
             << intr.columns[0][0], 0,                   intr.columns[2][0],
