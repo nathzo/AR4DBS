@@ -29,6 +29,10 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     : QObject(parent)
     , m_impl(new Impl)
 {
+    for (const QCameraDevice &dev : QMediaDevices::videoInputs()) {
+        qDebug() << "Camera:" << dev.description() << "position:" << dev.position();
+    }
+
     m_impl->captureWidth  = captureWidth;
     m_impl->captureHeight = captureHeight;
 
@@ -121,7 +125,7 @@ void IOSCamera::start()
             m_impl->camera->start();
             // AVFoundation needs ~200 ms after start() before
             // lockForConfiguration succeeds on the active device
-            QTimer::singleShot(300, this, []() {
+            QTimer::singleShot(500, this, []() {
                 forceMainCameraZoom();
             });
         } else {
