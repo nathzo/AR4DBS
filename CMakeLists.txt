@@ -201,10 +201,10 @@ set(CORE_SOURCES
 # Platform layer: only the camera differs between desktop and iPhone
 if(IOS)
     set(PLATFORM_SOURCES
-        platform/ios/IOSCamera.h
-        platform/ios/IOSCamera.cpp
+        platform/ios/ARKitSession.h
+        platform/ios/ARKitSession.mm       # Objective-C++ — ARKit session + pose delivery
         platform/ios/CameraIntrinsics.h
-        platform/ios/CameraIntrinsics.mm   # Objective-C++ — reads AVFoundation FOV
+        platform/ios/CameraIntrinsics.mm   # Objective-C++ — reads AVFoundation FOV (kept for reference)
     )
 else()
     set(PLATFORM_SOURCES
@@ -345,10 +345,14 @@ if(IOS)
     find_library(FW_FOUNDATION   Foundation   REQUIRED)
     find_library(FW_AVFOUNDATION AVFoundation REQUIRED)
     find_library(FW_UIKIT        UIKit        REQUIRED)
+    find_library(FW_ARKIT        ARKit        REQUIRED)
+    find_library(FW_COREVIDEO    CoreVideo    REQUIRED)
     target_link_libraries(DBSAR PRIVATE
         ${FW_FOUNDATION}
         ${FW_AVFOUNDATION}
         ${FW_UIKIT}
+        ${FW_ARKIT}
+        ${FW_COREVIDEO}
         $<$<BOOL:${FW_VISION}>:${FW_VISION}>
     )
     if(onnxruntime_FOUND)

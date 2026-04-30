@@ -116,13 +116,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
     m_renderer->beginFrame(out);
 
     if (!hasDepth) {
-        // Simple mode: draw both trajectories fully
-        for (int i = 0; i < 2; ++i) {
-            if (!m_lines[i]) continue;
-            const auto &line = *m_lines[i];
-            m_renderer->drawSegment(line.lineEnd(), line.target(), m_K, rvec, tvec);
-            m_renderer->drawTargetMarker(line.target(), m_K, rvec, tvec);
-        }
+        renderOverlayOnto(out, rvec, tvec);
     } else {
         // Occlusion-aware mode — R, lambdas computed once, reused for both lines
         cv::Mat R;
@@ -268,6 +262,91 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
     const double n = static_cast<double>(framePoses.size());
     return PoseUtils::toTransform(rvecSum / n, tvecSum / n);
 }
+
+// ── Simple overlay renderer (shared by both AprilTag and ARKit paths) ─────────
+
+// Draws both trajectory lines onto `out`. Caller must wrap with beginFrame/endFrame.
+void AppController::renderOverlayOnto(cv::Mat &out,
+                                      const cv::Mat &rvec,
+                                      const cv::Mat &tvec)
+{
+    for (int i = 0; i < 2; ++i) {
+        if (!m_lines[i]) continue;
+        const auto &line = *m_lines[i];
+        m_renderer->drawSegment(line.lineEnd(), line.target(), m_K, rvec, tvec);
+        m_renderer->drawTargetMarker(line.target(), m_K, rvec, tvec);
+    }
+}
+
+// ── ARKit path ────────────────────────────────────────────────────────────────
+
+#ifdef Q_OS_IOS
+
+// ARKit camera (Y-up, Z-toward-viewer) → OpenCV camera (Y-down, Z-into-scene):
+// flip Y and Z axes.
+static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
+    << 1,  0,  0, 0,
+       0, -1,  0, 0,
+       0,  0, -1, 0,
+       0,  0,  0, 1);
+
+void AppController::resetARRegistration()
+{
+    m_arState       = ARState::Registering;
+    m_world_T_frame = cv::Mat();
+}
+
+void AppController::onARFrame(const cv::Mat &frame,
+                               const cv::Mat &world_T_camera)
+{
+    m_frameTimer.restart();
+
+    const bool anyLine = m_lines[0] || m_lines[1];
+
+    if (m_arState == ARState::Registering) {
+        // Detect AprilTags to anchor the surgical frame in world space.
+        const auto detections = m_tracker->detect(frame);
+        const cv::Mat T_cam_frame = fusePoses(detections);
+
+        if (!T_cam_frame.empty()) {
+            // world_T_frame = world_T_camera_arkit * kFlip * T_cam_frame
+            // (kFlip converts OpenCV camera space back to ARKit world space)
+            m_world_T_frame = world_T_camera * kARKitFlip * T_cam_frame;
+            m_arState       = ARState::Tracking;
+        }
+
+        cv::Mat out = frame.clone();
+#ifndef NDEBUG
+        m_tracker->drawAxes(out, detections);
+#endif
+        m_lastFrameMs = m_frameTimer.elapsed();
+        emit frameReady(out);
+        return;
+    }
+
+    // Tracking mode: compute pose from ARKit world tracking, no tag detection needed.
+    // T_cam_frame = kFlip * world_T_camera^{-1} * world_T_frame
+    const cv::Mat T_cam_frame =
+        kARKitFlip * world_T_camera.inv() * m_world_T_frame;
+
+    if (!anyLine) {
+        m_lastFrameMs = m_frameTimer.elapsed();
+        emit frameReady(frame);
+        return;
+    }
+
+    cv::Mat out = frame.clone();
+    cv::Mat rvec, tvec;
+    PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
+    m_renderer->beginFrame(out);
+    renderOverlayOnto(out, rvec, tvec);
+    m_renderer->endFrame();
+
+    m_lastFrameMs = m_frameTimer.elapsed();
+    emit frameReady(out);
+}
+
+#endif // Q_OS_IOS
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 

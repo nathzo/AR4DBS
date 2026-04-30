@@ -9,7 +9,7 @@ class GLWidget;
 class AppController;
 
 #ifdef Q_OS_IOS
-class IOSCamera;
+class ARKitSession;
 #else
 class DesktopCamera;
 #endif
@@ -49,7 +49,7 @@ private:
     SurgicalPlan    m_currentPlan;
 
 #ifdef Q_OS_IOS
-    IOSCamera      *m_arCamera   = nullptr;
+    ARKitSession   *m_arCamera   = nullptr;
 #else
     DesktopCamera  *m_arCamera   = nullptr;
 #endif

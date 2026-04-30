@@ -36,7 +36,7 @@ static SurgicalPlan defaultTestPlan()
 }
 
 #ifdef Q_OS_IOS
-#  include "platform/ios/IOSCamera.h"
+#  include "platform/ios/ARKitSession.h"
 #else
 #  include "platform/desktop/DesktopCamera.h"
 #endif
@@ -92,27 +92,30 @@ MainWindow::MainWindow(QWidget *parent)
     // ── AR camera (used in the AR phase) ─────────────────────────────────────
     //
     // Frame-drop guard: AppController lives on a worker thread, so the
-    // camera→controller connection is QueuedConnection.  If onNewFrame takes
-    // longer than the camera's emission interval (32 ms), frames pile up in
-    // the worker's event queue without bound — causing memory growth, 100 %
-    // CPU utilisation, and thermal throttling within seconds.
+    // camera→controller connection is QueuedConnection.  If processing takes
+    // longer than the camera's emission interval, frames pile up in the worker's
+    // event queue without bound — causing memory growth, 100 % CPU, and thermal
+    // throttling within seconds.
     //
-    // Fix: allow at most ONE frame to be pending in the queue at any time.
-    // If the worker is still processing the previous frame, the new one is
-    // silently dropped.  `busy` is shared between the lambda and the queued
-    // functor via a ref-counted QAtomicInt.
+    // Fix: allow at most ONE frame pending in the queue at any time.  If the
+    // worker is still processing, the new frame is silently dropped.
+    // `busy` is shared between the lambda and the queued functor via a
+    // ref-counted QAtomicInt.
     auto busy = std::make_shared<QAtomicInt>(0);
 
 #ifdef Q_OS_IOS
-    m_arCamera = new IOSCamera(854, 480, this);
-    connect(m_arCamera, &IOSCamera::calibrationReady,
+    // ARKit path: frameReady carries both the BGR image and the ARKit
+    // world_T_camera pose matrix, so no per-frame AprilTag detection is needed
+    // once the surgical frame has been registered.
+    m_arCamera = new ARKitSession(this);
+    connect(m_arCamera, &ARKitSession::calibrationReady,
             m_controller, &AppController::setCalibration);
-    connect(m_arCamera, &IOSCamera::frameReady, this,
-            [this, busy](const cv::Mat &frame) {
-        if (!busy->testAndSetAcquire(0, 1)) return; // worker busy — drop frame
+    connect(m_arCamera, &ARKitSession::frameReady, this,
+            [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera) {
+        if (!busy->testAndSetAcquire(0, 1)) return;
         QMetaObject::invokeMethod(m_controller,
-            [this, frame, busy]() {
-                m_controller->onNewFrame(frame);
+            [this, frame, world_T_camera, busy]() {
+                m_controller->onARFrame(frame, world_T_camera);
                 busy->storeRelease(0);
             });
     });
@@ -254,6 +257,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 void MainWindow::startAR()
 {
     m_stack->setCurrentIndex(2);
+#ifdef Q_OS_IOS
+    // Re-register the surgical frame on each new AR session start so that
+    // returning from the menu and re-entering AR picks up a fresh anchor.
+    m_controller->resetARRegistration();
+#endif
     m_arCamera->start();
 }
 
@@ -285,6 +293,9 @@ void MainWindow::editPlan()
         m_controller->setSurgicalPlan(m_currentPlan);
     }
 
+#ifdef Q_OS_IOS
+    m_controller->resetARRegistration();
+#endif
     m_arCamera->start();
 }
 #endif

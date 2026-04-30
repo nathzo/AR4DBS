@@ -1,7 +1,9 @@
 #include <QApplication>
 #include <QMessageLogContext>
 #include <QtGlobal>
+#include <QMetaType>
 #include "MainWindow.h"
+#include "AppController.h" // pulls in Q_DECLARE_METATYPE(cv::Mat)
 
 #include <opencv2/core/utils/logger.hpp>
 
@@ -39,6 +41,9 @@ int main(int argc, char *argv[])
 #endif
 
     qInstallMessageHandler(appMessageHandler);
+
+    // Register cv::Mat so it can be passed through queued (cross-thread) connections.
+    qRegisterMetaType<cv::Mat>("cv::Mat");
 
     // Suppress OpenCV INFO spam (plugin load attempts, backend enumeration).
     // These go straight to stderr and bypass Qt's message handler.

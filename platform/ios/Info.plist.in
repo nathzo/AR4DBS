@@ -37,6 +37,10 @@
     <key>NSCameraUsageDescription</key>
     <string>Camera access is required to overlay the surgical plan on the patient.</string>
 
+    <!-- ARKit uses the accelerometer and gyroscope for world tracking -->
+    <key>NSMotionUsageDescription</key>
+    <string>Motion sensors are used by ARKit to stabilise the surgical overlay.</string>
+
     <!-- Support all orientations so the surgeon can hold the phone any way -->
     <key>UISupportedInterfaceOrientations</key>
     <array>

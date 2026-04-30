@@ -8,6 +8,10 @@
 
 #include "core/math/SurgicalPlan.h"
 
+// Register cv::Mat with Qt's meta-type system so it can be passed through
+// queued (cross-thread) signal/slot connections.
+Q_DECLARE_METATYPE(cv::Mat)
+
 class AprilTagTracker;
 class IncisionLine;
 class OverlayRenderer;
@@ -38,6 +42,13 @@ public slots:
     void setCalibration(const cv::Mat &K);
     void setSurgicalPlan(const SurgicalPlan &plan);
 
+#ifdef Q_OS_IOS
+    // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
+    // onARFrame is called from MainWindow's busy-guard lambda on the worker thread.
+    void onARFrame(const cv::Mat &frame, const cv::Mat &world_T_camera);
+    void resetARRegistration(); // call before each AR session start
+#endif
+
 signals:
     void frameReady(const cv::Mat &annotated);
 
@@ -46,6 +57,12 @@ private:
     std::vector<TagConfig>         loadTagConfigs(const QString &path);
 
     cv::Mat fusePoses(const std::vector<TagPose> &detections) const;
+
+    // Draws trajectory overlay onto `out` using the given pose.
+    // Shared between the AprilTag path (onNewFrame) and the ARKit path (onARFrame).
+    void renderOverlayOnto(cv::Mat &out,
+                           const cv::Mat &rvec,
+                           const cv::Mat &tvec);
 
     std::optional<cv::Point3d> findIncisionPoint(
         const cv::Mat     &depthMap,
@@ -68,4 +85,10 @@ private:
 
     QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
+
+#ifdef Q_OS_IOS
+    enum class ARState { Registering, Tracking };
+    ARState m_arState       = ARState::Registering;
+    cv::Mat m_world_T_frame; // stored once at registration, used every tracking frame
+#endif
 };
