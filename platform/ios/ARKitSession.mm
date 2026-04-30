@@ -92,7 +92,16 @@ struct ARKitSession::Impl {
         emit impl->q->calibrationReady(K);
     }
 
-  emit impl->q->frameReady(bgrPortrait, world_T_camera);
+    // Convert simd_float4x4 (column-major) → 4×4 CV_64F row-major cv::Mat.
+    // ARKit camera.transform = world_T_camera  (camera pose in world space).
+    simd_float4x4 T = frame.camera.transform;
+    cv::Mat world_T_camera(4, 4, CV_64F);
+    for (int col = 0; col < 4; ++col)
+        for (int row = 0; row < 4; ++row)
+            world_T_camera.at<double>(row, col) =
+                static_cast<double>(T.columns[col][row]);
+
+    emit impl->q->frameReady(bgr, world_T_camera);
 }
 
 - (void)session:(ARSession *)session didFailWithError:(NSError *)error
