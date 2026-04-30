@@ -32,18 +32,31 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     m_impl->captureWidth  = captureWidth;
     m_impl->captureHeight = captureHeight;
 
-    // Pick the back (wide) camera
     QCameraDevice backDevice;
+    QCameraDevice backFallback;
+
     for (const QCameraDevice &dev : QMediaDevices::videoInputs()) {
-        if (dev.position() == QCameraDevice::BackFace) {
+        if (dev.position() != QCameraDevice::BackFace)
+            continue;
+
+        const QString desc = dev.description().toLower();
+
+        if (!desc.contains("ultra") && !desc.contains("telephoto")) {
             backDevice = dev;
             break;
         }
+        if (backFallback.isNull())
+            backFallback = dev;
     }
 
+    if (backDevice.isNull())
+        backDevice = backFallback;
+
     m_impl->camera = backDevice.isNull()
-        ? new QCamera(this)
-        : new QCamera(backDevice, this);
+                         ? new QCamera(this)
+                         : new QCamera(backDevice, this);
+
+    m_impl->camera->setZoomFactor(1.0);
 
     m_impl->sink = new QVideoSink(this);
     m_impl->session.setCamera(m_impl->camera);

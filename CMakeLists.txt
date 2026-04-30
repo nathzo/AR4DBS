@@ -157,7 +157,7 @@ if(FEATURE_PLAN_SCANNER)
         # Use Apple Vision framework (built into iOS 13+) instead of Tesseract
         find_library(FW_VISION Vision REQUIRED)
         add_compile_definitions(HAVE_IOS_OCR)
-        list(APPEND PLATFORM_SOURCES
+        list(APPEND SCANNER_SOURCES
             platform/ios/IOSOCREngine.h
             platform/ios/IOSOCREngine.mm
         )
