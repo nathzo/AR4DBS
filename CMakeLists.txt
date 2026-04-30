@@ -205,8 +205,8 @@ if(IOS)
         platform/ios/ARKitSession.mm       # Objective-C++ — ARKit session + pose delivery
         platform/ios/CameraIntrinsics.h
         platform/ios/CameraIntrinsics.mm   # Objective-C++ — reads AVFoundation FOV (kept for reference)
-        platform/ios/IOSCamera.h          # ← add
-        platform/ios/IOSCamera.mm
+        platform/ios/IOSCamera.h
+        platform/ios/IOSCamera.cpp
     )
 else()
     set(PLATFORM_SOURCES
