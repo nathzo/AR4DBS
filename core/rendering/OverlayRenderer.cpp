@@ -9,6 +9,8 @@ OverlayRenderer::OverlayRenderer()               : m_style()    {}
 OverlayRenderer::OverlayRenderer(const Style &s) : m_style(s)   {}
 OverlayRenderer::~OverlayRenderer() = default;
 
+void OverlayRenderer::setDistortion(const cv::Mat &dist) { m_dist = dist.clone(); }
+
 // ── Overlay management ────────────────────────────────────────────────────────
 
 void OverlayRenderer::ensureOverlay(int w, int h)
@@ -129,8 +131,8 @@ void OverlayRenderer::drawSegment(const cv::Point3d &p0, const cv::Point3d &p1,
                                    const cv::Mat &rvec, const cv::Mat &tvec)
 {
     if (!m_painter) return;
-    const cv::Point2f a = PoseUtils::project(p0, K, rvec, tvec);
-    const cv::Point2f b = PoseUtils::project(p1, K, rvec, tvec);
+    const cv::Point2f a = PoseUtils::project(p0, K, rvec, tvec, m_dist);
+    const cv::Point2f b = PoseUtils::project(p1, K, rvec, tvec, m_dist);
     paintLine(QPointF(a.x, a.y), QPointF(b.x, b.y));
 }
 
@@ -139,7 +141,7 @@ void OverlayRenderer::drawTargetMarker(const cv::Point3d &target,
                                         const cv::Mat &rvec, const cv::Mat &tvec)
 {
     if (!m_painter) return;
-    const cv::Point2f p = PoseUtils::project(target, K, rvec, tvec);
+    const cv::Point2f p = PoseUtils::project(target, K, rvec, tvec, m_dist);
     paintTarget(QPointF(p.x, p.y));
 }
 
@@ -148,7 +150,7 @@ void OverlayRenderer::drawIncisionMarker(const cv::Point3d &pt,
                                           const cv::Mat &rvec, const cv::Mat &tvec)
 {
     if (!m_painter) return;
-    const cv::Point2f p = PoseUtils::project(pt, K, rvec, tvec);
+    const cv::Point2f p = PoseUtils::project(pt, K, rvec, tvec, m_dist);
     paintIncision(QPointF(p.x, p.y));
 }
 
@@ -164,12 +166,12 @@ void OverlayRenderer::draw(cv::Mat           &frame,
 {
     beginFrame(frame);
 
-    const cv::Point2f pT  = PoseUtils::project(target,  K, rvec, tvec);
-    const cv::Point2f pLE = PoseUtils::project(lineEnd, K, rvec, tvec);
+    const cv::Point2f pT  = PoseUtils::project(target,  K, rvec, tvec, m_dist);
+    const cv::Point2f pLE = PoseUtils::project(lineEnd, K, rvec, tvec, m_dist);
     paintLine(QPointF(pT.x, pT.y), QPointF(pLE.x, pLE.y));
     paintTarget(QPointF(pT.x, pT.y));
     if (incisionPt) {
-        const cv::Point2f pI = PoseUtils::project(*incisionPt, K, rvec, tvec);
+        const cv::Point2f pI = PoseUtils::project(*incisionPt, K, rvec, tvec, m_dist);
         paintIncision(QPointF(pI.x, pI.y));
     }
 

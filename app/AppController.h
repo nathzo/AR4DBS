@@ -74,6 +74,7 @@ private:
 
     cv::Mat m_K;
     cv::Mat m_dist;
+    float   m_markerSize = 0.05f; // overwritten from tag_config.json marker_size_m
     std::vector<TagConfig>           m_tagConfigs;
     std::unique_ptr<AprilTagTracker> m_tracker;
     std::unique_ptr<OverlayRenderer> m_renderer;
@@ -88,7 +89,9 @@ private:
 
 #ifdef Q_OS_IOS
     enum class ARState { Registering, Tracking };
-    ARState m_arState       = ARState::Registering;
-    cv::Mat m_world_T_frame; // stored once at registration, used every tracking frame
+    ARState              m_arState            = ARState::Registering;
+    cv::Mat              m_world_T_frame;
+    std::vector<cv::Mat> m_registrationPoses; // accumulated during Registering
+    static constexpr int kRegistrationFrames  = 20;
 #endif
 };

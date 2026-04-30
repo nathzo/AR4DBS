@@ -25,13 +25,14 @@ void fromTransform(const cv::Mat &T, cv::Mat &rvec, cv::Mat &tvec)
 cv::Point2f project(const cv::Point3d &pt,
                     const cv::Mat &K,
                     const cv::Mat &rvec,
-                    const cv::Mat &tvec)
+                    const cv::Mat &tvec,
+                    const cv::Mat &dist)
 {
     // Use double throughout to avoid type mismatch in OpenCV 4.7+
     std::vector<cv::Point3d> in = {pt};
     std::vector<cv::Point2d> out;
-    cv::Mat noDistortion = cv::Mat::zeros(1, 4, CV_64F);
-    cv::projectPoints(in, rvec, tvec, K, noDistortion, out);
+    const cv::Mat d = dist.empty() ? cv::Mat::zeros(1, 4, CV_64F) : dist;
+    cv::projectPoints(in, rvec, tvec, K, d, out);
     return cv::Point2f(static_cast<float>(out[0].x),
                        static_cast<float>(out[0].y));
 }

@@ -27,8 +27,7 @@ bool AppController::init(const QString &calibPath,
                          const QString &planPath,
                          const QString &depthModelPath)
 {
-    m_K    = loadCalibration(calibPath);
-    m_dist = cv::Mat::zeros(1, 4, CV_64F);
+    m_K = loadCalibration(calibPath); // also populates m_dist
     if (m_K.empty()) {
         qWarning() << "AppController: could not load calibration from" << calibPath;
         return false;
@@ -40,8 +39,9 @@ bool AppController::init(const QString &calibPath,
         return false;
     }
 
-    m_tracker  = std::make_unique<AprilTagTracker>(m_K, m_dist, 0.05f);
+    m_tracker  = std::make_unique<AprilTagTracker>(m_K, m_dist, m_markerSize);
     m_renderer = std::make_unique<OverlayRenderer>();
+    m_renderer->setDistortion(m_dist);
 
     if (!depthModelPath.isEmpty()) {
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
@@ -59,7 +59,7 @@ bool AppController::init(const QString &calibPath,
 void AppController::setCalibration(const cv::Mat &K)
 {
     m_K = K.clone();
-    m_tracker = std::make_unique<AprilTagTracker>(m_K, m_dist, 0.05f);
+    m_tracker = std::make_unique<AprilTagTracker>(m_K, m_dist, m_markerSize);
     qDebug() << "AppController: calibration updated fx=" << K.at<double>(0,0)
              << "fy=" << K.at<double>(1,1);
 }
@@ -107,7 +107,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
         depthMap       = m_depth->estimate(frame);
         tagMetricDepth = cv::norm(detections[0].tvec);
         tagPx          = PoseUtils::project(
-            cv::Point3d(0,0,0), m_K, detections[0].rvec, detections[0].tvec);
+            cv::Point3d(0,0,0), m_K, detections[0].rvec, detections[0].tvec, m_dist);
         relTag         = sampleDepthAt(depthMap, tagPx);
     }
 
@@ -123,7 +123,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
         cv::Rodrigues(rvec, R);
 
         auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
-            const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec);
+            const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
             const float rel = sampleDepthAt(depthMap, px);
             if (rel < 1e-4f) return 1e9;
             return tagMetricDepth * relTag / rel;
@@ -223,7 +223,7 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
         const double expectedDepth = ptCam.at<double>(2);
         if (expectedDepth <= 0) continue;
 
-        const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec);
+        const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
         const float relPt = sampleDepthAt(depthMap, px);
         if (relPt < 1e-4f) continue;
 
@@ -280,6 +280,20 @@ void AppController::renderOverlayOnto(cv::Mat &out,
 
 // ── ARKit path ────────────────────────────────────────────────────────────────
 
+static cv::Mat averagePoses(const std::vector<cv::Mat> &poses)
+{
+    cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
+    cv::Mat rvecSum = cv::Mat::zeros(3, 1, CV_64F);
+    for (const auto &T : poses) {
+        cv::Mat r, t;
+        PoseUtils::fromTransform(T, r, t);
+        tvecSum += t.reshape(1, 3);
+        rvecSum += r.reshape(1, 3);
+    }
+    const double n = static_cast<double>(poses.size());
+    return PoseUtils::toTransform(rvecSum / n, tvecSum / n);
+}
+
 #ifdef Q_OS_IOS
 
 // ARKit camera (Y-up, Z-toward-viewer) → OpenCV camera (Y-down, Z-into-scene):
@@ -292,8 +306,9 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    m_arState       = ARState::Registering;
+    m_arState = ARState::Registering;
     m_world_T_frame = cv::Mat();
+    m_registrationPoses.clear();
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -309,10 +324,12 @@ void AppController::onARFrame(const cv::Mat &frame,
         const cv::Mat T_cam_frame = fusePoses(detections);
 
         if (!T_cam_frame.empty()) {
-            // world_T_frame = world_T_camera_arkit * kFlip * T_cam_frame
-            // (kFlip converts OpenCV camera space back to ARKit world space)
-            m_world_T_frame = world_T_camera * kARKitFlip * T_cam_frame;
-            m_arState       = ARState::Tracking;
+            m_registrationPoses.push_back(world_T_camera * kARKitFlip * T_cam_frame);
+            if (static_cast<int>(m_registrationPoses.size()) >= kRegistrationFrames) {
+                m_world_T_frame = averagePoses(m_registrationPoses);
+                m_registrationPoses.clear();
+                m_arState = ARState::Tracking;
+            }
         }
 
         cv::Mat out = frame.clone();
@@ -355,6 +372,9 @@ cv::Mat AppController::loadCalibration(const QString &path)
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return {};
     const auto obj = QJsonDocument::fromJson(f.readAll()).object();
+    m_dist = (cv::Mat_<double>(1, 4)
+        << obj["k1"].toDouble(0), obj["k2"].toDouble(0),
+           obj["p1"].toDouble(0), obj["p2"].toDouble(0));
     return (cv::Mat_<double>(3, 3) <<
         obj["fx"].toDouble(900), 0,                       obj["cx"].toDouble(640),
         0,                       obj["fy"].toDouble(900),  obj["cy"].toDouble(360),
@@ -365,7 +385,9 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return {};
-    const auto arr = QJsonDocument::fromJson(f.readAll()).object()["tags"].toArray();
+    const auto root = QJsonDocument::fromJson(f.readAll()).object();
+    m_markerSize = static_cast<float>(root["marker_size_m"].toDouble(0.05));
+    const auto arr = root["tags"].toArray();
     std::vector<TagConfig> configs;
     for (const auto &entry : arr) {
         const auto obj = entry.toObject();

@@ -27,6 +27,8 @@ public:
     explicit OverlayRenderer(const Style &style);
     ~OverlayRenderer();
 
+    void setDistortion(const cv::Mat &dist);
+
     // Full draw (no occlusion).
     void draw(cv::Mat           &frame,
               const cv::Point3d &target,
@@ -59,6 +61,7 @@ public:
 
 private:
     Style               m_style;
+    cv::Mat             m_dist;
     cv::Mat            *m_frame   = nullptr;
     QImage              m_overlay;
     std::unique_ptr<QPainter> m_painter;
