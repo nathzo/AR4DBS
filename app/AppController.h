@@ -88,10 +88,8 @@ private:
     qint64        m_lastFrameMs = 0;
 
 #ifdef Q_OS_IOS
-    enum class ARState { Registering, Tracking };
-    ARState              m_arState            = ARState::Registering;
-    cv::Mat              m_world_T_frame;
-    std::vector<cv::Mat> m_registrationPoses; // accumulated during Registering
-    static constexpr int kRegistrationFrames  = 20;
+    // Empty until at least one tag detection succeeds.
+    // Refreshed every frame tags are visible; ARKit falls back to it when not.
+    cv::Mat m_world_T_frame;
 #endif
 };

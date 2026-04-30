@@ -280,20 +280,6 @@ void AppController::renderOverlayOnto(cv::Mat &out,
 
 // ── ARKit path ────────────────────────────────────────────────────────────────
 
-static cv::Mat averagePoses(const std::vector<cv::Mat> &poses)
-{
-    cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
-    cv::Mat rvecSum = cv::Mat::zeros(3, 1, CV_64F);
-    for (const auto &T : poses) {
-        cv::Mat r, t;
-        PoseUtils::fromTransform(T, r, t);
-        tvecSum += t.reshape(1, 3);
-        rvecSum += r.reshape(1, 3);
-    }
-    const double n = static_cast<double>(poses.size());
-    return PoseUtils::toTransform(rvecSum / n, tvecSum / n);
-}
-
 #ifdef Q_OS_IOS
 
 // ARKit camera (Y-up, Z-toward-viewer) → OpenCV camera (Y-down, Z-into-scene):
@@ -306,9 +292,7 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    m_arState = ARState::Registering;
     m_world_T_frame = cv::Mat();
-    m_registrationPoses.clear();
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -318,41 +302,34 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     const bool anyLine = m_lines[0] || m_lines[1];
 
-    if (m_arState == ARState::Registering) {
-        // Detect AprilTags to anchor the surgical frame in world space.
-        const auto detections = m_tracker->detect(frame);
-        const cv::Mat T_cam_frame = fusePoses(detections);
+    // Always attempt tag detection.
+    // When tags are visible they give the most accurate pose and refresh the
+    // ARKit anchor so the fallback stays current.
+    const auto detections     = m_tracker->detect(frame);
+    const cv::Mat T_from_tags = fusePoses(detections);
 
-        if (!T_cam_frame.empty()) {
-            m_registrationPoses.push_back(world_T_camera * kARKitFlip * T_cam_frame);
-            if (static_cast<int>(m_registrationPoses.size()) >= kRegistrationFrames) {
-                m_world_T_frame = averagePoses(m_registrationPoses);
-                m_registrationPoses.clear();
-                m_arState = ARState::Tracking;
-            }
-        }
+    cv::Mat T_cam_frame;
+    if (!T_from_tags.empty()) {
+        // Tags visible: use direct solvePnP result and keep the anchor fresh.
+        T_cam_frame     = T_from_tags;
+        m_world_T_frame = world_T_camera * kARKitFlip * T_from_tags;
+    } else if (!m_world_T_frame.empty()) {
+        // Tags not visible: fall back to ARKit world tracking.
+        T_cam_frame = kARKitFlip * world_T_camera.inv() * m_world_T_frame;
+    }
+    // If neither: m_world_T_frame still empty — no tags ever seen, no overlay.
 
-        cv::Mat out = frame.clone();
+    cv::Mat out = frame.clone();
 #ifndef NDEBUG
-        m_tracker->drawAxes(out, detections);
+    m_tracker->drawAxes(out, detections);
 #endif
+
+    if (T_cam_frame.empty() || !anyLine) {
         m_lastFrameMs = m_frameTimer.elapsed();
         emit frameReady(out);
         return;
     }
 
-    // Tracking mode: compute pose from ARKit world tracking, no tag detection needed.
-    // T_cam_frame = kFlip * world_T_camera^{-1} * world_T_frame
-    const cv::Mat T_cam_frame =
-        kARKitFlip * world_T_camera.inv() * m_world_T_frame;
-
-    if (!anyLine) {
-        m_lastFrameMs = m_frameTimer.elapsed();
-        emit frameReady(frame);
-        return;
-    }
-
-    cv::Mat out = frame.clone();
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
     m_renderer->beginFrame(out);
