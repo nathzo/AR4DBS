@@ -23,3 +23,5 @@ CameraIntrinsicsData readCameraIntrinsics(int captureWidth, int captureHeight);
 // - If denied / restricted  → calls callback(false) immediately on the calling thread.
 // Implemented in CameraIntrinsics.mm (Objective-C++).
 void requestCameraAccess(std::function<void(bool)> callback);
+
+void forceMainCameraZoom();

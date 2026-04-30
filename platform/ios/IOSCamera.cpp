@@ -119,6 +119,11 @@ void IOSCamera::start()
     requestCameraAccess([this](bool granted) {
         if (granted) {
             m_impl->camera->start();
+            // AVFoundation needs ~200 ms after start() before
+            // lockForConfiguration succeeds on the active device
+            QTimer::singleShot(300, this, []() {
+                forceMainCameraZoom();
+            });
         } else {
             qWarning() << "IOSCamera: camera permission denied — no frames will be delivered";
         }

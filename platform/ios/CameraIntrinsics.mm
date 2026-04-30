@@ -75,3 +75,23 @@ void requestCameraAccess(std::function<void(bool)> callback)
     // Denied or restricted — inform caller so it can show a message
     callback(false);
 }
+
+void forceMainCameraZoom()
+{
+    AVCaptureDevice *device = nil;
+    if (@available(iOS 13.0, *)) {
+        device = [AVCaptureDevice
+            defaultDeviceWithDeviceType:AVCaptureDeviceTypeBuiltInWideAngleCamera
+                              mediaType:AVMediaTypeVideo
+                               position:AVCaptureDevicePositionBack];
+    }
+    if (!device) return;
+
+    NSError *error = nil;
+    if ([device lockForConfiguration:&error]) {
+        device.videoZoomFactor = 1.0;
+        [device unlockForConfiguration];
+    } else {
+        NSLog(@"forceMainCameraZoom: could not lock device — %@", error);
+    }
+}
