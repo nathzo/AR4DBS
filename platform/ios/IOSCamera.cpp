@@ -29,10 +29,6 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     : QObject(parent)
     , m_impl(new Impl)
 {
-    for (const QCameraDevice &dev : QMediaDevices::videoInputs()) {
-        qDebug() << "Camera:" << dev.description() << "position:" << dev.position();
-    }
-
     m_impl->captureWidth  = captureWidth;
     m_impl->captureHeight = captureHeight;
 

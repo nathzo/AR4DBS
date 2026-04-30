@@ -63,37 +63,36 @@ struct ARKitSession::Impl {
     cv::Mat bgr;
     cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12);
 
-    // Emit calibration once, scaled to actual capture resolution.
+    // ARKit frames are always landscape-right — rotate to portrait
+    cv::Mat bgrPortrait;
+    cv::rotate(bgr, bgrPortrait, cv::ROTATE_90_CLOCKWISE);
+
+    // Adjust intrinsics for the 90° rotation:
+    // after rotation: new_w = old_h, new_fy = old_fx, new_fx = old_fy
+    // cx and cy swap and reflect
     if (!impl->calibEmitted) {
         impl->calibEmitted = true;
         matrix_float3x3 intr = frame.camera.intrinsics;
-        CGSize imageRes = frame.camera.imageResolution;
 
-        float scaleX = w / imageRes.width;
-        float scaleY = h / imageRes.height;
+        double fx = intr.columns[0][0];
+        double fy = intr.columns[1][1];
+        double cx = intr.columns[2][0];
+        double cy = intr.columns[2][1];
 
-        intr.columns[0][0] *= scaleX;  // fx
-        intr.columns[2][0] *= scaleX;  // cx
-        intr.columns[1][1] *= scaleY;  // fy
-        intr.columns[2][1] *= scaleY;  // cy
-        // columns[col][row]
+        // After ROTATE_90_CLOCKWISE: x_new = (h-1) - y_old, y_new = x_old
+        double new_fx = fy;
+        double new_fy = fx;
+        double new_cx = (h - 1) - cy;   // h = landscape height = portrait width
+        double new_cy = cx;
+
         cv::Mat K = (cv::Mat_<double>(3, 3)
-            << intr.columns[0][0], 0,                   intr.columns[2][0],
-               0,                   intr.columns[1][1],  intr.columns[2][1],
-               0,                   0,                   1);
+            << new_fx, 0,      new_cx,
+               0,      new_fy, new_cy,
+               0,      0,      1);
         emit impl->q->calibrationReady(K);
     }
 
-    // Convert simd_float4x4 (column-major) → 4×4 CV_64F row-major cv::Mat.
-    // ARKit camera.transform = world_T_camera  (camera pose in world space).
-    simd_float4x4 T = frame.camera.transform;
-    cv::Mat world_T_camera(4, 4, CV_64F);
-    for (int col = 0; col < 4; ++col)
-        for (int row = 0; row < 4; ++row)
-            world_T_camera.at<double>(row, col) =
-                static_cast<double>(T.columns[col][row]);
-
-    emit impl->q->frameReady(bgr, world_T_camera);
+  emit impl->q->frameReady(bgrPortrait, world_T_camera);
 }
 
 - (void)session:(ARSession *)session didFailWithError:(NSError *)error
