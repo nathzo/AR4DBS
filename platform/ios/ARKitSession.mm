@@ -54,7 +54,7 @@ struct ARKitSession::Impl {
     cv::Mat bgr;
     cv::cvtColorTwoPlane(yMat, uvMat, bgr, cv::COLOR_YUV2BGR_NV12);
 
-    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly)
+    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
 
     // ARKit frames are always landscape-right — rotate to portrait
     cv::Mat bgrPortrait;
