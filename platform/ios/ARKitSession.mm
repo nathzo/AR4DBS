@@ -48,20 +48,13 @@ struct ARKitSession::Impl {
     const uint8_t *uvData = static_cast<const uint8_t *>(
                                 CVPixelBufferGetBaseAddressOfPlane(pb, 1));
 
-    // Pack NV12 (Y plane + interleaved UV plane) into a contiguous cv::Mat.
-    // cv::COLOR_YUV2BGR_NV12 expects height*3/2 rows of width columns.
-    cv::Mat yuv(static_cast<int>(h * 3 / 2), static_cast<int>(w), CV_8UC1);
-    for (size_t row = 0; row < h; ++row)
-        std::memcpy(yuv.ptr(static_cast<int>(row)),
-                    yData + row * yStride, w);
-    for (size_t row = 0; row < h / 2; ++row)
-        std::memcpy(yuv.ptr(static_cast<int>(h + row)),
-                    uvData + row * uvStride, w);
-
-    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+    cv::Mat yMat(static_cast<int>(h),   static_cast<int>(w), CV_8UC1, (void*)yData,  yStride);
+    cv::Mat uvMat(static_cast<int>(h/2), static_cast<int>(w/2), CV_8UC2, (void*)uvData, uvStride);
 
     cv::Mat bgr;
-    cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12);
+    cv::cvtColorTwoPlane(yMat, uvMat, bgr, cv::COLOR_YUV2BGR_NV12);
+
+    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly)
 
     // ARKit frames are always landscape-right — rotate to portrait
     cv::Mat bgrPortrait;
@@ -101,7 +94,7 @@ struct ARKitSession::Impl {
             world_T_camera.at<double>(row, col) =
                 static_cast<double>(T.columns[col][row]);
 
-    emit impl->q->frameReady(bgr, world_T_camera);
+    emit impl->q->frameReady(bgrPortrait, world_T_camera);
 }
 
 - (void)session:(ARSession *)session didFailWithError:(NSError *)error
