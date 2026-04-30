@@ -8,6 +8,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QCloseEvent>
+#include <QAtomicInt>
 #include <cmath>
 
 // Two test targets centred between the tags (X=0), 10 cm above the tag plane (Z=0.10 m).
@@ -89,16 +90,43 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
     // ── AR camera (used in the AR phase) ─────────────────────────────────────
+    //
+    // Frame-drop guard: AppController lives on a worker thread, so the
+    // camera→controller connection is QueuedConnection.  If onNewFrame takes
+    // longer than the camera's emission interval (32 ms), frames pile up in
+    // the worker's event queue without bound — causing memory growth, 100 %
+    // CPU utilisation, and thermal throttling within seconds.
+    //
+    // Fix: allow at most ONE frame to be pending in the queue at any time.
+    // If the worker is still processing the previous frame, the new one is
+    // silently dropped.  `busy` is shared between the lambda and the queued
+    // functor via a ref-counted QAtomicInt.
+    auto busy = std::make_shared<QAtomicInt>(0);
+
 #ifdef Q_OS_IOS
     m_arCamera = new IOSCamera(854, 480, this);
     connect(m_arCamera, &IOSCamera::calibrationReady,
             m_controller, &AppController::setCalibration);
-    connect(m_arCamera, &IOSCamera::frameReady,
-            m_controller, &AppController::onNewFrame);
+    connect(m_arCamera, &IOSCamera::frameReady, this,
+            [this, busy](const cv::Mat &frame) {
+        if (!busy->testAndSetAcquire(0, 1)) return; // worker busy — drop frame
+        QMetaObject::invokeMethod(m_controller,
+            [this, frame, busy]() {
+                m_controller->onNewFrame(frame);
+                busy->storeRelease(0);
+            });
+    });
 #else
     m_arCamera = new DesktopCamera(0, this);
-    connect(m_arCamera, &DesktopCamera::frameReady,
-            m_controller, &AppController::onNewFrame);
+    connect(m_arCamera, &DesktopCamera::frameReady, this,
+            [this, busy](const cv::Mat &frame) {
+        if (!busy->testAndSetAcquire(0, 1)) return;
+        QMetaObject::invokeMethod(m_controller,
+            [this, frame, busy]() {
+                m_controller->onNewFrame(frame);
+                busy->storeRelease(0);
+            });
+    });
 #endif
 
     // ── AR display widget + "Next target" button ─────────────────────────────
