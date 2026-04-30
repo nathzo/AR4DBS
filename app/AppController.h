@@ -88,8 +88,9 @@ private:
     qint64        m_lastFrameMs = 0;
 
 #ifdef Q_OS_IOS
-    // Empty until at least one tag detection succeeds.
-    // Refreshed every frame tags are visible; ARKit falls back to it when not.
-    cv::Mat m_world_T_frame;
+    cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen
+    cv::Mat m_world_T_camera_prev; // previous ARKit pose, for computing Δ
+    // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
+    static constexpr double kAlpha = 0.15;
 #endif
 };

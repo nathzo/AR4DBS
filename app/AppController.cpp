@@ -292,33 +292,58 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    m_world_T_frame = cv::Mat();
+    m_T_cam_frame_filt    = cv::Mat();
+    m_world_T_camera_prev = cv::Mat();
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
                                const cv::Mat &world_T_camera)
 {
     m_frameTimer.restart();
-
     const bool anyLine = m_lines[0] || m_lines[1];
 
-    // Always attempt tag detection.
-    // When tags are visible they give the most accurate pose and refresh the
-    // ARKit anchor so the fallback stays current.
-    const auto detections     = m_tracker->detect(frame);
+    // ── 1. Prediction: propagate last filtered pose using ARKit's Δpose ──────
+    // ARKit gives accurate relative motion between frames even when its absolute
+    // world position drifts. We use it to predict where the frame is now.
+    cv::Mat T_cam_frame;
+    if (!m_T_cam_frame_filt.empty() && !m_world_T_camera_prev.empty()) {
+        // cam_new_T_cam_old in ARKit space, converted to OpenCV camera space.
+        // kARKitFlip is its own inverse (it is a reflection), so:
+        //   T_opencv = kARKitFlip * T_arkit * kARKitFlip
+        const cv::Mat delta_arkit = world_T_camera.inv() * m_world_T_camera_prev;
+        const cv::Mat delta_cam   = kARKitFlip * delta_arkit * kARKitFlip;
+        T_cam_frame = delta_cam * m_T_cam_frame_filt;
+    }
+
+    // ── 2. Measurement: detect tags and compute absolute pose ────────────────
+    const auto    detections  = m_tracker->detect(frame);
     const cv::Mat T_from_tags = fusePoses(detections);
 
-    cv::Mat T_cam_frame;
+    // ── 3. Update: blend prediction with measurement ─────────────────────────
     if (!T_from_tags.empty()) {
-        // Tags visible: use direct solvePnP result and keep the anchor fresh.
-        T_cam_frame     = T_from_tags;
-        m_world_T_frame = world_T_camera * kARKitFlip * T_from_tags;
-    } else if (!m_world_T_frame.empty()) {
-        // Tags not visible: fall back to ARKit world tracking.
-        T_cam_frame = kARKitFlip * world_T_camera.inv() * m_world_T_frame;
+        if (T_cam_frame.empty()) {
+            // No prediction yet (first frame) — initialise directly from tags.
+            T_cam_frame = T_from_tags;
+        } else {
+            // Complementary filter in rvec/tvec space.
+            // ARKit delta already accounts for real camera motion, so the gap
+            // between prediction and measurement is pure solvePnP noise plus
+            // any slow absolute drift — we blend in a small fraction each frame.
+            cv::Mat r_pred, t_pred, r_meas, t_meas;
+            PoseUtils::fromTransform(T_cam_frame,  r_pred, t_pred);
+            PoseUtils::fromTransform(T_from_tags,  r_meas, t_meas);
+            const cv::Mat r_fused = (1.0 - kAlpha) * r_pred + kAlpha * r_meas;
+            const cv::Mat t_fused = (1.0 - kAlpha) * t_pred + kAlpha * t_meas;
+            T_cam_frame = PoseUtils::toTransform(r_fused, t_fused);
+        }
     }
-    // If neither: m_world_T_frame still empty — no tags ever seen, no overlay.
+    // If no prediction and no tags: T_cam_frame stays empty → no overlay.
 
+    // ── 4. Store state for next frame ────────────────────────────────────────
+    m_world_T_camera_prev = world_T_camera.clone();
+    m_T_cam_frame_filt    = T_cam_frame.clone(); // empty clone is still empty
+
+    // ── 5. Render ────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 #ifndef NDEBUG
     m_tracker->drawAxes(out, detections);
