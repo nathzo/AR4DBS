@@ -85,7 +85,7 @@ jobs:
             echo "model-small.onnx not found — skipping CoreML conversion (depth disabled)"
             exit 0
           fi
-          pip install --quiet "coremltools>=7.0" onnx
+          python3 -m pip install --quiet "coremltools>=7.0" onnx
           python3 -c "import coremltools as ct; model = ct.convert('resources/model-small.onnx', minimum_deployment_target=ct.target.iOS14); model.save('resources/model-small.mlmodel'); print('Saved: resources/model-small.mlmodel')"
 
       # ── Configure ─────────────────────────────────────────────────────────────
