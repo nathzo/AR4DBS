@@ -99,6 +99,8 @@ private:
     QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
 
+    int  m_depthFrameCount = 0;
+
 #ifdef Q_OS_IOS
     cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen
     cv::Mat m_world_T_camera_prev; // previous ARKit pose, for computing Δ
