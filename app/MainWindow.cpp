@@ -2,6 +2,7 @@
 #include "AppController.h"
 #include "core/rendering/GLWidget.h"
 
+#include <QFile>
 #include <QMessageBox>
 #include <QCoreApplication>
 #include <QPushButton>
@@ -66,8 +67,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_controllerThread->start();
 
 #ifdef Q_OS_IOS
-    // Xcode compiles model-small.mlmodel → model-small.mlmodelc at bundle root.
-    const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.mlmodelc";
+    // Compiled CoreML model: Xcode places it in the bundle root or Resources/ depending on build settings.
+    QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.mlmodelc";
+    if (!QFile::exists(depthModel))
+        depthModel = QCoreApplication::applicationDirPath() + "/Resources/model-small.mlmodelc";
 #else
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
 #endif
@@ -186,6 +189,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_btnBackToMenu, &QPushButton::clicked, this, [this]() {
         m_arCamera->stop();
         m_btnEditPlan->setVisible(false);
+#ifdef Q_OS_IOS
+        m_controller->setShowDepthOverlay(false);
+#endif
         m_stack->setCurrentIndex(0);
     });
 
@@ -211,6 +217,9 @@ MainWindow::MainWindow(QWidget *parent)
         m_currentPlan = defaultTestPlan();
         m_controller->setSurgicalPlan(m_currentPlan);
         m_btnEditPlan->setVisible(true);
+#ifdef Q_OS_IOS
+        m_controller->setShowDepthOverlay(true);
+#endif
         startAR();
     });
 

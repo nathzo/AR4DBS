@@ -79,6 +79,8 @@ void AppController::setCalibration(const cv::Mat &K)
              << "fy=" << K.at<double>(1,1);
 }
 
+void AppController::setShowDepthOverlay(bool show) { m_showDepthOverlay = show; }
+
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
     m_lines[0] = plan.hasLeft()
@@ -187,7 +189,11 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
         const float relPt = sampleDepthAt(depthMap, px);
         if (relPt < 1e-4f) continue;
 
-        const double estimatedDepth = depthAnchor / relPt;
+#ifdef Q_OS_IOS
+        const double estimatedDepth = relPt * depthAnchor; // depth convention (higher=farther)
+#else
+        const double estimatedDepth = depthAnchor / relPt; // disparity convention (higher=closer)
+#endif
         if (std::abs(estimatedDepth - expectedDepth) < DEPTH_TOLERANCE * expectedDepth)
             return pt;
     }
@@ -211,16 +217,26 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
     if (framePoses.empty()) return {};
     if (framePoses.size() == 1) return framePoses[0];
 
+    // Average rotations in SO(3) (matrix space) then re-orthogonalise via SVD.
+    // Direct Rodrigues-vector averaging fails near the ±π boundary where the same
+    // rotation has two antipodal representations — causing ~180° flips.
+    cv::Mat RSum    = cv::Mat::zeros(3, 3, CV_64F);
     cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
-    cv::Mat rvecSum = cv::Mat::zeros(3, 1, CV_64F);
     for (const auto &T : framePoses) {
         cv::Mat r, t;
         PoseUtils::fromTransform(T, r, t);
+        cv::Mat R;
+        cv::Rodrigues(r, R);
+        RSum    += R;
         tvecSum += t.reshape(1, 3);
-        rvecSum += r.reshape(1, 3);
     }
     const double n = static_cast<double>(framePoses.size());
-    return PoseUtils::toTransform(rvecSum / n, tvecSum / n);
+    cv::Mat U, S, Vt;
+    cv::SVD::compute(RSum, S, U, Vt);
+    if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+    cv::Mat rFused;
+    cv::Rodrigues(U * Vt, rFused);
+    return PoseUtils::toTransform(rFused, tvecSum / n);
 }
 
 // ── Simple overlay renderer (shared by both AprilTag and ARKit paths) ─────────
@@ -254,12 +270,20 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     cv::Rodrigues(rvec, R);
 
     // Returns the estimated metric surface depth at the pixel corresponding to pt.
-    // depthAnchor / rel(px) converts the unitless MiDaS value to metres.
+    // Formula depends on depth model convention:
+    //   iOS (Depth Anything v2): depth convention — higher values are farther.
+    //     surfaceDepth = rel * depthAnchor  (anchor = tagMetricDepth / relTag)
+    //   Desktop (MiDaS): disparity convention — higher values are closer.
+    //     surfaceDepth = depthAnchor / rel  (anchor = tagMetricDepth * relTag)
     auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
         const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
         const float rel = sampleDepthAt(depthMap, px);
-        if (rel < 1e-4f) return 1e9;
+        if (rel < 1e-4f) return 1e9; // OOB or no data → assume no occlusion
+#ifdef Q_OS_IOS
+        return rel * depthAnchor;
+#else
         return depthAnchor / rel;
+#endif
     };
 
     // Returns the actual Z-depth of a frame-space point in camera space.
@@ -412,7 +436,9 @@ void AppController::onARFrame(const cv::Mat &frame,
                 detections[0].rvec, detections[0].tvec, m_dist);
             const float relTag = sampleDepthAt(depthMap, tagPx);
             if (relTag > 1e-4f)
-                m_depthAnchor = tagMetricDepth * relTag;
+                // Depth Anything v2 outputs depth (higher=farther), so divide.
+                // anchor / relTag = tagMetricDepth → surfaceDepth = rel * anchor
+                m_depthAnchor = tagMetricDepth / relTag;
         }
     }
 
@@ -430,6 +456,18 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
+
+    // Depth visualization overlay (test AR mode): red = close, blue = far.
+    // Applied before trajectory rendering so lines remain visible on top.
+    if (m_showDepthOverlay && !depthMap.empty()) {
+        // Invert so that low depth values (close) map to high pixel values → red in JET.
+        cv::Mat invDepth = 1.0f - depthMap;
+        cv::Mat depth8u, colored;
+        invDepth.convertTo(depth8u, CV_8U, 255.0);
+        cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);
+        cv::addWeighted(out, 0.7, colored, 0.3, 0, out);
+    }
+
     m_renderer->beginFrame(out);
     cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
 

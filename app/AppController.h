@@ -45,6 +45,7 @@ public slots:
     void onNewFrame(const cv::Mat &frame);
     void setCalibration(const cv::Mat &K);
     void setSurgicalPlan(const SurgicalPlan &plan);
+    void setShowDepthOverlay(bool show);
 
 #ifdef Q_OS_IOS
     // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
@@ -98,6 +99,8 @@ private:
 
     QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
+
+    bool m_showDepthOverlay = false;
 
     int  m_depthFrameCount          = 0;
     static constexpr int kDepthThrottleFrames = 3;
