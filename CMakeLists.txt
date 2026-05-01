@@ -309,14 +309,6 @@ if(IOS)
     endif()
 endif()
 
-# On iOS the ONNX model must be a real file in the bundle (not a Qt resource)
-# because ONNX Runtime opens it with fopen().  On desktop it sits next to the exe.
-if(IOS)
-    set_source_files_properties(resources/model-small.onnx PROPERTIES
-        MACOSX_PACKAGE_LOCATION Resources)
-    target_sources(DBSAR PRIVATE resources/model-small.onnx)
-endif()
-
 # CoreML depth model for iOS monocular depth (CoreMLDepthEstimator).
 # Set COREML_DEPTH_MODEL to the path of an .mlmodel or .mlpackage file.
 # Xcode will compile it to .mlmodelc and place it in the app bundle Resources/.

@@ -5,7 +5,8 @@
 #include <opencv2/imgproc.hpp>
 #include <cstring>
 
-// ImageNet mean and 1/std — same as the ONNX MiDaS preprocessing.
+// ImageNet mean and 1/std — used for MultiArray inputs that expect ImageNet normalisation.
+// Apple's Depth Anything v2 CoreML model uses image-type input so these are not applied.
 static const float kMean[3]   = {0.485f, 0.456f, 0.406f};
 static const float kInvStd[3] = {1.f/0.229f, 1.f/0.224f, 1.f/0.225f};
 
@@ -184,9 +185,12 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
     std::memcpy(disp.data, outArr.dataPointer,
                 (size_t)outH * outW * sizeof(float));
 
-    // Normalise to [0,1] where 1 = closest (MiDaS outputs disparity, not depth).
+    // Normalise raw output to [0,1], then invert so that 1 = closest.
+    // Depth Anything v2 outputs metric-like depth (larger = farther), which is the
+    // opposite of the disparity convention expected by AppController's anchor formula.
     cv::Mat norm;
     cv::normalize(disp, norm, 0.0, 1.0, cv::NORM_MINMAX, CV_32F);
+    norm = 1.0f - norm;   // invert: 0=far, 1=close
     cv::Mat result;
     cv::resize(norm, result, bgr.size(), 0, 0, cv::INTER_LINEAR);
     return result;

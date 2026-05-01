@@ -65,44 +65,37 @@ jobs:
                -o opencv-ios.zip
           unzip -q opencv-ios.zip -d ~/opencv-ios
 
-      # ── CoreML depth model conversion ─────────────────────────────────────────
-      # Convert resources/model-small.onnx (MiDaS) to CoreML format so it can be
-      # bundled directly into the app and loaded by CoreMLDepthEstimator at runtime.
-      # The result is cached by ONNX file hash — re-conversion only happens when
-      # the model changes. Build succeeds without a model (depth disabled at runtime).
+      # ── Depth Anything v2 CoreML model (Apple official, no conversion needed) ────
+      # Downloads DepthAnythingV2SmallF16.mlpackage from the apple/ HuggingFace repo.
+      # Xcode compiles it to model-small.mlmodelc and bundles it in the app at build time.
+      # Cached with a fixed key — bump the key to force a re-download.
 
-      - name: Restore converted CoreML model from cache
+      - name: Restore Depth Anything v2 CoreML model from cache
         id: coreml-cache
         uses: actions/cache@v4
         with:
-          path: resources/model-small.mlmodel
-          key: coreml-midas-small-${{ hashFiles('resources/model-small.onnx') }}
+          path: resources/model-small.mlpackage
+          key: depth-anything-v2-small-f16-v1
 
-      - name: Set up Python 3.12 for CoreML conversion
-        if: steps.coreml-cache.outputs.cache-hit != 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Convert MiDaS ONNX to CoreML
+      - name: Download Depth Anything v2 CoreML model
         if: steps.coreml-cache.outputs.cache-hit != 'true'
         run: |
-          if [ ! -f resources/model-small.onnx ]; then
-            echo "model-small.onnx not found — skipping CoreML conversion (depth disabled)"
-            exit 0
-          fi
-          pip install --quiet "coremltools>=7.0" onnx
-          python3 -c "import onnx, coremltools as ct; m = onnx.load('resources/model-small.onnx'); out = ct.convert(m, minimum_deployment_target=ct.target.iOS14); out.save('resources/model-small.mlmodel'); print('Saved: resources/model-small.mlmodel')"
+          GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 \
+            https://huggingface.co/apple/coreml-depth-anything-v2-small \
+            /tmp/da-model
+          cd /tmp/da-model
+          git lfs pull --include "DepthAnythingV2SmallF16.mlpackage/**"
+          cp -r DepthAnythingV2SmallF16.mlpackage \
+                "$GITHUB_WORKSPACE/resources/model-small.mlpackage"
 
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
         run: |
-          # Pass the CoreML model to cmake when the conversion succeeded.
-          # Xcode will compile model-small.mlmodel → model-small.mlmodelc and
-          # place it in the app bundle's Resources/ directory automatically.
+          # Bundle the CoreML model when present.
+          # Xcode compiles model-small.mlpackage → model-small.mlmodelc automatically.
           COREML_ARG=""
-          if [ -f resources/model-small.mlmodel ]; then
-            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlmodel"
+          if [ -d resources/model-small.mlpackage ]; then
+            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlpackage"
             echo "CoreML model found — depth occlusion will be bundled"
           else
             echo "CoreML model not found — depth occlusion disabled in this build"
@@ -195,7 +188,7 @@ jobs:
             echo "OK  CoreML model bundled — depth occlusion active at runtime"
           else
             echo "INFO CoreML model not bundled — depth occlusion disabled at runtime"
-            echo "     (add model-small.onnx to the repo to enable)"
+            echo "     (model download may have failed — check the download step logs)"
           fi
 
           # --- Info.plist checks ---
