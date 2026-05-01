@@ -2,7 +2,6 @@
 #include <opencv2/core.hpp>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <vector>
-#include <nlohmann/json.hpp>
 
 struct TagPose {
     int     id;
