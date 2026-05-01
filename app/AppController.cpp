@@ -21,6 +21,7 @@ static constexpr int    RAY_SAMPLES     = 60;
 static float sampleDepthAt(const cv::Mat &depthMap, cv::Point2f p); // defined below
 static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
+static constexpr int kDepthThrottleFrames = 30;
 
 AppController::AppController(QObject *parent) : QObject(parent) {}
 AppController::~AppController() = default;

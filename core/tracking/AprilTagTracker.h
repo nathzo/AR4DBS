@@ -54,4 +54,6 @@ private:
     // Update m_roi from the detected corners (in m_small coordinates)
     void updateRoi(const std::vector<std::vector<cv::Point2f>> &corners,
                    cv::Size smallSize);
+
+    int  m_depthFrameCount = 0;
 };
