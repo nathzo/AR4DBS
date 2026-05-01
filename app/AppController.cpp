@@ -129,6 +129,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
     }
 
     m_renderer->beginFrame(out);
+    cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.03f); //  3 cm frame origin axes
 
     if (depthAnchor < 1e-9) {
         renderOverlayOnto(out, rvec, tvec);
@@ -430,6 +431,7 @@ void AppController::onARFrame(const cv::Mat &frame,
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
     m_renderer->beginFrame(out);
+    cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
         renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor);
