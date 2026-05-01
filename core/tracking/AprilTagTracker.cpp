@@ -29,31 +29,6 @@ AprilTagTracker::AprilTagTracker(const cv::Mat &K,
     };
 }
 
-void AprilTagTracker::loadTagConfig(const std::string &path)
-{
-    std::ifstream f(path);
-    auto j = nlohmann::json::parse(f);
-
-    m_tagConfigs.clear();
-    for (const auto &t : j["tags"]) {
-        TagConfig cfg;
-        cfg.id = t["id"];
-
-        cv::Mat rvec = (cv::Mat_<double>(3,1)
-                            << t["rx_rad"].get<double>(),
-                        t["ry_rad"].get<double>(),
-                        t["rz_rad"].get<double>());
-        cv::Rodrigues(rvec, cfg.R_tag_frame);
-
-        cfg.t_tag_frame = (cv::Mat_<double>(3,1)
-                               << t["tx_m"].get<double>(),
-                           t["ty_m"].get<double>(),
-                           t["tz_m"].get<double>());
-
-        m_tagConfigs.push_back(cfg);
-    }
-}
-
 bool AprilTagTracker::estimateFramePose(const std::vector<TagPose> &poses,
                                         cv::Mat &R_out, cv::Mat &t_out) const
 {
