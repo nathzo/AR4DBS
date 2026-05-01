@@ -1,6 +1,7 @@
 #include "AprilTagTracker.h"
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
+#include <fstream>
 
 AprilTagTracker::AprilTagTracker(const cv::Mat &K,
                                  const cv::Mat &distCoeffs,
@@ -26,6 +27,67 @@ AprilTagTracker::AprilTagTracker(const cv::Mat &K,
         {  h, -h, 0.f },
         { -h, -h, 0.f }
     };
+}
+
+void AprilTagTracker::loadTagConfig(const std::string &path)
+{
+    std::ifstream f(path);
+    auto j = nlohmann::json::parse(f);
+
+    m_tagConfigs.clear();
+    for (const auto &t : j["tags"]) {
+        TagConfig cfg;
+        cfg.id = t["id"];
+
+        cv::Mat rvec = (cv::Mat_<double>(3,1)
+                            << t["rx_rad"].get<double>(),
+                        t["ry_rad"].get<double>(),
+                        t["rz_rad"].get<double>());
+        cv::Rodrigues(rvec, cfg.R_tag_frame);
+
+        cfg.t_tag_frame = (cv::Mat_<double>(3,1)
+                               << t["tx_m"].get<double>(),
+                           t["ty_m"].get<double>(),
+                           t["tz_m"].get<double>());
+
+        m_tagConfigs.push_back(cfg);
+    }
+}
+
+bool AprilTagTracker::estimateFramePose(const std::vector<TagPose> &poses,
+                                        cv::Mat &R_out, cv::Mat &t_out) const
+{
+    std::vector<cv::Mat> Rs, ts;
+
+    for (const auto &tp : poses) {
+        auto it = std::find_if(m_tagConfigs.begin(), m_tagConfigs.end(),
+                               [&](const TagConfig &c){ return c.id == tp.id; });
+        if (it == m_tagConfigs.end()) continue;
+
+        cv::Mat R_cam_tag;
+        cv::Rodrigues(tp.rvec, R_cam_tag);
+
+        Rs.push_back(R_cam_tag * it->R_tag_frame);
+        ts.push_back(R_cam_tag * it->t_tag_frame + tp.tvec);
+    }
+
+    if (Rs.empty()) return false;
+
+    // Average translations
+    t_out = cv::Mat::zeros(3, 1, CV_64F);
+    for (const auto &t : ts) t_out += t;
+    t_out /= static_cast<double>(ts.size());
+
+    // Average rotations via Rodrigues vectors
+    cv::Mat rvecSum = cv::Mat::zeros(3, 1, CV_64F);
+    for (const auto &R : Rs) {
+        cv::Mat rv; cv::Rodrigues(R, rv);
+        rvecSum += rv;
+    }
+    rvecSum /= static_cast<double>(Rs.size());
+    cv::Rodrigues(rvecSum, R_out);
+
+    return true;
 }
 
 // ── ROI helpers ───────────────────────────────────────────────────────────────
@@ -146,6 +208,18 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
 
 void AprilTagTracker::drawAxes(cv::Mat &frame, const std::vector<TagPose> &poses) const
 {
-    for (const auto &p : poses)
-        cv::drawFrameAxes(frame, m_K, m_dist, p.rvec, p.tvec, m_markerSize * 0.5f);
+    // Draw individual tag axes only if no config is loaded
+    if (m_tagConfigs.empty()) {
+        for (const auto &p : poses)
+            cv::drawFrameAxes(frame, m_K, m_dist, p.rvec, p.tvec, m_markerSize * 0.5f);
+        return;
+    }
+
+    // Draw the unified frame origin
+    cv::Mat R_frame, t_frame;
+    if (estimateFramePose(poses, R_frame, t_frame)) {
+        cv::Mat rvec_frame;
+        cv::Rodrigues(R_frame, rvec_frame);
+        cv::drawFrameAxes(frame, m_K, m_dist, rvec_frame, t_frame, m_markerSize);
+    }
 }

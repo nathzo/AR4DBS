@@ -2,6 +2,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 struct TagPose {
     int     id;
@@ -9,11 +10,22 @@ struct TagPose {
     cv::Mat tvec; // translation in metres (tag → camera)
 };
 
+struct TagConfig {
+    int     id;
+    cv::Mat R_tag_frame;   // 3×3 double
+    cv::Mat t_tag_frame;   // 3×1 double
+};
+
 class AprilTagTracker
 {
 public:
     // K: 3x3 camera matrix; distCoeffs: 1x4/5 distortion; markerSizeM: physical side length
     AprilTagTracker(const cv::Mat &K, const cv::Mat &distCoeffs, float markerSizeM);
+
+    void loadTagConfig(const std::string &path);
+
+    bool estimateFramePose(const std::vector<TagPose> &poses,   // ← add this
+                           cv::Mat &R_out, cv::Mat &t_out) const;
 
     // predictedR: optional 3×3 rotation (camera←frame, CV_64F) used to
     // disambiguate the two IPPE solutions. When empty the lower-reprojection-
@@ -54,4 +66,6 @@ private:
     // Update m_roi from the detected corners (in m_small coordinates)
     void updateRoi(const std::vector<std::vector<cv::Point2f>> &corners,
                    cv::Size smallSize);
+
+    std::vector<TagConfig> m_tagConfigs;
 };
