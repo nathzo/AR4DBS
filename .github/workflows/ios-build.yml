@@ -86,16 +86,12 @@ jobs:
             exit 0
           fi
           pip install --quiet "coremltools>=7.0" onnx
-          python3 - <<'PYEOF'
+          python3 -c "
 import coremltools as ct
-
-model = ct.convert(
-    "resources/model-small.onnx",
-    minimum_deployment_target=ct.target.iOS14,
-)
-model.save("resources/model-small.mlmodel")
-print("Saved: resources/model-small.mlmodel")
-PYEOF
+model = ct.convert('resources/model-small.onnx', minimum_deployment_target=ct.target.iOS14)
+model.save('resources/model-small.mlmodel')
+print('Saved: resources/model-small.mlmodel')
+"
 
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
