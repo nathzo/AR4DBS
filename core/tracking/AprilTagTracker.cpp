@@ -77,7 +77,7 @@ void AprilTagTracker::updateRoi(const std::vector<std::vector<cv::Point2f>> &cor
 
 // ── Main detect ───────────────────────────────────────────────────────────────
 
-std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame)
+std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat &predictedR)
 {
     // 1. Grayscale + downscale into reused buffers
     cv::cvtColor(frame, m_grey, cv::COLOR_BGR2GRAY);
