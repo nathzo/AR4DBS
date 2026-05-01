@@ -99,7 +99,8 @@ private:
     QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
 
-    int  m_depthFrameCount = 0;
+    int  m_depthFrameCount          = 0;
+    static constexpr int kDepthThrottleFrames = 3;
 
 #ifdef Q_OS_IOS
     cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen

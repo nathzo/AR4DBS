@@ -21,7 +21,7 @@ static constexpr int    RAY_SAMPLES     = 60;
 static float sampleDepthAt(const cv::Mat &depthMap, cv::Point2f p); // defined below
 static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
-static constexpr int kDepthThrottleFrames = 30;
+static constexpr int kDepthThrottleFrames = 3;
 
 AppController::AppController(QObject *parent) : QObject(parent) {}
 AppController::~AppController() = default;
@@ -395,7 +395,15 @@ void AppController::onARFrame(const cv::Mat &frame,
     cv::Mat depthMap;
     if (m_iosDepth && (tagsVisible || m_depthFrameCount >= kDepthThrottleFrames)) {
         if (tagsVisible) m_depthFrameCount = 0;
-        depthMap = m_iosDepth->estimate(frame);
+        // ARKit delivers landscape frames; ARKitSession rotates them 90° CW to portrait.
+        // Depth Anything expects a landscape-aspect input (518×396). Feeding the portrait
+        // frame directly squishes the scene geometry and corrupts spatial correspondence.
+        // Fix: un-rotate to landscape for inference, then rotate the depth map back.
+        cv::Mat landscape;
+        cv::rotate(frame, landscape, cv::ROTATE_90_COUNTERCLOCKWISE);
+        cv::Mat depthLandscape = m_iosDepth->estimate(landscape);
+        if (!depthLandscape.empty())
+            cv::rotate(depthLandscape, depthMap, cv::ROTATE_90_CLOCKWISE);
         if (!depthMap.empty() && tagsVisible) {
             const double tagMetricDepth = cv::norm(detections[0].tvec);
             const cv::Point2f tagPx = PoseUtils::project(
