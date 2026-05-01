@@ -320,7 +320,8 @@ void AppController::resetARRegistration()
 {
     m_T_cam_frame_filt    = cv::Mat();
     m_world_T_camera_prev = cv::Mat();
-    m_depthAnchor         = 0.0;   // discard stale metric scale from previous session
+    m_depthAnchor         = 0.0;
+    m_depthFrameCount     = 0;
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -384,16 +385,17 @@ void AppController::onARFrame(const cv::Mat &frame,
     m_world_T_camera_prev = world_T_camera.clone();
     m_T_cam_frame_filt    = T_cam_frame.clone(); // empty clone is still empty
 
-    // ── 5. Depth estimation and anchor update (Step 6) ───────────────────────
-    // Run the CoreML monocular depth model on this frame when loaded and when
-    // the previous frame was fast enough to afford inference.
-    // When AprilTags are visible their solvePnP metric depth anchors the relative
-    // MiDaS scale: anchor = metric_depth_tag × rel_depth_tag.
-    // The anchor persists so occlusion keeps working between tag detections.
+    // ── 5. Depth estimation and anchor update ────────────────────────────────
+    // Tags visible → run depth every frame so the metric anchor is always fresh.
+    // Tags absent  → run depth every kDepthThrottleFrames frames to spare CPU
+    //                (anchor persists from last tag sighting for occlusion rendering).
+    const bool tagsVisible = !detections.empty();
+    ++m_depthFrameCount;
     cv::Mat depthMap;
-    if (m_iosDepth && m_lastFrameMs < 50) {
+    if (m_iosDepth && (tagsVisible || m_depthFrameCount >= kDepthThrottleFrames)) {
+        if (tagsVisible) m_depthFrameCount = 0;
         depthMap = m_iosDepth->estimate(frame);
-        if (!depthMap.empty() && !detections.empty()) {
+        if (!depthMap.empty() && tagsVisible) {
             const double tagMetricDepth = cv::norm(detections[0].tvec);
             const cv::Point2f tagPx = PoseUtils::project(
                 cv::Point3d(0,0,0), m_K,
