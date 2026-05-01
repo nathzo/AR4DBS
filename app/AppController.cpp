@@ -444,9 +444,18 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     // ── 6. Render ─────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
-#ifndef NDEBUG
-    m_tracker->drawAxes(out, detections);
-#endif
+
+    // Depth visualization overlay: red = close, blue = far.
+    // Rendered first so it appears under trajectory lines and frame axes,
+    // and shows even before the surgical frame is registered (no tags yet).
+    if (m_showDepthOverlay && !depthMap.empty()) {
+        // Invert so low depth values (close) map to high pixel values → red in JET.
+        cv::Mat invDepth = 1.0f - depthMap;
+        cv::Mat depth8u, colored;
+        invDepth.convertTo(depth8u, CV_8U, 255.0);
+        cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);
+        cv::addWeighted(out, 0.7, colored, 0.3, 0, out);
+    }
 
     if (T_cam_frame.empty() || !anyLine) {
         m_lastFrameMs = m_frameTimer.elapsed();
@@ -456,17 +465,6 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
-
-    // Depth visualization overlay (test AR mode): red = close, blue = far.
-    // Applied before trajectory rendering so lines remain visible on top.
-    if (m_showDepthOverlay && !depthMap.empty()) {
-        // Invert so that low depth values (close) map to high pixel values → red in JET.
-        cv::Mat invDepth = 1.0f - depthMap;
-        cv::Mat depth8u, colored;
-        invDepth.convertTo(depth8u, CV_8U, 255.0);
-        cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);
-        cv::addWeighted(out, 0.7, colored, 0.3, 0, out);
-    }
 
     m_renderer->beginFrame(out);
     cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
