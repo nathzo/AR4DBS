@@ -15,7 +15,11 @@ public:
     // K: 3x3 camera matrix; distCoeffs: 1x4/5 distortion; markerSizeM: physical side length
     AprilTagTracker(const cv::Mat &K, const cv::Mat &distCoeffs, float markerSizeM);
 
-    std::vector<TagPose> detect(const cv::Mat &frame);
+    // predictedR: optional 3×3 rotation (camera←frame, CV_64F) used to
+    // disambiguate the two IPPE solutions. When empty the lower-reprojection-
+    // error solution is returned (original behaviour).
+    std::vector<TagPose> detect(const cv::Mat &frame,
+                                const cv::Mat &predictedR = cv::Mat());
 
     // Draws coordinate axes on frame for each detected tag (debug)
     void drawAxes(cv::Mat &frame, const std::vector<TagPose> &poses) const;

@@ -263,7 +263,8 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     // Returns the actual Z-depth of a frame-space point in camera space.
     auto cameraDepth = [&](const cv::Point3d &pt) -> double {
         const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
-        return (R * v + tvec.reshape(1,3)).at<double>(2);
+        cv::Mat result = R * v + tvec.reshape(1, 3);
+        return result.at<double>(2);
     };
 
     // A point is visible when the head surface (measured by MiDaS) is at least
