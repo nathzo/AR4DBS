@@ -65,7 +65,12 @@ MainWindow::MainWindow(QWidget *parent)
             m_controller,       &QObject::deleteLater);
     m_controllerThread->start();
 
+#ifdef Q_OS_IOS
+    // Xcode compiles model-small.mlmodel → model-small.mlmodelc at bundle root.
+    const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.mlmodelc";
+#else
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
+#endif
 
 #ifdef FEATURE_PLAN_SCANNER
     // With the scanner: init without a plan path (plan comes from the wizard)

@@ -65,14 +65,52 @@ jobs:
                -o opencv-ios.zip
           unzip -q opencv-ios.zip -d ~/opencv-ios
 
-      # ONNX Runtime is no longer the iOS depth backend — CoreML (system framework,
-      # no download required) is used instead via CoreMLDepthEstimator.
-      # COREML_DEPTH_MODEL is not passed here; the CI build succeeds without a model
-      # file — the model is a runtime asset deployed separately to the device.
+      # ── CoreML depth model conversion ─────────────────────────────────────────
+      # Convert resources/model-small.onnx (MiDaS) to CoreML format so it can be
+      # bundled directly into the app and loaded by CoreMLDepthEstimator at runtime.
+      # The result is cached by ONNX file hash — re-conversion only happens when
+      # the model changes. Build succeeds without a model (depth disabled at runtime).
+
+      - name: Restore converted CoreML model from cache
+        id: coreml-cache
+        uses: actions/cache@v4
+        with:
+          path: resources/model-small.mlmodel
+          key: coreml-midas-small-${{ hashFiles('resources/model-small.onnx') }}
+
+      - name: Convert MiDaS ONNX to CoreML
+        if: steps.coreml-cache.outputs.cache-hit != 'true'
+        run: |
+          if [ ! -f resources/model-small.onnx ]; then
+            echo "model-small.onnx not found — skipping CoreML conversion (depth disabled)"
+            exit 0
+          fi
+          pip install --quiet "coremltools>=7.0" onnx
+          python3 - <<'PYEOF'
+import coremltools as ct
+
+model = ct.convert(
+    "resources/model-small.onnx",
+    minimum_deployment_target=ct.target.iOS14,
+)
+model.save("resources/model-small.mlmodel")
+print("Saved: resources/model-small.mlmodel")
+PYEOF
 
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
         run: |
+          # Pass the CoreML model to cmake when the conversion succeeded.
+          # Xcode will compile model-small.mlmodel → model-small.mlmodelc and
+          # place it in the app bundle's Resources/ directory automatically.
+          COREML_ARG=""
+          if [ -f resources/model-small.mlmodel ]; then
+            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlmodel"
+            echo "CoreML model found — depth occlusion will be bundled"
+          else
+            echo "CoreML model not found — depth occlusion disabled in this build"
+          fi
+
           cmake -S . -B build-ios \
             -G Xcode \
             -DCMAKE_TOOLCHAIN_FILE="$QT_IOS/lib/cmake/Qt6/qt.toolchain.cmake" \
@@ -80,6 +118,7 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DFEATURE_PLAN_SCANNER=ON \
+            $COREML_ARG \
             2>&1 | tee cmake-configure.log
           # Fail immediately if FFmpeg was not resolved — saves 30 min on link errors
           if grep -q "symbols will be unresolved\|no FFmpeg frameworks found" cmake-configure.log; then
@@ -149,6 +188,17 @@ jobs:
           else
             echo "FFmpeg appears to be statically linked (no libavcodec in otool -L)."
             echo "No embedding checks needed."
+          fi
+
+          # --- CoreML model checks ---
+          echo ""
+          echo "=== CoreML depth model in bundle ==="
+          if ls build-ios/Release-iphoneos/DBSAR.app/*.mlmodelc 2>/dev/null \
+          || ls build-ios/Release-iphoneos/DBSAR.app/Resources/*.mlmodelc 2>/dev/null; then
+            echo "OK  CoreML model bundled — depth occlusion active at runtime"
+          else
+            echo "INFO CoreML model not bundled — depth occlusion disabled at runtime"
+            echo "     (add model-small.onnx to the repo to enable)"
           fi
 
           # --- Info.plist checks ---

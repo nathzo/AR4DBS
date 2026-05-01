@@ -352,14 +352,28 @@ void AppController::onARFrame(const cv::Mat &frame,
             // No prediction yet (first frame) — initialise directly from tags.
             T_cam_frame = T_from_tags;
         } else {
-            // Complementary filter in rvec/tvec space.
-            // ARKit delta already accounts for real camera motion, so the gap
-            // between prediction and measurement is pure solvePnP noise plus
-            // any slow absolute drift — we blend in a small fraction each frame.
+            // Complementary filter — blend in SO(3), not in Rodrigues space.
+            // Linear rvec blending fails when |rvec| ≈ π because the same
+            // rotation has two representations (rvec and -rvec); blending across
+            // that sign boundary produces a nonsense rotation (~180° flip).
+            // Blending rotation matrices and re-orthogonalizing via SVD is safe.
             cv::Mat r_pred, t_pred, r_meas, t_meas;
-            PoseUtils::fromTransform(T_cam_frame,  r_pred, t_pred);
-            PoseUtils::fromTransform(T_from_tags,  r_meas, t_meas);
-            const cv::Mat r_fused = (1.0 - kAlpha) * r_pred + kAlpha * r_meas;
+            PoseUtils::fromTransform(T_cam_frame, r_pred, t_pred);
+            PoseUtils::fromTransform(T_from_tags, r_meas, t_meas);
+
+            cv::Mat R_pred, R_meas;
+            cv::Rodrigues(r_pred, R_pred);
+            cv::Rodrigues(r_meas, R_meas);
+            cv::Mat R_raw = (1.0 - kAlpha) * R_pred + kAlpha * R_meas;
+
+            // SVD projects the blended matrix back onto SO(3).
+            // The det check flips a reflection (det=-1) to a proper rotation.
+            cv::Mat U, S, Vt;
+            cv::SVD::compute(R_raw, S, U, Vt);
+            if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+            cv::Mat r_fused;
+            cv::Rodrigues(U * Vt, r_fused);
+
             const cv::Mat t_fused = (1.0 - kAlpha) * t_pred + kAlpha * t_meas;
             T_cam_frame = PoseUtils::toTransform(r_fused, t_fused);
         }
