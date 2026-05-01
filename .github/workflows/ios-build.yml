@@ -78,6 +78,12 @@ jobs:
           path: resources/model-small.mlmodel
           key: coreml-midas-small-${{ hashFiles('resources/model-small.onnx') }}
 
+      - name: Set up Python 3.12 for CoreML conversion
+        if: steps.coreml-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Convert MiDaS ONNX to CoreML
         if: steps.coreml-cache.outputs.cache-hit != 'true'
         run: |
@@ -85,9 +91,8 @@ jobs:
             echo "model-small.onnx not found — skipping CoreML conversion (depth disabled)"
             exit 0
           fi
-          python3 -m venv /tmp/coreml-venv
-          /tmp/coreml-venv/bin/pip install --quiet "coremltools>=7.0" onnx
-          /tmp/coreml-venv/bin/python3 -c "import coremltools as ct; model = ct.convert('resources/model-small.onnx', minimum_deployment_target=ct.target.iOS14); model.save('resources/model-small.mlmodel'); print('Saved: resources/model-small.mlmodel')"
+          pip install --quiet "coremltools>=7.0" onnx
+          python3 -c "import onnx, coremltools as ct; m = onnx.load('resources/model-small.onnx'); out = ct.convert(m, minimum_deployment_target=ct.target.iOS14); out.save('resources/model-small.mlmodel'); print('Saved: resources/model-small.mlmodel')"
 
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
