@@ -202,11 +202,13 @@ set(CORE_SOURCES
 if(IOS)
     set(PLATFORM_SOURCES
         platform/ios/ARKitSession.h
-        platform/ios/ARKitSession.mm       # Objective-C++ — ARKit session + pose delivery
+        platform/ios/ARKitSession.mm          # Objective-C++ — ARKit session + pose delivery
         platform/ios/CameraIntrinsics.h
-        platform/ios/CameraIntrinsics.mm   # Objective-C++ — reads AVFoundation FOV (kept for reference)
+        platform/ios/CameraIntrinsics.mm      # Objective-C++ — reads AVFoundation FOV (kept for reference)
         platform/ios/IOSCamera.h
         platform/ios/IOSCamera.cpp
+        platform/ios/CoreMLDepthEstimator.h
+        platform/ios/CoreMLDepthEstimator.mm  # Objective-C++ — Neural Engine monocular depth (no LiDAR)
     )
 else()
     set(PLATFORM_SOURCES
@@ -315,6 +317,27 @@ if(IOS)
     target_sources(DBSAR PRIVATE resources/model-small.onnx)
 endif()
 
+# CoreML depth model for iOS monocular depth (CoreMLDepthEstimator).
+# Set COREML_DEPTH_MODEL to the path of an .mlmodel or .mlpackage file.
+# Xcode will compile it to .mlmodelc and place it in the app bundle Resources/.
+# The path passed to AppController::init() at runtime should be:
+#   [[NSBundle mainBundle] pathForResource:@"<model-name>" ofType:@"mlmodelc"]
+# Leave empty to skip — depth occlusion will be disabled at runtime.
+set(COREML_DEPTH_MODEL "" CACHE FILEPATH
+    "Path to CoreML depth model (.mlmodel or .mlpackage) to bundle with the iOS app")
+if(IOS AND COREML_DEPTH_MODEL)
+    if(NOT EXISTS "${COREML_DEPTH_MODEL}")
+        message(WARNING "COREML_DEPTH_MODEL is set but file not found: ${COREML_DEPTH_MODEL}")
+    else()
+        set_source_files_properties("${COREML_DEPTH_MODEL}" PROPERTIES
+            MACOSX_PACKAGE_LOCATION Resources)
+        target_sources(DBSAR PRIVATE "${COREML_DEPTH_MODEL}")
+        message(STATUS "CoreML depth model: ${COREML_DEPTH_MODEL}")
+    endif()
+elseif(IOS)
+    message(STATUS "CoreML depth model: not set — depth occlusion disabled (set COREML_DEPTH_MODEL to enable)")
+endif()
+
 # ─── Include paths ────────────────────────────────────────────────────────────
 target_include_directories(DBSAR PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -349,18 +372,16 @@ if(IOS)
     find_library(FW_UIKIT        UIKit        REQUIRED)
     find_library(FW_ARKIT        ARKit        REQUIRED)
     find_library(FW_COREVIDEO    CoreVideo    REQUIRED)
+    find_library(FW_COREML       CoreML       REQUIRED)  # always needed: CoreMLDepthEstimator
     target_link_libraries(DBSAR PRIVATE
         ${FW_FOUNDATION}
         ${FW_AVFOUNDATION}
         ${FW_UIKIT}
         ${FW_ARKIT}
         ${FW_COREVIDEO}
+        ${FW_COREML}
         $<$<BOOL:${FW_VISION}>:${FW_VISION}>
     )
-    if(onnxruntime_FOUND)
-        find_library(FW_COREML CoreML REQUIRED)
-        target_link_libraries(DBSAR PRIVATE ${FW_COREML})
-    endif()
 endif()
 
 # ─── iOS bundle settings ──────────────────────────────────────────────────────

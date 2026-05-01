@@ -4,6 +4,9 @@
 #include "core/math/PoseUtils.h"
 #include "core/rendering/OverlayRenderer.h"
 #include "core/depth/DepthEstimator.h"
+#ifdef Q_OS_IOS
+#include "platform/ios/CoreMLDepthEstimator.h"
+#endif
 
 #include <QFile>
 #include <QJsonDocument>
@@ -44,6 +47,16 @@ bool AppController::init(const QString &calibPath,
     m_renderer->setDistortion(m_dist);
 
     if (!depthModelPath.isEmpty()) {
+#ifdef Q_OS_IOS
+        // Step 3: on iOS use the CoreML estimator (Neural Engine, no LiDAR).
+        m_iosDepth = std::make_unique<CoreMLDepthEstimator>(depthModelPath.toStdString());
+        if (!m_iosDepth->isLoaded()) {
+            qWarning() << "AppController: CoreML depth model not loaded from" << depthModelPath;
+            m_iosDepth.reset();
+        } else {
+            qDebug() << "AppController: iOS CoreML depth estimation enabled";
+        }
+#else
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
         if (!m_depth->isLoaded()) {
             qWarning() << "AppController: depth model not loaded from" << depthModelPath;
@@ -51,6 +64,7 @@ bool AppController::init(const QString &calibPath,
         } else {
             qDebug() << "AppController: depth estimation enabled";
         }
+#endif
     }
 
     return true;
@@ -97,80 +111,28 @@ void AppController::onNewFrame(const cv::Mat &frame)
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
 
-    // Depth map computed once and shared across both trajectories.
+    // Compute depth map and anchor (metric_depth_tag × rel_depth_tag).
     // Skipped when the previous frame already took > 50 ms.
     cv::Mat depthMap;
-    cv::Point2f tagPx;
-    double tagMetricDepth = 0;
-    float  relTag = 0.f;
+    double  depthAnchor = 0.0;
     if (m_depth && !detections.empty() && m_lastFrameMs < 50) {
-        depthMap       = m_depth->estimate(frame);
-        tagMetricDepth = cv::norm(detections[0].tvec);
-        tagPx          = PoseUtils::project(
-            cv::Point3d(0,0,0), m_K, detections[0].rvec, detections[0].tvec, m_dist);
-        relTag         = sampleDepthAt(depthMap, tagPx);
+        depthMap = m_depth->estimate(frame);
+        if (!depthMap.empty()) {
+            const double    tagMetricDepth = cv::norm(detections[0].tvec);
+            const cv::Point2f tagPx = PoseUtils::project(
+                cv::Point3d(0,0,0), m_K, detections[0].rvec, detections[0].tvec, m_dist);
+            const float relTag = sampleDepthAt(depthMap, tagPx);
+            if (relTag > 1e-4f)
+                depthAnchor = tagMetricDepth * relTag;
+        }
     }
-
-    const bool hasDepth = !depthMap.empty() && relTag > 1e-4f;
 
     m_renderer->beginFrame(out);
 
-    if (!hasDepth) {
+    if (depthAnchor < 1e-9) {
         renderOverlayOnto(out, rvec, tvec);
     } else {
-        // Occlusion-aware mode — R, lambdas computed once, reused for both lines
-        cv::Mat R;
-        cv::Rodrigues(rvec, R);
-
-        auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
-            const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
-            const float rel = sampleDepthAt(depthMap, px);
-            if (rel < 1e-4f) return 1e9;
-            return tagMetricDepth * relTag / rel;
-        };
-
-        auto cameraDepth = [&](const cv::Point3d &pt) -> double {
-            const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
-            const cv::Mat ptCam = R * v + tvec.reshape(1,3);
-            return ptCam.at<double>(2);
-        };
-
-        auto visible = [&](const cv::Point3d &pt) -> bool {
-            const double cd = cameraDepth(pt);
-            if (cd <= 0) return false;
-            return surfaceDepth(pt) >= cd * 0.95;
-        };
-
-        for (int i = 0; i < 2; ++i) {
-            if (!m_lines[i]) continue;
-            const auto &line = *m_lines[i];
-            const cv::Point3d &tgt = line.target();
-            const cv::Point3d &end = line.lineEnd();
-
-            for (int s = 0; s < RAY_SAMPLES; ++s) {
-                const double t0 = static_cast<double>(s)   / RAY_SAMPLES;
-                const double t1 = static_cast<double>(s+1) / RAY_SAMPLES;
-                const cv::Point3d p0 = {
-                    end.x + t0*(tgt.x-end.x),
-                    end.y + t0*(tgt.y-end.y),
-                    end.z + t0*(tgt.z-end.z)
-                };
-                const cv::Point3d p1 = {
-                    end.x + t1*(tgt.x-end.x),
-                    end.y + t1*(tgt.y-end.y),
-                    end.z + t1*(tgt.z-end.z)
-                };
-                if (visible(p0) && visible(p1))
-                    m_renderer->drawSegment(p0, p1, m_K, rvec, tvec);
-            }
-
-            if (visible(tgt))
-                m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
-
-            auto hit = findIncisionPoint(depthMap, rvec, tvec, tagPx, tagMetricDepth, line);
-            if (hit.has_value())
-                m_renderer->drawIncisionMarker(hit.value(), m_K, rvec, tvec);
-        }
+        renderWithOcclusion(out, rvec, tvec, depthMap, depthAnchor);
     }
 
     m_renderer->endFrame();
@@ -196,14 +158,10 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
     const cv::Mat     &depthMap,
     const cv::Mat     &rvec,
     const cv::Mat     &tvec,
-    const cv::Point2f &tagPx,
-    double             tagMetricDepth,
+    double             depthAnchor,
     const IncisionLine &line) const
 {
-    if (depthMap.empty()) return std::nullopt;
-
-    const float relTag = sampleDepthAt(depthMap, tagPx);
-    if (relTag < 1e-4f) return std::nullopt;
+    if (depthMap.empty() || depthAnchor < 1e-9) return std::nullopt;
 
     cv::Mat R;
     cv::Rodrigues(rvec, R);
@@ -227,7 +185,7 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
         const float relPt = sampleDepthAt(depthMap, px);
         if (relPt < 1e-4f) continue;
 
-        const double estimatedDepth = tagMetricDepth * relTag / relPt;
+        const double estimatedDepth = depthAnchor / relPt;
         if (std::abs(estimatedDepth - expectedDepth) < DEPTH_TOLERANCE * expectedDepth)
             return pt;
     }
@@ -278,6 +236,73 @@ void AppController::renderOverlayOnto(cv::Mat &out,
     }
 }
 
+// ── Occlusion-aware overlay (Step 4) ─────────────────────────────────────────
+// For each trajectory, walks 60 equal segments from skull entry to brain target.
+// Each segment is projected to screen; its 3-D depth in camera space is compared
+// to the MiDaS surface depth at that pixel (scaled to metres via depthAnchor).
+// Only segments where the surface is farther than the point are drawn.
+
+void AppController::renderWithOcclusion(cv::Mat       &out,
+                                        const cv::Mat &rvec,
+                                        const cv::Mat &tvec,
+                                        const cv::Mat &depthMap,
+                                        double         depthAnchor)
+{
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+
+    // Returns the estimated metric surface depth at the pixel corresponding to pt.
+    // depthAnchor / rel(px) converts the unitless MiDaS value to metres.
+    auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
+        const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
+        const float rel = sampleDepthAt(depthMap, px);
+        if (rel < 1e-4f) return 1e9;
+        return depthAnchor / rel;
+    };
+
+    // Returns the actual Z-depth of a frame-space point in camera space.
+    auto cameraDepth = [&](const cv::Point3d &pt) -> double {
+        const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
+        return (R * v + tvec.reshape(1,3)).at<double>(2);
+    };
+
+    // A point is visible when the head surface (measured by MiDaS) is at least
+    // as far as the point itself. The 0.95 factor gives a 5% depth tolerance so
+    // points right at the surface don't flicker due to MiDaS noise.
+    auto visible = [&](const cv::Point3d &pt) -> bool {
+        const double cd = cameraDepth(pt);
+        if (cd <= 0) return false;
+        return surfaceDepth(pt) >= cd * 0.95;
+    };
+
+    for (int i = 0; i < 2; ++i) {
+        if (!m_lines[i]) continue;
+        const auto &line = *m_lines[i];
+        const cv::Point3d &tgt = line.target();
+        const cv::Point3d &end = line.lineEnd();
+
+        for (int s = 0; s < RAY_SAMPLES; ++s) {
+            const double t0 = static_cast<double>(s)   / RAY_SAMPLES;
+            const double t1 = static_cast<double>(s+1) / RAY_SAMPLES;
+            const cv::Point3d p0 = {end.x + t0*(tgt.x-end.x),
+                                    end.y + t0*(tgt.y-end.y),
+                                    end.z + t0*(tgt.z-end.z)};
+            const cv::Point3d p1 = {end.x + t1*(tgt.x-end.x),
+                                    end.y + t1*(tgt.y-end.y),
+                                    end.z + t1*(tgt.z-end.z)};
+            if (visible(p0) && visible(p1))
+                m_renderer->drawSegment(p0, p1, m_K, rvec, tvec);
+        }
+
+        if (visible(tgt))
+            m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
+
+        auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
+        if (hit.has_value())
+            m_renderer->drawIncisionMarker(hit.value(), m_K, rvec, tvec);
+    }
+}
+
 // ── ARKit path ────────────────────────────────────────────────────────────────
 
 #ifdef Q_OS_IOS
@@ -294,6 +319,7 @@ void AppController::resetARRegistration()
 {
     m_T_cam_frame_filt    = cv::Mat();
     m_world_T_camera_prev = cv::Mat();
+    m_depthAnchor         = 0.0;   // discard stale metric scale from previous session
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -343,7 +369,27 @@ void AppController::onARFrame(const cv::Mat &frame,
     m_world_T_camera_prev = world_T_camera.clone();
     m_T_cam_frame_filt    = T_cam_frame.clone(); // empty clone is still empty
 
-    // ── 5. Render ────────────────────────────────────────────────────────────
+    // ── 5. Depth estimation and anchor update (Step 6) ───────────────────────
+    // Run the CoreML monocular depth model on this frame when loaded and when
+    // the previous frame was fast enough to afford inference.
+    // When AprilTags are visible their solvePnP metric depth anchors the relative
+    // MiDaS scale: anchor = metric_depth_tag × rel_depth_tag.
+    // The anchor persists so occlusion keeps working between tag detections.
+    cv::Mat depthMap;
+    if (m_iosDepth && m_lastFrameMs < 50) {
+        depthMap = m_iosDepth->estimate(frame);
+        if (!depthMap.empty() && !detections.empty()) {
+            const double tagMetricDepth = cv::norm(detections[0].tvec);
+            const cv::Point2f tagPx = PoseUtils::project(
+                cv::Point3d(0,0,0), m_K,
+                detections[0].rvec, detections[0].tvec, m_dist);
+            const float relTag = sampleDepthAt(depthMap, tagPx);
+            if (relTag > 1e-4f)
+                m_depthAnchor = tagMetricDepth * relTag;
+        }
+    }
+
+    // ── 6. Render ─────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 #ifndef NDEBUG
     m_tracker->drawAxes(out, detections);
@@ -358,7 +404,13 @@ void AppController::onARFrame(const cv::Mat &frame,
     cv::Mat rvec, tvec;
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
     m_renderer->beginFrame(out);
-    renderOverlayOnto(out, rvec, tvec);
+
+    if (!depthMap.empty() && m_depthAnchor > 1e-9) {
+        renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor);
+    } else {
+        renderOverlayOnto(out, rvec, tvec);
+    }
+
     m_renderer->endFrame();
 
     m_lastFrameMs = m_frameTimer.elapsed();
