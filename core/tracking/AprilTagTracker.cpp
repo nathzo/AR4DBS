@@ -110,8 +110,35 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
     for (size_t i = 0; i < m_ids.size(); ++i) {
         TagPose tp;
         tp.id = m_ids[i];
-        cv::solvePnP(m_objPts, m_corners[i], m_K, m_dist,
-                     tp.rvec, tp.tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
+
+        std::vector<cv::Mat> rvecs, tvecs;
+        std::vector<double>  reprojErrors;
+        cv::solvePnPGeneric(m_objPts, m_corners[i], m_K, m_dist,
+                            rvecs, tvecs, false,
+                            cv::SOLVEPNP_IPPE_SQUARE,
+                            cv::noArray(), cv::noArray(),
+                            reprojErrors);
+
+        // IPPE_SQUARE always produces exactly two solutions (a front/back ambiguity).
+        // OpenCV sorts them by reprojection error (index 0 = lower error), which is
+        // unreliable when the tag is viewed at a steep angle.
+        //
+        // Physical constraint: tags are always mounted facing the camera, so the tag's
+        // outward normal must point toward the camera. In OpenCV camera space the normal
+        // is R * [0,0,1] = third column of R. For a front-facing tag its Z component
+        // must be negative (pointing back toward the camera, which looks along +Z).
+        // We override the reprojection-error choice only when it violates this.
+        int best = 0;
+        if (rvecs.size() >= 2) {
+            cv::Mat R0, R1;
+            cv::Rodrigues(rvecs[0], R0);
+            cv::Rodrigues(rvecs[1], R1);
+            if (R0.at<double>(2, 2) >= 0 && R1.at<double>(2, 2) < 0)
+                best = 1;
+        }
+
+        tp.rvec = rvecs[best];
+        tp.tvec = tvecs[best];
         result.push_back(std::move(tp));
     }
     return result;
