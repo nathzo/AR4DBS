@@ -18,6 +18,10 @@ class OverlayRenderer;
 class DepthEstimator;
 struct TagPose;
 
+#ifdef Q_OS_IOS
+class CoreMLDepthEstimator;
+#endif
+
 struct TagConfig {
     int     id;
     cv::Mat T_frame_tag; // 4x4 CV_64F homogeneous transform
@@ -58,18 +62,26 @@ private:
 
     cv::Mat fusePoses(const std::vector<TagPose> &detections) const;
 
-    // Draws trajectory overlay onto `out` using the given pose.
-    // Shared between the AprilTag path (onNewFrame) and the ARKit path (onARFrame).
+    // Full overlay without occlusion (fallback when no depth is available).
     void renderOverlayOnto(cv::Mat &out,
                            const cv::Mat &rvec,
                            const cv::Mat &tvec);
 
+    // Occlusion-aware overlay. depthAnchor = metric_depth_tag × rel_depth_tag;
+    // used by both onNewFrame (desktop) and onARFrame (iOS).
+    void renderWithOcclusion(cv::Mat       &out,
+                             const cv::Mat &rvec,
+                             const cv::Mat &tvec,
+                             const cv::Mat &depthMap,
+                             double         depthAnchor);
+
+    // Walks the trajectory and returns the first point where the line enters
+    // the head surface. depthAnchor = metric_depth_tag × rel_depth_tag.
     std::optional<cv::Point3d> findIncisionPoint(
         const cv::Mat     &depthMap,
         const cv::Mat     &rvec,
         const cv::Mat     &tvec,
-        const cv::Point2f &tagPx,
-        double             tagMetricDepth,
+        double             depthAnchor,
         const IncisionLine &line) const;
 
     cv::Mat m_K;
@@ -90,6 +102,15 @@ private:
 #ifdef Q_OS_IOS
     cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen
     cv::Mat m_world_T_camera_prev; // previous ARKit pose, for computing Δ
+
+    // CoreML monocular depth estimator (Neural Engine, no LiDAR).
+    std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
+
+    // Scale anchor: metric_depth_tag × rel_depth_tag at last tag detection.
+    // Converts the unitless MiDaS map to metres: metric(px) = m_depthAnchor / rel(px).
+    // Persists across frames so occlusion survives brief tag occlusion.
+    double m_depthAnchor = 0.0;
+
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
     static constexpr double kAlpha = 0.15;
 #endif
