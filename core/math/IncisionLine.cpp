@@ -1,10 +1,23 @@
 #include "IncisionLine.h"
 #include <cmath>
 
-// Leksell convention:
-//   Arc  = tilt of the electrode from vertical (0° = pointing straight down)
-//   Ring = rotation around the vertical axis
-// We map: theta = Arc (polar from Z),  phi = Ring (azimuthal)
+// Leksell frame convention (matches tag_config.json coordinate system):
+//   x: 0 = right (tag 1), 200 mm = left (tag 0)
+//   y: 0 = posterior,     200 mm = anterior
+//   z: 0 = superior (out of tags / toward camera), increases inferior
+//
+// Arc  = position on the arc, sweeping right ear → top of skull → left ear:
+//   Arc=0°   → right ear (−x), independent of Ring
+//   Arc=90°  → top of skull (−z) at Ring=90°; nose (+y) at Ring=0°; etc.
+//   Arc=180° → left ear (+x), independent of Ring
+//
+// Ring = orientation of the arc plane, sweeping nose → top of skull → back:
+//   Ring=0°   → nose (+y)
+//   Ring=90°  → top of skull (−z)
+//   Ring=180° → back of head (−y)
+//
+// Resulting direction (target → skull entry):
+//   d = (−cos(Arc),  sin(Arc)·cos(Ring),  −sin(Arc)·sin(Ring))
 IncisionLine IncisionLine::fromLeksell(const LeksellTarget &t, double lengthM)
 {
     Plan p;
@@ -20,9 +33,9 @@ IncisionLine IncisionLine::fromLeksell(const LeksellTarget &t, double lengthM)
 IncisionLine::IncisionLine(const Plan &p)
 {
     m_dir = {
-        std::sin(p.theta) * std::cos(p.phi),
-        std::sin(p.theta) * std::sin(p.phi),
-        std::cos(p.theta)
+        -std::cos(p.theta),
+         std::sin(p.theta) * std::cos(p.phi),
+        -std::sin(p.theta) * std::sin(p.phi)
     };
 
     m_target  = { p.x, p.y, p.z };

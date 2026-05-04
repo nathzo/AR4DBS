@@ -12,25 +12,23 @@
 #include <QAtomicInt>
 #include <cmath>
 
-// Two test targets centred between the tags (X=0), 10 cm above the tag plane (Z=0.10 m).
-// Left at X=-5 cm, right at X=+5 cm; both tilted slightly outward so the
-// trajectories are visually distinct when switching with "Cible suivante".
+// Default DBS targets in Leksell frame coordinates (mm / degrees).
 static SurgicalPlan defaultTestPlan()
 {
     SurgicalPlan p;
 
-    p.left.x_mm     = -50;   // 5 cm left of centre
-    p.left.y_mm     =   0;
-    p.left.z_mm     = 100;   // 10 cm above tag plane
-    p.left.arc_deg  =  20;   // 20° tilt from vertical
-    p.left.ring_deg = 270;   // tilted toward the left tag
+    p.left.x_mm     = 140.4;
+    p.left.y_mm     = 114.6;
+    p.left.z_mm     =  80.0;
+    p.left.arc_deg  =  71.0;
+    p.left.ring_deg =  74.2;
     p.left.valid    = true;
 
-    p.right.x_mm     =  50;   // 5 cm right of centre
-    p.right.y_mm     =   0;
-    p.right.z_mm     = 100;
-    p.right.arc_deg  =  20;
-    p.right.ring_deg =  90;   // tilted toward the right tag
+    p.right.x_mm     =  66.2;
+    p.right.y_mm     = 118.2;
+    p.right.z_mm     =  77.4;
+    p.right.arc_deg  = 111.1;
+    p.right.ring_deg =  66.8;
     p.right.valid    = true;
 
     return p;
