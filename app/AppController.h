@@ -55,6 +55,10 @@ public slots:
     // onARFrame is called from MainWindow's busy-guard lambda on the worker thread.
     void onARFrame(const cv::Mat &frame, const cv::Mat &world_T_camera);
     void resetARRegistration(); // call before each AR session start
+
+    // LiDAR integration — connected to ARKitSession signals.
+    void onLidarAvailable(bool available);
+    void onLidarDepth(const cv::Mat &depthMetric);
 #endif
 
 signals:
@@ -112,9 +116,13 @@ private:
     // CoreML monocular depth estimator (Neural Engine, no LiDAR).
     std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
 
-    // Scale anchor: metric_depth_tag × rel_depth_tag at last tag detection.
-    // Converts the unitless MiDaS map to metres: metric(px) = m_depthAnchor / rel(px).
-    // Persists across frames so occlusion survives brief tag occlusion.
+    // true when the device has a LiDAR scanner and ARKit is providing scene depth.
+    // When true, CoreML inference is skipped and m_depthAnchor is fixed at 1.0.
+    bool m_usingLiDAR = false;
+
+    // Scale anchor: converts the depth map to metric metres.
+    //   LiDAR path:          always 1.0 (LiDAR values are already in metres).
+    //   Depth Anything v2:   tagMetricDepth / relTag, recomputed each frame tags visible.
     double m_depthAnchor = 0.0;
 
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.

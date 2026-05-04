@@ -25,6 +25,8 @@ public:
 signals:
     void frameReady(const cv::Mat &bgr, const cv::Mat &world_T_camera);
     void calibrationReady(const cv::Mat &K);
+    void lidarAvailable(bool available);              // emitted once in start()
+    void lidarDepthReady(const cv::Mat &depthMetric); // emitted each frame when LiDAR active
 
 private:
     Impl *m_impl;

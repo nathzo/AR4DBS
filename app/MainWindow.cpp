@@ -116,6 +116,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_arCamera = new ARKitSession(this);
     connect(m_arCamera, &ARKitSession::calibrationReady,
             m_controller, &AppController::setCalibration);
+    connect(m_arCamera, &ARKitSession::lidarAvailable,
+            m_controller, &AppController::onLidarAvailable);
+    connect(m_arCamera, &ARKitSession::lidarDepthReady,
+            m_controller, &AppController::onLidarDepth);
     connect(m_arCamera, &ARKitSession::frameReady, this,
             [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera) {
         if (!busy->testAndSetAcquire(0, 1)) return;

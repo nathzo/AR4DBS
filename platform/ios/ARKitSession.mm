@@ -11,11 +11,14 @@ static constexpr qint64 MIN_FRAME_MS = 33; // ~30 fps cap
 
 // ── Forward-declare Impl so the delegate can reference it ────────────────────
 struct ARKitSession::Impl {
-    ARSession    *session      = nil;
-    id            delegate     = nil; // ARDelegate (Obj-C type hidden from header)
-    bool          calibEmitted = false;
+    ARSession    *session       = nil;
+    id            delegate      = nil; // ARDelegate (Obj-C type hidden from header)
+    bool          calibEmitted  = false;
+    bool          lidarActive   = false; // true when LiDAR frameSemantics is enabled
+    int           cameraWidth   = 0;    // stored after first frame for LiDAR resize
+    int           cameraHeight  = 0;
     QElapsedTimer frameTimer;
-    ARKitSession *q            = nullptr; // back-pointer for signal emission
+    ARKitSession *q             = nullptr; // back-pointer for signal emission
 };
 
 // ── Objective-C delegate ──────────────────────────────────────────────────────
@@ -56,6 +59,12 @@ struct ARKitSession::Impl {
 
     CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
 
+    // Cache camera dimensions on the first frame (used for LiDAR depth resize).
+    if (impl->cameraWidth == 0) {
+        impl->cameraWidth  = static_cast<int>(w);
+        impl->cameraHeight = static_cast<int>(h);
+    }
+
     // Emit calibration once using ARKit's native landscape intrinsics directly.
     if (!impl->calibEmitted) {
         impl->calibEmitted = true;
@@ -78,6 +87,39 @@ struct ARKitSession::Impl {
                 static_cast<double>(T.columns[col][row]);
 
     emit impl->q->frameReady(bgr, world_T_camera);
+
+    // Extract LiDAR depth when active.
+    // sceneDepth.depthMap is kCVPixelFormatType_DepthFloat32 — metric metres,
+    // higher = farther — same convention as the CoreML estimator output.
+    if (impl->lidarActive && frame.sceneDepth != nil) {
+        CVPixelBufferRef depthBuf = frame.sceneDepth.depthMap;
+        CVPixelBufferLockBaseAddress(depthBuf, kCVPixelBufferLock_ReadOnly);
+
+        const size_t dw         = CVPixelBufferGetWidth(depthBuf);
+        const size_t dh         = CVPixelBufferGetHeight(depthBuf);
+        const size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthBuf);
+        const uint8_t *base     = static_cast<const uint8_t *>(
+                                      CVPixelBufferGetBaseAddress(depthBuf));
+
+        cv::Mat depthRaw(static_cast<int>(dh), static_cast<int>(dw), CV_32F);
+        for (size_t r = 0; r < dh; ++r)
+            memcpy(depthRaw.ptr<float>(static_cast<int>(r)),
+                   base + r * bytesPerRow,
+                   dw * sizeof(float));
+
+        CVPixelBufferUnlockBaseAddress(depthBuf, kCVPixelBufferLock_ReadOnly);
+
+        // Replace NaN (unmeasured pixels) with 0 — treated as "no data" downstream.
+        cv::patchNaNs(depthRaw, 0.0f);
+
+        // Resize to match camera frame dimensions so depth pixels align with image pixels.
+        cv::Mat depthScaled;
+        cv::resize(depthRaw, depthScaled,
+                   cv::Size(impl->cameraWidth, impl->cameraHeight),
+                   0, 0, cv::INTER_LINEAR);
+
+        emit impl->q->lidarDepthReady(depthScaled);
+    }
 }
 
 - (void)session:(ARSession *)session didFailWithError:(NSError *)error
@@ -123,10 +165,21 @@ ARKitSession::~ARKitSession()
 void ARKitSession::start()
 {
     m_impl->calibEmitted = false;
+    m_impl->cameraWidth  = 0;
+    m_impl->cameraHeight = 0;
 
     ARWorldTrackingConfiguration *config =
         [[ARWorldTrackingConfiguration alloc] init];
     config.planeDetection = ARPlaneDetectionNone; // we only need camera tracking
+
+    // Enable LiDAR scene depth when the device supports it (iPhone 12 Pro and later).
+    const bool hasLidar = [ARWorldTrackingConfiguration
+                              supportsFrameSemantics:ARFrameSemanticSceneDepth];
+    m_impl->lidarActive = hasLidar;
+    if (hasLidar)
+        config.frameSemantics |= ARFrameSemanticSceneDepth;
+
+    emit lidarAvailable(hasLidar);
     [m_impl->session runWithConfiguration:config];
 }
 

@@ -355,7 +355,21 @@ void AppController::resetARRegistration()
 {
     m_T_cam_frame_filt    = cv::Mat();
     m_world_T_camera_prev = cv::Mat();
-    m_depthAnchor         = 0.0;
+    m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
+}
+
+void AppController::onLidarAvailable(bool available)
+{
+    m_usingLiDAR  = available;
+    m_depthAnchor = available ? 1.0 : 0.0;
+    qDebug() << "AppController: depth source ="
+             << (available ? "LiDAR" : "Depth Anything v2");
+}
+
+void AppController::onLidarDepth(const cv::Mat &depthMetric)
+{
+    std::lock_guard<std::mutex> lk(m_depthMutex);
+    m_depthMapReady = depthMetric;
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -432,8 +446,9 @@ void AppController::onARFrame(const cv::Mat &frame,
         depthMap = m_depthMapReady;
     }
 
-    // Update metric anchor whenever we have both tags and a depth map.
-    if (!depthMap.empty() && tagsVisible) {
+    // Update metric anchor from tag geometry — only for Depth Anything v2.
+    // LiDAR values are already in metres; anchor stays fixed at 1.0.
+    if (!m_usingLiDAR && !depthMap.empty() && tagsVisible) {
         const double tagMetricDepth = cv::norm(detections[0].tvec);
         const cv::Point2f tagPx = PoseUtils::project(
             cv::Point3d(0,0,0), m_K,
@@ -443,9 +458,9 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_depthAnchor = tagMetricDepth / relTag;
     }
 
-    // Dispatch a new inference if none is currently in flight.
-    // Frame is landscape (ARKit native) — passed directly, no rotation needed.
-    if (m_iosDepth && !m_depthInFlight.exchange(true)) {
+    // Dispatch CoreML inference only when LiDAR is not providing depth.
+    // When LiDAR is active, onLidarDepth() updates m_depthMapReady directly.
+    if (!m_usingLiDAR && m_iosDepth && !m_depthInFlight.exchange(true)) {
         std::thread([this, frame]() mutable {
             cv::Mat depth = m_iosDepth->estimate(frame);
             {
@@ -472,12 +487,15 @@ void AppController::onARFrame(const cv::Mat &frame,
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
             m_showDepthOverlay);
+        dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: Depth Anywhere v2",
+            true);
         dbg(m_iosDepth ? "iosDepth model: LOADED" : "iosDepth model: NULL",
-            m_iosDepth != nullptr);
+            m_usingLiDAR || m_iosDepth != nullptr);
         dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
             tagsVisible);
-        dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
-            !m_depthInFlight.load());
+        if (!m_usingLiDAR)
+            dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
+                !m_depthInFlight.load());
         dbg(depthMap.empty() ? "depthMap: EMPTY" :
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());
@@ -487,8 +505,16 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Rendered first so it appears under trajectory lines and frame axes,
     // and shows even before the surgical frame is registered (no tags yet).
     if (m_showDepthOverlay && !depthMap.empty()) {
+        // LiDAR depth is in raw metres; normalize to [0,1] for visualization.
+        // Depth Anything v2 is already [0,1], so this is a no-op in that case.
+        cv::Mat vizDepth;
+        if (m_usingLiDAR)
+            cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
+        else
+            vizDepth = depthMap;
+
         // Invert so low depth values (close) map to high pixel values → red in JET.
-        cv::Mat invDepth = 1.0f - depthMap;
+        cv::Mat invDepth = 1.0f - vizDepth;
         cv::Mat depth8u, colored;
         invDepth.convertTo(depth8u, CV_8U, 255.0);
         cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);
