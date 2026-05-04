@@ -475,6 +475,10 @@ void AppController::onARFrame(const cv::Mat &frame,
         dbg(depthMap.empty() ? "depthMap: EMPTY" :
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());
+        if (m_iosDepth && depthMap.empty()) {
+            const std::string e = m_iosDepth->lastError();
+            dbg(e.empty() ? "err: (none)" : e.substr(0, 36), false);
+        }
     }
     // ── END DEBUG ─────────────────────────────────────────────────────────────
 

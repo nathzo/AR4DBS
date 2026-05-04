@@ -18,13 +18,14 @@ struct CoreMLDepthEstimator::Impl {
     // the struct lifetime is managed outside ARC (raw new/delete through an opaque
     // pointer).  Bypass ARC entirely by storing the three ObjC objects as opaque
     // void* retained with CFBridgingRetain and released with CFRelease in ~Impl().
-    void *model      = nullptr;   // retains MLModel*
-    void *inputName  = nullptr;   // retains NSString*
-    void *outputName = nullptr;   // retains NSString*
-    bool  isImage    = false;     // true → model takes a CVPixelBuffer input
-    int   inputW     = 256;
-    int   inputH     = 256;
-    bool  loaded     = false;
+    void        *model      = nullptr;   // retains MLModel*
+    void        *inputName  = nullptr;   // retains NSString*
+    void        *outputName = nullptr;   // retains NSString*
+    bool         isImage    = false;     // true → model takes a CVPixelBuffer input
+    int          inputW     = 256;
+    int          inputH     = 256;
+    bool         loaded     = false;
+    std::string  lastError;
 
     ~Impl() {
         if (model)      { CFRelease(model);      model      = nullptr; }
@@ -80,7 +81,8 @@ CoreMLDepthEstimator::CoreMLDepthEstimator(const std::string &modelPath)
 }
 
 CoreMLDepthEstimator::~CoreMLDepthEstimator() { delete m_impl; }
-bool CoreMLDepthEstimator::isLoaded() const    { return m_impl->loaded; }
+bool        CoreMLDepthEstimator::isLoaded()  const { return m_impl->loaded; }
+std::string CoreMLDepthEstimator::lastError() const { return m_impl->lastError; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // estimate()
@@ -88,7 +90,11 @@ bool CoreMLDepthEstimator::isLoaded() const    { return m_impl->loaded; }
 
 cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
 {
-    if (!m_impl->loaded || bgr.empty()) return {};
+    m_impl->lastError.clear();
+    if (!m_impl->loaded || bgr.empty()) {
+        m_impl->lastError = bgr.empty() ? "input frame empty" : "model not loaded";
+        return {};
+    }
 
     const int W = m_impl->inputW;
     const int H = m_impl->inputH;
@@ -110,7 +116,10 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         CVPixelBufferCreate(kCFAllocatorDefault, W, H,
                             kCVPixelFormatType_32BGRA,
                             (__bridge CFDictionaryRef)attrs, &pb);
-        if (!pb) return {};
+        if (!pb) {
+            m_impl->lastError = "CVPixelBufferCreate failed";
+            return {};
+        }
 
         CVPixelBufferLockBaseAddress(pb, 0);
         uint8_t    *dst    = static_cast<uint8_t*>(CVPixelBufferGetBaseAddress(pb));
@@ -169,7 +178,10 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
                         strides:strides
                     deallocator:nil
                           error:&err];
-        if (err || !arr) return {};
+        if (err || !arr) {
+            m_impl->lastError = err ? err.localizedDescription.UTF8String : "MLMultiArray alloc nil";
+            return {};
+        }
 
         inp = [[MLDictionaryFeatureProvider alloc]
                initWithDictionary:@{(__bridge NSString*)m_impl->inputName:
@@ -177,15 +189,27 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
                error:&err];
     }
 
-    if (err || !inp) return {};
+    if (err || !inp) {
+        m_impl->lastError = std::string("inp: ") +
+            (err ? err.localizedDescription.UTF8String : "nil provider");
+        return {};
+    }
 
     id<MLFeatureProvider> out =
         [(__bridge MLModel*)m_impl->model predictionFromFeatures:inp error:&err];
-    if (err || !out) return {};
+    if (err || !out) {
+        m_impl->lastError = std::string("predict: ") +
+            (err ? err.localizedDescription.UTF8String : "nil output");
+        return {};
+    }
 
     MLMultiArray *outArr =
         [out featureValueForName:(__bridge NSString*)m_impl->outputName].multiArrayValue;
-    if (!outArr) return {};
+    if (!outArr) {
+        m_impl->lastError = std::string("no output key: ") +
+            ((__bridge NSString*)m_impl->outputName).UTF8String;
+        return {};
+    }
 
     // Output shape: [1,H,W] or [H,W] — take the last two dimensions.
     NSUInteger n      = outArr.shape.count;

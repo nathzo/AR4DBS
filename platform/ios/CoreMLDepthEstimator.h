@@ -18,8 +18,9 @@ public:
     explicit CoreMLDepthEstimator(const std::string &modelPath);
     ~CoreMLDepthEstimator();
 
-    bool    isLoaded() const;
-    cv::Mat estimate(const cv::Mat &bgr);
+    bool        isLoaded()  const;
+    cv::Mat     estimate(const cv::Mat &bgr);
+    std::string lastError() const;  // empty when last estimate() succeeded
 
 private:
     struct Impl;
