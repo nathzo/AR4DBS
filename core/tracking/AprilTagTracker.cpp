@@ -12,7 +12,7 @@ AprilTagTracker::AprilTagTracker(const cv::Mat &K,
           cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50),
           [](){
               auto p = cv::aruco::DetectorParameters();
-              p.cornerRefinementMethod    = cv::aruco::CORNER_REFINE_NONE;
+              p.cornerRefinementMethod    = cv::aruco::CORNER_REFINE_SUBPIX;
               p.adaptiveThreshWinSizeMin  = 3;
               p.adaptiveThreshWinSizeMax  = 13;  // 2 scales (3,13) instead of 3 — ~40% faster thresholding
               p.adaptiveThreshWinSizeStep = 10;

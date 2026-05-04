@@ -118,7 +118,7 @@ private:
     double m_depthAnchor = 0.0;
 
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
-    static constexpr double kAlpha = 0.15;
+    static constexpr double kAlpha = 0.07;
 
     // Async depth inference — background thread, never blocks the camera loop.
     // m_depthInFlight: true while a background estimate() call is running.
