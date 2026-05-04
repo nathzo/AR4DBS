@@ -8,6 +8,8 @@
 #include "platform/ios/CoreMLDepthEstimator.h"
 #endif
 
+#include <string>
+
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -418,7 +420,9 @@ void AppController::onARFrame(const cv::Mat &frame,
     const bool tagsVisible = !detections.empty();
     ++m_depthFrameCount;
     cv::Mat depthMap;
+    bool depthRan = false;
     if (m_iosDepth && (tagsVisible || m_depthFrameCount >= kDepthThrottleFrames)) {
+        depthRan = true;
         if (tagsVisible) m_depthFrameCount = 0;
         // ARKit delivers landscape frames; ARKitSession rotates them 90° CW to portrait.
         // Depth Anything expects a landscape-aspect input (518×396). Feeding the portrait
@@ -444,6 +448,35 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     // ── 6. Render ─────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
+
+    // ── DEBUG: on-screen depth overlay diagnostics (remove when fixed) ────────
+    {
+        int y = 100;
+        const int lineH = 70;
+        auto dbg = [&](const std::string &msg, bool ok) {
+            const cv::Scalar shadow(0, 0, 0);
+            const cv::Scalar color = ok ? cv::Scalar(50, 220, 50) : cv::Scalar(50, 50, 255);
+            cv::putText(out, msg, {22, y+2}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
+            cv::putText(out, msg, {20, y},   cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
+            y += lineH;
+        };
+        dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
+            m_showDepthOverlay);
+        dbg(m_iosDepth ? "iosDepth model: LOADED" : "iosDepth model: NULL",
+            m_iosDepth != nullptr);
+        dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
+            tagsVisible);
+        if (!depthRan) {
+            dbg("depth: SKIPPED (count=" + std::to_string(m_depthFrameCount) +
+                "/" + std::to_string(kDepthThrottleFrames) + ")", false);
+        } else {
+            dbg("depth: RAN this frame", true);
+        }
+        dbg(depthMap.empty() ? "depthMap: EMPTY" :
+            "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
+            !depthMap.empty());
+    }
+    // ── END DEBUG ─────────────────────────────────────────────────────────────
 
     // Depth visualization overlay: red = close, blue = far.
     // Rendered first so it appears under trajectory lines and frame axes,
