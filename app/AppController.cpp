@@ -8,6 +8,7 @@
 #include "platform/ios/CoreMLDepthEstimator.h"
 #endif
 
+#include <chrono>
 #include <string>
 
 #include <QFile>
@@ -23,10 +24,16 @@ static constexpr int    RAY_SAMPLES     = 60;
 static float sampleDepthAt(const cv::Mat &depthMap, cv::Point2f p); // defined below
 static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
-static constexpr int kDepthThrottleFrames = 3;
 
 AppController::AppController(QObject *parent) : QObject(parent) {}
-AppController::~AppController() = default;
+AppController::~AppController()
+{
+#ifdef Q_OS_IOS
+    // Wait for any background depth inference to finish before members are destroyed.
+    while (m_depthInFlight.load())
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+#endif
+}
 
 bool AppController::init(const QString &calibPath,
                          const QString &tagConfigPath,
@@ -349,7 +356,6 @@ void AppController::resetARRegistration()
     m_T_cam_frame_filt    = cv::Mat();
     m_world_T_camera_prev = cv::Mat();
     m_depthAnchor         = 0.0;
-    m_depthFrameCount     = 0;
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -414,36 +420,44 @@ void AppController::onARFrame(const cv::Mat &frame,
     m_T_cam_frame_filt    = T_cam_frame.clone(); // empty clone is still empty
 
     // ── 5. Depth estimation and anchor update ────────────────────────────────
-    // Tags visible → run depth every frame so the metric anchor is always fresh.
-    // Tags absent  → run depth every kDepthThrottleFrames frames to spare CPU
-    //                (anchor persists from last tag sighting for occlusion rendering).
+    // Inference runs on a background thread so the camera loop is never blocked.
+    // The camera thread always reads the last completed depth map (m_depthMapReady)
+    // and dispatches a new inference only when the previous one has finished.
     const bool tagsVisible = !detections.empty();
-    ++m_depthFrameCount;
+
+    // Grab the latest completed depth map (non-blocking).
     cv::Mat depthMap;
-    bool depthRan = false;
-    if (m_iosDepth && (tagsVisible || m_depthFrameCount >= kDepthThrottleFrames)) {
-        depthRan = true;
-        if (tagsVisible) m_depthFrameCount = 0;
-        // ARKit delivers landscape frames; ARKitSession rotates them 90° CW to portrait.
-        // Depth Anything expects a landscape-aspect input (518×396). Feeding the portrait
-        // frame directly squishes the scene geometry and corrupts spatial correspondence.
-        // Fix: un-rotate to landscape for inference, then rotate the depth map back.
+    {
+        std::lock_guard<std::mutex> lk(m_depthMutex);
+        depthMap = m_depthMapReady;
+    }
+
+    // Update metric anchor whenever we have both tags and a depth map.
+    if (!depthMap.empty() && tagsVisible) {
+        const double tagMetricDepth = cv::norm(detections[0].tvec);
+        const cv::Point2f tagPx = PoseUtils::project(
+            cv::Point3d(0,0,0), m_K,
+            detections[0].rvec, detections[0].tvec, m_dist);
+        const float relTag = sampleDepthAt(depthMap, tagPx);
+        if (relTag > 1e-4f)
+            m_depthAnchor = tagMetricDepth / relTag;
+    }
+
+    // Dispatch a new inference if none is currently in flight.
+    if (m_iosDepth && !m_depthInFlight.exchange(true)) {
         cv::Mat landscape;
         cv::rotate(frame, landscape, cv::ROTATE_90_COUNTERCLOCKWISE);
-        cv::Mat depthLandscape = m_iosDepth->estimate(landscape);
-        if (!depthLandscape.empty())
-            cv::rotate(depthLandscape, depthMap, cv::ROTATE_90_CLOCKWISE);
-        if (!depthMap.empty() && tagsVisible) {
-            const double tagMetricDepth = cv::norm(detections[0].tvec);
-            const cv::Point2f tagPx = PoseUtils::project(
-                cv::Point3d(0,0,0), m_K,
-                detections[0].rvec, detections[0].tvec, m_dist);
-            const float relTag = sampleDepthAt(depthMap, tagPx);
-            if (relTag > 1e-4f)
-                // Depth Anything v2 outputs depth (higher=farther), so divide.
-                // anchor / relTag = tagMetricDepth → surfaceDepth = rel * anchor
-                m_depthAnchor = tagMetricDepth / relTag;
-        }
+        std::thread([this, landscape = std::move(landscape)]() mutable {
+            cv::Mat depthLandscape = m_iosDepth->estimate(landscape);
+            cv::Mat depthPortrait;
+            if (!depthLandscape.empty())
+                cv::rotate(depthLandscape, depthPortrait, cv::ROTATE_90_CLOCKWISE);
+            {
+                std::lock_guard<std::mutex> lk(m_depthMutex);
+                m_depthMapReady = depthPortrait;
+            }
+            m_depthInFlight.store(false);
+        }).detach();
     }
 
     // ── 6. Render ─────────────────────────────────────────────────────────────
@@ -466,19 +480,11 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_iosDepth != nullptr);
         dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
             tagsVisible);
-        if (!depthRan) {
-            dbg("depth: SKIPPED (count=" + std::to_string(m_depthFrameCount) +
-                "/" + std::to_string(kDepthThrottleFrames) + ")", false);
-        } else {
-            dbg("depth: RAN this frame", true);
-        }
+        dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
+            !m_depthInFlight.load());
         dbg(depthMap.empty() ? "depthMap: EMPTY" :
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());
-        if (m_iosDepth && depthMap.empty()) {
-            const std::string e = m_iosDepth->lastError();
-            dbg(e.empty() ? "err: (none)" : e.substr(0, 36), false);
-        }
     }
     // ── END DEBUG ─────────────────────────────────────────────────────────────
 

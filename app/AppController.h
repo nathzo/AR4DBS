@@ -2,8 +2,11 @@
 #include <QObject>
 #include <QElapsedTimer>
 #include <opencv2/core.hpp>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "core/math/SurgicalPlan.h"
@@ -102,9 +105,6 @@ private:
 
     bool m_showDepthOverlay = false;
 
-    int  m_depthFrameCount          = 0;
-    static constexpr int kDepthThrottleFrames = 3;
-
 #ifdef Q_OS_IOS
     cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen
     cv::Mat m_world_T_camera_prev; // previous ARKit pose, for computing Δ
@@ -119,5 +119,12 @@ private:
 
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
     static constexpr double kAlpha = 0.15;
+
+    // Async depth inference — background thread, never blocks the camera loop.
+    // m_depthInFlight: true while a background estimate() call is running.
+    // m_depthMapReady: last completed depth map (portrait orientation), guarded by mutex.
+    std::atomic<bool> m_depthInFlight{false};
+    std::mutex        m_depthMutex;
+    cv::Mat           m_depthMapReady;
 #endif
 };
