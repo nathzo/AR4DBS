@@ -206,7 +206,7 @@ if(IOS)
         platform/ios/CameraIntrinsics.h
         platform/ios/CameraIntrinsics.mm      # Objective-C++ — reads AVFoundation FOV (kept for reference)
         platform/ios/IOSCamera.h
-        platform/ios/IOSCamera.cpp
+        platform/ios/IOSCamera.mm
         platform/ios/CoreMLDepthEstimator.h
         platform/ios/CoreMLDepthEstimator.mm  # Objective-C++ — Neural Engine monocular depth (no LiDAR)
     )
@@ -223,6 +223,7 @@ qt_add_executable(DBSAR
     ${CORE_SOURCES}
     ${PLATFORM_SOURCES}
     ${SCANNER_SOURCES}
+    platform/ios/IOSCamera.mm
 )
 
 # ─── Resources ────────────────────────────────────────────────────────────────
