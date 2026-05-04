@@ -1,3 +1,4 @@
+typedef struct opaqueCMSampleBuffer *CMSampleBufferRef;
 #pragma once
 #include <QObject>
 #include <opencv2/core.hpp>
@@ -17,6 +18,8 @@ public:
 
     void start();
     void stop();
+
+    void handleSampleBuffer(CMSampleBufferRef sampleBuffer);  // called by native delegate
 
 signals:
     void frameReady(const cv::Mat &bgr);
