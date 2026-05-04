@@ -9,22 +9,11 @@ struct TagPose {
     cv::Mat tvec; // translation in metres (tag → camera)
 };
 
-struct TagConfig {
-    int     id;
-    cv::Mat R_tag_frame;   // 3×3 double
-    cv::Mat t_tag_frame;   // 3×1 double
-};
-
 class AprilTagTracker
 {
 public:
     // K: 3x3 camera matrix; distCoeffs: 1x4/5 distortion; markerSizeM: physical side length
     AprilTagTracker(const cv::Mat &K, const cv::Mat &distCoeffs, float markerSizeM);
-
-    void loadTagConfig(const std::string &path);
-
-    bool estimateFramePose(const std::vector<TagPose> &poses,   // ← add this
-                           cv::Mat &R_out, cv::Mat &t_out) const;
 
     // predictedR: optional 3×3 rotation (camera←frame, CV_64F) used to
     // disambiguate the two IPPE solutions. When empty the lower-reprojection-
@@ -55,9 +44,17 @@ private:
     std::vector<int>                      m_ids;
 
     // ROI state — updated each frame
-    bool    m_roiActive = false;
-    cv::Rect m_roi;                 // in m_small coordinates
-    cv::Point2f m_roiOffset;        // top-left of the ROI in m_small coordinates
+    bool        m_roiActive = false;
+    cv::Rect    m_roi;               // in m_small coordinates
+    cv::Point2f m_roiOffset;         // top-left of the ROI in m_small coordinates
+
+    // Periodic full-scan counter.
+    // Every kFullScanPeriod frames we bypass the ROI and scan the whole image so
+    // that a tag which drifted outside the last ROI is rediscovered.  Without this,
+    // a two-tag scene degenerates: once the ROI centres on one tag it never picks
+    // up the second one again.
+    int m_fullScanCounter = 0;
+    static constexpr int kFullScanPeriod = 10;
 
     // Run detection inside a sub-image; returns false on a miss (caller does full scan)
     bool detectInRoi(std::vector<std::vector<cv::Point2f>> &corners,
@@ -65,6 +62,4 @@ private:
     // Update m_roi from the detected corners (in m_small coordinates)
     void updateRoi(const std::vector<std::vector<cv::Point2f>> &corners,
                    cv::Size smallSize);
-
-    std::vector<TagConfig> m_tagConfigs;
 };

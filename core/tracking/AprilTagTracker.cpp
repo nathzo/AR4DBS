@@ -1,7 +1,6 @@
 #include "AprilTagTracker.h"
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
-#include <fstream>
 
 AprilTagTracker::AprilTagTracker(const cv::Mat &K,
                                  const cv::Mat &distCoeffs,
@@ -27,42 +26,6 @@ AprilTagTracker::AprilTagTracker(const cv::Mat &K,
         {  h, -h, 0.f },
         { -h, -h, 0.f }
     };
-}
-
-bool AprilTagTracker::estimateFramePose(const std::vector<TagPose> &poses,
-                                        cv::Mat &R_out, cv::Mat &t_out) const
-{
-    std::vector<cv::Mat> Rs, ts;
-
-    for (const auto &tp : poses) {
-        auto it = std::find_if(m_tagConfigs.begin(), m_tagConfigs.end(),
-                               [&](const TagConfig &c){ return c.id == tp.id; });
-        if (it == m_tagConfigs.end()) continue;
-
-        cv::Mat R_cam_tag;
-        cv::Rodrigues(tp.rvec, R_cam_tag);
-
-        Rs.push_back(R_cam_tag * it->R_tag_frame);
-        ts.push_back(R_cam_tag * it->t_tag_frame + tp.tvec);
-    }
-
-    if (Rs.empty()) return false;
-
-    // Average translations
-    t_out = cv::Mat::zeros(3, 1, CV_64F);
-    for (const auto &t : ts) t_out += t;
-    t_out /= static_cast<double>(ts.size());
-
-    // Average rotations via Rodrigues vectors
-    cv::Mat rvecSum = cv::Mat::zeros(3, 1, CV_64F);
-    for (const auto &R : Rs) {
-        cv::Mat rv; cv::Rodrigues(R, rv);
-        rvecSum += rv;
-    }
-    rvecSum /= static_cast<double>(Rs.size());
-    cv::Rodrigues(rvecSum, R_out);
-
-    return true;
 }
 
 // ── ROI helpers ───────────────────────────────────────────────────────────────
@@ -120,14 +83,21 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
     cv::cvtColor(frame, m_grey, cv::COLOR_BGR2GRAY);
     cv::resize(m_grey, m_small, cv::Size(), kDetectScale, kDetectScale, cv::INTER_AREA);
 
-    // 2. Try ROI first; fall back to full scan on a miss
+    // 2. Try ROI first; fall back to full scan on a miss or every kFullScanPeriod frames.
+    //
+    // Without the periodic full scan a two-tag scene breaks: detectInRoi short-
+    // circuits once it finds *one* tag, the ROI then shrinks to that tag only, and
+    // the second tag is never rediscovered.  The forced full scan every
+    // kFullScanPeriod frames lets both tags be re-included in the ROI regularly.
     m_corners.clear();
     m_ids.clear();
     m_rejected.clear();
 
     bool found = false;
-    if (m_roiActive)
+    if (m_roiActive && (++m_fullScanCounter < kFullScanPeriod))
         found = detectInRoi(m_corners, m_ids);
+    else
+        m_fullScanCounter = 0;   // reset; full scan runs below
 
     if (!found) {
         m_detector.detectMarkers(m_small, m_corners, m_ids, m_rejected);
@@ -183,18 +153,6 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
 
 void AprilTagTracker::drawAxes(cv::Mat &frame, const std::vector<TagPose> &poses) const
 {
-    // Draw individual tag axes only if no config is loaded
-    if (m_tagConfigs.empty()) {
-        for (const auto &p : poses)
-            cv::drawFrameAxes(frame, m_K, m_dist, p.rvec, p.tvec, m_markerSize * 0.5f);
-        return;
-    }
-
-    // Draw the unified frame origin
-    cv::Mat R_frame, t_frame;
-    if (estimateFramePose(poses, R_frame, t_frame)) {
-        cv::Mat rvec_frame;
-        cv::Rodrigues(R_frame, rvec_frame);
-        cv::drawFrameAxes(frame, m_K, m_dist, rvec_frame, t_frame, m_markerSize);
-    }
+    for (const auto &p : poses)
+        cv::drawFrameAxes(frame, m_K, m_dist, p.rvec, p.tvec, m_markerSize * 0.5f);
 }
