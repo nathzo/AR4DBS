@@ -203,11 +203,27 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         return {};
     }
 
-    MLMultiArray *outArr =
-        [out featureValueForName:(__bridge NSString*)m_impl->outputName].multiArrayValue;
+    // Try stored output key first; fall back to any MultiArray in the output.
+    NSString *outKey = (__bridge NSString*)m_impl->outputName;
+    MLFeatureValue *outFV = [out featureValueForName:outKey];
+    if (!outFV) {
+        // Stored key not in prediction output — try every available feature name.
+        for (NSString *k in out.featureNames) {
+            MLFeatureValue *v = [out featureValueForName:k];
+            if (v.multiArrayValue) { outFV = v; outKey = k; break; }
+        }
+    }
+    if (!outFV) {
+        // Build a list of available keys to show on screen.
+        NSString *keys = [out.featureNames.allObjects componentsJoinedByString:@","];
+        m_impl->lastError = std::string("no arr in: ") + keys.UTF8String;
+        return {};
+    }
+
+    MLMultiArray *outArr = outFV.multiArrayValue;
     if (!outArr) {
-        m_impl->lastError = std::string("no output key: ") +
-            ((__bridge NSString*)m_impl->outputName).UTF8String;
+        m_impl->lastError = std::string("out type=") +
+            std::to_string((int)outFV.type) + " key=" + outKey.UTF8String;
         return {};
     }
 
@@ -216,9 +232,23 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
     const int  outH   = outArr.shape[n-2].intValue;
     const int  outW   = outArr.shape[n-1].intValue;
 
+    // Copy output to CV_32F, handling both Float32 and Float16 element types.
     cv::Mat disp(outH, outW, CV_32F);
-    std::memcpy(disp.data, outArr.dataPointer,
-                (size_t)outH * outW * sizeof(float));
+    if (outArr.dataType == MLMultiArrayDataTypeFloat16) {
+        const uint16_t *src = static_cast<const uint16_t*>(outArr.dataPointer);
+        float          *dst = disp.ptr<float>();
+        const size_t    N   = (size_t)outH * outW;
+        // Convert fp16 → fp32 via the standard bit-manipulation trick.
+        for (size_t i = 0; i < N; ++i) {
+            uint32_t bits = ((uint32_t)(src[i] & 0x8000u) << 16)
+                          | ((uint32_t)((src[i] & 0x7C00u) + 0x1C000u) << 13)
+                          | ((uint32_t)(src[i] & 0x03FFu) << 13);
+            std::memcpy(&dst[i], &bits, sizeof(float));
+        }
+    } else {
+        std::memcpy(disp.data, outArr.dataPointer,
+                    (size_t)outH * outW * sizeof(float));
+    }
 
     // Normalise raw output to [0,1], then invert so that 1 = closest.
     // Depth Anything v2 outputs metric-like depth (larger = farther), which is the
