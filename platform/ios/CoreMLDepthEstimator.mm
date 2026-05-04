@@ -220,34 +220,73 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         return {};
     }
 
-    MLMultiArray *outArr = outFV.multiArrayValue;
-    if (!outArr) {
-        m_impl->lastError = std::string("out type=") +
-            std::to_string((int)outFV.type) + " key=" + outKey.UTF8String;
-        return {};
-    }
+    cv::Mat disp;
 
-    // Output shape: [1,H,W] or [H,W] — take the last two dimensions.
-    NSUInteger n      = outArr.shape.count;
-    const int  outH   = outArr.shape[n-2].intValue;
-    const int  outW   = outArr.shape[n-1].intValue;
-
-    // Copy output to CV_32F, handling both Float32 and Float16 element types.
-    cv::Mat disp(outH, outW, CV_32F);
-    if (outArr.dataType == MLMultiArrayDataTypeFloat16) {
-        const uint16_t *src = static_cast<const uint16_t*>(outArr.dataPointer);
-        float          *dst = disp.ptr<float>();
-        const size_t    N   = (size_t)outH * outW;
-        // Convert fp16 → fp32 via the standard bit-manipulation trick.
-        for (size_t i = 0; i < N; ++i) {
-            uint32_t bits = ((uint32_t)(src[i] & 0x8000u) << 16)
-                          | ((uint32_t)((src[i] & 0x7C00u) + 0x1C000u) << 13)
-                          | ((uint32_t)(src[i] & 0x03FFu) << 13);
-            std::memcpy(&dst[i], &bits, sizeof(float));
+    if (outFV.type == MLFeatureTypeImage) {
+        // Apple's DepthAnythingV2 outputs a single-channel CVPixelBuffer.
+        CVPixelBufferRef outPB = outFV.imageBufferValue;
+        if (!outPB) {
+            m_impl->lastError = "image output: nil pixel buffer";
+            return {};
         }
+        CVPixelBufferLockBaseAddress(outPB, kCVPixelBufferLock_ReadOnly);
+        const OSType fmt   = CVPixelBufferGetPixelFormatType(outPB);
+        const int    outW  = (int)CVPixelBufferGetWidth(outPB);
+        const int    outH  = (int)CVPixelBufferGetHeight(outPB);
+        const size_t stride = CVPixelBufferGetBytesPerRow(outPB);
+        const void  *base  = CVPixelBufferGetBaseAddress(outPB);
+
+        disp = cv::Mat(outH, outW, CV_32F);
+        if (fmt == kCVPixelFormatType_OneComponent32Float) {
+            for (int y = 0; y < outH; ++y)
+                std::memcpy(disp.ptr<float>(y),
+                            static_cast<const uint8_t*>(base) + y * stride,
+                            outW * sizeof(float));
+        } else if (fmt == kCVPixelFormatType_OneComponent16Half) {
+            for (int y = 0; y < outH; ++y) {
+                const uint16_t *src = reinterpret_cast<const uint16_t*>(
+                    static_cast<const uint8_t*>(base) + y * stride);
+                float *dst = disp.ptr<float>(y);
+                for (int x = 0; x < outW; ++x) {
+                    uint32_t bits = ((uint32_t)(src[x] & 0x8000u) << 16)
+                                  | ((uint32_t)((src[x] & 0x7C00u) + 0x1C000u) << 13)
+                                  | ((uint32_t)(src[x] & 0x03FFu) << 13);
+                    std::memcpy(&dst[x], &bits, sizeof(float));
+                }
+            }
+        } else {
+            CVPixelBufferUnlockBaseAddress(outPB, kCVPixelBufferLock_ReadOnly);
+            m_impl->lastError = std::string("unsupported pb fmt: ") +
+                std::to_string((unsigned)fmt);
+            return {};
+        }
+        CVPixelBufferUnlockBaseAddress(outPB, kCVPixelBufferLock_ReadOnly);
+
     } else {
-        std::memcpy(disp.data, outArr.dataPointer,
-                    (size_t)outH * outW * sizeof(float));
+        MLMultiArray *outArr = outFV.multiArrayValue;
+        if (!outArr) {
+            m_impl->lastError = std::string("out type=") +
+                std::to_string((int)outFV.type) + " key=" + outKey.UTF8String;
+            return {};
+        }
+        NSUInteger n     = outArr.shape.count;
+        const int  outH  = outArr.shape[n-2].intValue;
+        const int  outW  = outArr.shape[n-1].intValue;
+        disp = cv::Mat(outH, outW, CV_32F);
+        if (outArr.dataType == MLMultiArrayDataTypeFloat16) {
+            const uint16_t *src = static_cast<const uint16_t*>(outArr.dataPointer);
+            float          *dst = disp.ptr<float>();
+            const size_t    N   = (size_t)outH * outW;
+            for (size_t i = 0; i < N; ++i) {
+                uint32_t bits = ((uint32_t)(src[i] & 0x8000u) << 16)
+                              | ((uint32_t)((src[i] & 0x7C00u) + 0x1C000u) << 13)
+                              | ((uint32_t)(src[i] & 0x03FFu) << 13);
+                std::memcpy(&dst[i], &bits, sizeof(float));
+            }
+        } else {
+            std::memcpy(disp.data, outArr.dataPointer,
+                        (size_t)outH * outW * sizeof(float));
+        }
     }
 
     // Normalise raw output to [0,1], then invert so that 1 = closest.
