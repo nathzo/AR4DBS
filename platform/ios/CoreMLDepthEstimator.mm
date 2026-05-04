@@ -13,9 +13,13 @@ static const float kInvStd[3] = {1.f/0.229f, 1.f/0.224f, 1.f/0.225f};
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CoreMLDepthEstimator::Impl {
-    MLModel  *model      = nil;
-    NSString *inputName  = nil;
-    NSString *outputName = nil;
+    // __strong is required: ObjC pointers in C++ structs are __unsafe_unretained
+    // by default under ARC and do not retain the object. Without __strong the
+    // MLModel is released when the constructor's local variable goes out of scope
+    // and the pointer becomes dangling, causing a crash on the next inference call.
+    __strong MLModel  *model      = nil;
+    __strong NSString *inputName  = nil;
+    __strong NSString *outputName = nil;
     bool      isImage    = false;  // true → model takes a CVPixelBuffer input
     int       inputW     = 256;
     int       inputH     = 256;
