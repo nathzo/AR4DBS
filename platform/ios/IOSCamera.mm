@@ -67,7 +67,7 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     // 3. Build the capture session
     m_impl->session = [[AVCaptureSession alloc] init];
     [m_impl->session beginConfiguration];
-    m_impl->session.sessionPreset = AVCaptureSessionPreset1280x720;
+    m_impl->session.sessionPreset = AVCaptureSessionPresetPhoto;
 
     // Input
     m_impl->input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&err];
@@ -91,14 +91,14 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     if ([m_impl->session canAddOutput:m_impl->output])
         [m_impl->session addOutput:m_impl->output];
 
-    // Lock orientation to landscape-right to match your preview
+    // Deliver native landscape pixels on all iOS versions — no system rotation.
     AVCaptureConnection *conn =
         [m_impl->output connectionWithMediaType:AVMediaTypeVideo];
     if (@available(iOS 17.0, *)) {
         conn.videoRotationAngle = 0;
     } else {
         if (conn.isVideoOrientationSupported)
-            conn.videoOrientation = AVCaptureVideoOrientationPortrait;
+            conn.videoOrientation = AVCaptureVideoOrientationLandscapeRight;
     }
 
     [m_impl->session commitConfiguration];
