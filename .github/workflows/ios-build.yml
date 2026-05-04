@@ -104,16 +104,6 @@ jobs:
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
         run: |
-          # Pass the pre-compiled .mlmodelc directory to CMake.
-          # CMake copies it into the app bundle via a POST_BUILD command.
-          COREML_ARG=""
-          if [ -d resources/model-small.mlmodelc ]; then
-            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlmodelc"
-            echo "CoreML model found — depth occlusion will be bundled"
-          else
-            echo "CoreML model not found — depth occlusion disabled in this build"
-          fi
-
           cmake -S . -B build-ios \
             -G Xcode \
             -DCMAKE_TOOLCHAIN_FILE="$QT_IOS/lib/cmake/Qt6/qt.toolchain.cmake" \
@@ -121,7 +111,6 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
             -DOPENCV_FRAMEWORK=$HOME/opencv-ios \
             -DFEATURE_PLAN_SCANNER=ON \
-            $COREML_ARG \
             2>&1 | tee cmake-configure.log
           # Fail immediately if FFmpeg was not resolved — saves 30 min on link errors
           if grep -q "symbols will be unresolved\|no FFmpeg frameworks found" cmake-configure.log; then
@@ -141,6 +130,21 @@ jobs:
             -destination generic/platform=iOS \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      # ── Bundle CoreML model into built app ────────────────────────────────────
+      # CMake/Xcode cannot reliably copy a directory into an iOS app bundle at
+      # build time, so we do it here with a plain cp -r after xcodebuild finishes.
+      - name: Bundle CoreML model into app
+        run: |
+          APP="build-ios/Release-iphoneos/DBSAR.app"
+          MODEL="resources/model-small.mlmodelc"
+          if [ -d "$MODEL" ] && [ -d "$APP" ]; then
+            cp -r "$MODEL" "$APP/"
+            echo "Bundled $MODEL → $APP/model-small.mlmodelc"
+          else
+            [ -d "$MODEL" ] || echo "SKIP: $MODEL not found (compile step may have failed)"
+            [ -d "$APP"   ] || echo "SKIP: $APP not found (build may have failed)"
+          fi
 
       # ── Verify binary before packaging ───────────────────────────────────────
       - name: Verify dynamic library linking

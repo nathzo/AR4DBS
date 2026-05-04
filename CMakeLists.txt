@@ -310,30 +310,12 @@ if(IOS)
 endif()
 
 # CoreML depth model for iOS monocular depth (CoreMLDepthEstimator).
-# Set COREML_DEPTH_MODEL to the path of a pre-compiled .mlmodelc directory.
-# The CI pre-compiles model-small.mlpackage → model-small.mlmodelc via
-# "xcrun coremlcompiler compile" before calling CMake, then passes the result here.
-# A POST_BUILD command copies the directory into the app bundle root so it is found
-# at runtime via: QCoreApplication::applicationDirPath() + "/model-small.mlmodelc"
-# Leave empty to skip — depth occlusion will be disabled at runtime.
-set(COREML_DEPTH_MODEL "" CACHE PATH
-    "Path to pre-compiled CoreML depth model (.mlmodelc directory) to bundle with the iOS app")
-if(IOS AND COREML_DEPTH_MODEL)
-    if(NOT EXISTS "${COREML_DEPTH_MODEL}")
-        message(WARNING "COREML_DEPTH_MODEL is set but not found: ${COREML_DEPTH_MODEL}")
-    else()
-        get_filename_component(COREML_MODEL_FILENAME "${COREML_DEPTH_MODEL}" NAME)
-        add_custom_command(TARGET DBSAR POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${COREML_DEPTH_MODEL}"
-                "$<TARGET_BUNDLE_DIR:DBSAR>/${COREML_MODEL_FILENAME}"
-            COMMENT "Bundling CoreML model ${COREML_MODEL_FILENAME} into app bundle"
-            VERBATIM
-        )
-        message(STATUS "CoreML depth model: ${COREML_DEPTH_MODEL}")
-    endif()
-elseif(IOS)
-    message(STATUS "CoreML depth model: not set — depth occlusion disabled (set COREML_DEPTH_MODEL to enable)")
+# Bundling is handled entirely by the CI workflow (ios-build.yml):
+#   1. xcrun coremlcompiler compiles model-small.mlpackage → model-small.mlmodelc
+#   2. cp -r copies model-small.mlmodelc into the built DBSAR.app after xcodebuild
+# No CMake action is needed or taken here.
+if(IOS)
+    message(STATUS "CoreML depth model: bundled by CI post-build step in ios-build.yml")
 endif()
 
 # ─── Include paths ────────────────────────────────────────────────────────────
