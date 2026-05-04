@@ -32,11 +32,34 @@ void GLWidget::paintEvent(QPaintEvent *event)
     if (m_image.isNull())
         return;
 
-    QSize scaled = m_image.size().scaled(rect().size(), Qt::KeepAspectRatio);
+    // The incoming frame is landscape (ARKit native: width > height).
+    // The widget is portrait. Rotate 90° CW around the widget centre so the
+    // frame fills portrait orientation, then scale with aspect-ratio preserved.
+    const bool needsRotation = m_image.width() > m_image.height();
+
+    QSize frameSize = needsRotation
+        ? QSize(m_image.height(), m_image.width())  // swapped after 90° rotation
+        : m_image.size();
+
+    QSize scaled = frameSize.scaled(rect().size(), Qt::KeepAspectRatio);
     QRect target(
         (rect().width()  - scaled.width())  / 2,
         (rect().height() - scaled.height()) / 2,
         scaled.width(), scaled.height()
     );
-    painter.drawImage(target, m_image);
+
+    if (needsRotation) {
+        painter.translate(target.center());
+        painter.rotate(90.0);
+        painter.translate(-target.center());
+        // After the transform the drawing rect maps back to the image dimensions
+        QRect srcRect(
+            target.center().x() - scaled.height() / 2,
+            target.center().y() - scaled.width()  / 2,
+            scaled.height(), scaled.width()
+        );
+        painter.drawImage(srcRect, m_image);
+    } else {
+        painter.drawImage(target, m_image);
+    }
 }

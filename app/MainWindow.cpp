@@ -138,12 +138,9 @@ MainWindow::MainWindow(QWidget *parent)
     });
 #endif
 
-    // ── AR display widget + side buttons ─────────────────────────────────────
-    // Layout: [GLWidget (video, expands)] | [button column (fixed width)]
-    // The UI is locked to landscape; buttons occupy the right side as they
-    // would in portrait (i.e. stacked vertically beside the image).
+    // ── AR display widget + button row ───────────────────────────────────────
     auto *arContainer = new QWidget(this);
-    auto *arLayout    = new QHBoxLayout(arContainer);
+    auto *arLayout    = new QVBoxLayout(arContainer);
     arLayout->setContentsMargins(0, 0, 0, 0);
     arLayout->setSpacing(0);
 
@@ -158,24 +155,23 @@ MainWindow::MainWindow(QWidget *parent)
         ).arg(bg, fg);
     };
 
-    // Button column on the right side of the AR view
-    auto *arBtnCol = new QWidget(arContainer);
-    arBtnCol->setStyleSheet("background: #1a1b1d;");
-    arBtnCol->setFixedWidth(160);
-    auto *arBtnLayout = new QVBoxLayout(arBtnCol);
+    // Button row at the bottom of the AR view
+    auto *arBtnRow = new QWidget(arContainer);
+    arBtnRow->setStyleSheet("background: #1a1b1d;");
+    auto *arBtnLayout = new QHBoxLayout(arBtnRow);
     arBtnLayout->setContentsMargins(0, 0, 0, 0);
     arBtnLayout->setSpacing(0);
 
-    m_btnBackToMenu = new QPushButton("← Menu", arBtnCol);
+    m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
     m_btnBackToMenu->setStyleSheet(arBtnStyle("#3a3b3d")); // neutral dark
 
-    m_btnEditPlan = new QPushButton("Modifier\nle plan", arBtnCol);
+    m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
     m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE
     m_btnEditPlan->setVisible(false);
 
     arBtnLayout->addWidget(m_btnBackToMenu, 1);
     arBtnLayout->addWidget(m_btnEditPlan,   1);
-    arLayout->addWidget(arBtnCol);
+    arLayout->addWidget(arBtnRow);
 
     connect(m_controller, &AppController::frameReady,
             m_glWidget,   &GLWidget::setFrame);
