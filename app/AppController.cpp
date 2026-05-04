@@ -444,17 +444,13 @@ void AppController::onARFrame(const cv::Mat &frame,
     }
 
     // Dispatch a new inference if none is currently in flight.
+    // Frame is landscape (ARKit native) — passed directly, no rotation needed.
     if (m_iosDepth && !m_depthInFlight.exchange(true)) {
-        cv::Mat landscape;
-        cv::rotate(frame, landscape, cv::ROTATE_90_COUNTERCLOCKWISE);
-        std::thread([this, landscape = std::move(landscape)]() mutable {
-            cv::Mat depthLandscape = m_iosDepth->estimate(landscape);
-            cv::Mat depthPortrait;
-            if (!depthLandscape.empty())
-                cv::rotate(depthLandscape, depthPortrait, cv::ROTATE_90_CLOCKWISE);
+        std::thread([this, frame]() mutable {
+            cv::Mat depth = m_iosDepth->estimate(frame);
             {
                 std::lock_guard<std::mutex> lk(m_depthMutex);
-                m_depthMapReady = depthPortrait;
+                m_depthMapReady = depth;
             }
             m_depthInFlight.store(false);
         }).detach();

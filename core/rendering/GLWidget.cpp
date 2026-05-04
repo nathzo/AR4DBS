@@ -25,10 +25,18 @@ void GLWidget::setFrame(const cv::Mat &bgr)
 void GLWidget::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event)
+
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
+
     if (m_image.isNull())
         return;
 
-    QPainter painter(this);
-    // Scale the frame to fill the widget while preserving aspect ratio
-    painter.drawImage(rect(), m_image);
+    QSize scaled = m_image.size().scaled(rect().size(), Qt::KeepAspectRatio);
+    QRect target(
+        (rect().width()  - scaled.width())  / 2,
+        (rect().height() - scaled.height()) / 2,
+        scaled.width(), scaled.height()
+    );
+    painter.drawImage(target, m_image);
 }

@@ -41,10 +41,9 @@
     <key>NSMotionUsageDescription</key>
     <string>Motion sensors are used by ARKit to stabilise the surgical overlay.</string>
 
-    <!-- Support all orientations so the surgeon can hold the phone any way -->
+    <!-- Lock to landscape so the UI never rotates during a procedure -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
-        <string>UIInterfaceOrientationPortrait</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
