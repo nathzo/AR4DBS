@@ -459,8 +459,8 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── 6. Render ─────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 
-    // ── DEBUG: on-screen depth overlay diagnostics (remove when fixed) ────────
-    {
+    // Debug diagnostics — test AR mode only
+    if (m_showDepthOverlay) {
         int y = 100;
         const int lineH = 70;
         auto dbg = [&](const std::string &msg, bool ok) {
@@ -482,7 +482,6 @@ void AppController::onARFrame(const cv::Mat &frame,
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());
     }
-    // ── END DEBUG ─────────────────────────────────────────────────────────────
 
     // Depth visualization overlay: red = close, blue = far.
     // Rendered first so it appears under trajectory lines and frame axes,
@@ -506,7 +505,8 @@ void AppController::onARFrame(const cv::Mat &frame,
     PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
 
     m_renderer->beginFrame(out);
-    cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
+    if (m_showDepthOverlay)
+        cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
         renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor);
