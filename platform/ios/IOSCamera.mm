@@ -94,8 +94,12 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     // Lock orientation to landscape-right to match your preview
     AVCaptureConnection *conn =
         [m_impl->output connectionWithMediaType:AVMediaTypeVideo];
-    if (conn.isVideoOrientationSupported)
-        conn.videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+    if (@available(iOS 17.0, *)) {
+        conn.videoRotationAngle = 0;
+    } else {
+        if (conn.isVideoOrientationSupported)
+            conn.videoOrientation = AVCaptureVideoOrientationPortrait;
+    }
 
     [m_impl->session commitConfiguration];
 }
@@ -163,6 +167,12 @@ void IOSCamera::handleSampleBuffer(CMSampleBufferRef sampleBuffer)
                  CV_8UC4, base, stride);
     cv::Mat bgr;
     cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+
+    // Strip CVPixelBuffer row padding so the mat is exactly captureWidth wide
+    if (bgr.cols != m_impl->captureWidth || !bgr.isContinuous()) {
+        bgr = bgr(cv::Rect(0, 0, m_impl->captureWidth,
+                                  m_impl->captureHeight)).clone();
+    }
 
     CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
