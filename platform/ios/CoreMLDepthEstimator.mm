@@ -13,17 +13,24 @@ static const float kInvStd[3] = {1.f/0.229f, 1.f/0.224f, 1.f/0.225f};
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CoreMLDepthEstimator::Impl {
-    // __strong is required: ObjC pointers in C++ structs are __unsafe_unretained
-    // by default under ARC and do not retain the object. Without __strong the
-    // MLModel is released when the constructor's local variable goes out of scope
-    // and the pointer becomes dangling, causing a crash on the next inference call.
-    __strong MLModel  *model      = nil;
-    __strong NSString *inputName  = nil;
-    __strong NSString *outputName = nil;
-    bool      isImage    = false;  // true → model takes a CVPixelBuffer input
-    int       inputW     = 256;
-    int       inputH     = 256;
-    bool      loaded     = false;
+    // ARC + C++ pImpl via raw new/delete is unreliable: __strong on ObjC pointers
+    // inside a C++ struct is not guaranteed to be honoured by the ARC optimizer when
+    // the struct lifetime is managed outside ARC (raw new/delete through an opaque
+    // pointer).  Bypass ARC entirely by storing the three ObjC objects as opaque
+    // void* retained with CFBridgingRetain and released with CFRelease in ~Impl().
+    void *model      = nullptr;   // retains MLModel*
+    void *inputName  = nullptr;   // retains NSString*
+    void *outputName = nullptr;   // retains NSString*
+    bool  isImage    = false;     // true → model takes a CVPixelBuffer input
+    int   inputW     = 256;
+    int   inputH     = 256;
+    bool  loaded     = false;
+
+    ~Impl() {
+        if (model)      { CFRelease(model);      model      = nullptr; }
+        if (inputName)  { CFRelease(inputName);  inputName  = nullptr; }
+        if (outputName) { CFRelease(outputName); outputName = nullptr; }
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,14 +53,14 @@ CoreMLDepthEstimator::CoreMLDepthEstimator(const std::string &modelPath)
         NSLog(@"[CoreMLDepth] load failed: %@", err.localizedDescription);
         return;
     }
-    m_impl->model = mdl;
+    m_impl->model = (void*)CFBridgingRetain(mdl);
 
     // Discover input/output names and the spatial size the model expects.
     MLModelDescription *desc = mdl.modelDescription;
-    m_impl->inputName  = desc.inputDescriptionsByName.allKeys.firstObject;
-    m_impl->outputName = desc.outputDescriptionsByName.allKeys.firstObject;
+    m_impl->inputName  = (void*)CFBridgingRetain(desc.inputDescriptionsByName.allKeys.firstObject);
+    m_impl->outputName = (void*)CFBridgingRetain(desc.outputDescriptionsByName.allKeys.firstObject);
 
-    MLFeatureDescription *inDesc = desc.inputDescriptionsByName[m_impl->inputName];
+    MLFeatureDescription *inDesc = desc.inputDescriptionsByName[(__bridge NSString*)m_impl->inputName];
     if (inDesc.type == MLFeatureTypeImage) {
         m_impl->isImage = true;
         m_impl->inputW  = (int)inDesc.imageConstraint.pixelsWide;
@@ -123,7 +130,7 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         MLFeatureValue *fv = [MLFeatureValue featureValueWithPixelBuffer:pb];
         CFRelease(pb);
         inp = [[MLDictionaryFeatureProvider alloc]
-               initWithDictionary:@{m_impl->inputName: fv} error:&err];
+               initWithDictionary:@{(__bridge NSString*)m_impl->inputName: fv} error:&err];
 
     } else {
         // ── MultiArray input: CHW float32 with ImageNet normalisation ─────────
@@ -142,9 +149,9 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         }
 
         // Support models exported with a batch dimension ([1,3,H,W]) or without ([3,H,W]).
-        MLModelDescription *desc = m_impl->model.modelDescription;
+        MLModelDescription *desc = ((__bridge MLModel*)m_impl->model).modelDescription;
         NSArray<NSNumber*> *modelShape =
-            desc.inputDescriptionsByName[m_impl->inputName]
+            desc.inputDescriptionsByName[(__bridge NSString*)m_impl->inputName]
                 .multiArrayConstraint.shape;
         NSArray<NSNumber*> *mlShape, *strides;
         if (modelShape.count == 4) {
@@ -165,7 +172,7 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         if (err || !arr) return {};
 
         inp = [[MLDictionaryFeatureProvider alloc]
-               initWithDictionary:@{m_impl->inputName:
+               initWithDictionary:@{(__bridge NSString*)m_impl->inputName:
                    [MLFeatureValue featureValueWithMultiArray:arr]}
                error:&err];
     }
@@ -173,11 +180,11 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
     if (err || !inp) return {};
 
     id<MLFeatureProvider> out =
-        [m_impl->model predictionFromFeatures:inp error:&err];
+        [(__bridge MLModel*)m_impl->model predictionFromFeatures:inp error:&err];
     if (err || !out) return {};
 
     MLMultiArray *outArr =
-        [out featureValueForName:m_impl->outputName].multiArrayValue;
+        [out featureValueForName:(__bridge NSString*)m_impl->outputName].multiArrayValue;
     if (!outArr) return {};
 
     // Output shape: [1,H,W] or [H,W] — take the last two dimensions.
