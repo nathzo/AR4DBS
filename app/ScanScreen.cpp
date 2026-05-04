@@ -79,7 +79,7 @@ ScanScreen::ScanScreen(QWidget *parent)
 
     // Camera
 #ifdef Q_OS_IOS
-    m_impl->camera = new IOSCamera(1920, 1440, this);
+    m_impl->camera = new IOSCamera(640, 480, this);
 #else
     m_impl->camera = new DesktopCamera(0, this);
 #endif

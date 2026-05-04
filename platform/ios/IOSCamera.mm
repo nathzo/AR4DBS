@@ -67,7 +67,7 @@ IOSCamera::IOSCamera(int captureWidth, int captureHeight, QObject *parent)
     // 3. Build the capture session
     m_impl->session = [[AVCaptureSession alloc] init];
     [m_impl->session beginConfiguration];
-    m_impl->session.sessionPreset = AVCaptureSessionPresetPhoto;
+    m_impl->session.sessionPreset = AVCaptureSessionPreset640x480;
 
     // Input
     m_impl->input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&err];
