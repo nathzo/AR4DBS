@@ -88,14 +88,27 @@ jobs:
           cp -r DepthAnythingV2SmallF16.mlpackage \
                 "$GITHUB_WORKSPACE/resources/model-small.mlpackage"
 
+      # ── Compile CoreML model (.mlpackage → .mlmodelc) ─────────────────────────
+      # xcrun coremlcompiler is the only reliable way to get the compiled .mlmodelc
+      # directory. Passing the raw .mlpackage to CMake's target_sources does not work
+      # because CMake's Xcode generator does not invoke coremlc on directory sources.
+      - name: Compile CoreML model
+        run: |
+          if [ -d resources/model-small.mlpackage ]; then
+            xcrun coremlcompiler compile resources/model-small.mlpackage resources/
+            echo "CoreML model compiled → resources/model-small.mlmodelc"
+          else
+            echo "CoreML model package not found — skipping compile"
+          fi
+
       # ── Configure ─────────────────────────────────────────────────────────────
       - name: Configure CMake
         run: |
-          # Bundle the CoreML model when present.
-          # Xcode compiles model-small.mlpackage → model-small.mlmodelc automatically.
+          # Pass the pre-compiled .mlmodelc directory to CMake.
+          # CMake copies it into the app bundle via a POST_BUILD command.
           COREML_ARG=""
-          if [ -d resources/model-small.mlpackage ]; then
-            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlpackage"
+          if [ -d resources/model-small.mlmodelc ]; then
+            COREML_ARG="-DCOREML_DEPTH_MODEL=$(pwd)/resources/model-small.mlmodelc"
             echo "CoreML model found — depth occlusion will be bundled"
           else
             echo "CoreML model not found — depth occlusion disabled in this build"

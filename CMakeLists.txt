@@ -310,20 +310,26 @@ if(IOS)
 endif()
 
 # CoreML depth model for iOS monocular depth (CoreMLDepthEstimator).
-# Set COREML_DEPTH_MODEL to the path of an .mlmodel or .mlpackage file.
-# Xcode will compile it to .mlmodelc and place it in the app bundle Resources/.
-# The path passed to AppController::init() at runtime should be:
-#   [[NSBundle mainBundle] pathForResource:@"<model-name>" ofType:@"mlmodelc"]
+# Set COREML_DEPTH_MODEL to the path of a pre-compiled .mlmodelc directory.
+# The CI pre-compiles model-small.mlpackage → model-small.mlmodelc via
+# "xcrun coremlcompiler compile" before calling CMake, then passes the result here.
+# A POST_BUILD command copies the directory into the app bundle root so it is found
+# at runtime via: QCoreApplication::applicationDirPath() + "/model-small.mlmodelc"
 # Leave empty to skip — depth occlusion will be disabled at runtime.
-set(COREML_DEPTH_MODEL "" CACHE FILEPATH
-    "Path to CoreML depth model (.mlmodel or .mlpackage) to bundle with the iOS app")
+set(COREML_DEPTH_MODEL "" CACHE PATH
+    "Path to pre-compiled CoreML depth model (.mlmodelc directory) to bundle with the iOS app")
 if(IOS AND COREML_DEPTH_MODEL)
     if(NOT EXISTS "${COREML_DEPTH_MODEL}")
-        message(WARNING "COREML_DEPTH_MODEL is set but file not found: ${COREML_DEPTH_MODEL}")
+        message(WARNING "COREML_DEPTH_MODEL is set but not found: ${COREML_DEPTH_MODEL}")
     else()
-        set_source_files_properties("${COREML_DEPTH_MODEL}" PROPERTIES
-            MACOSX_PACKAGE_LOCATION Resources)
-        target_sources(DBSAR PRIVATE "${COREML_DEPTH_MODEL}")
+        get_filename_component(COREML_MODEL_FILENAME "${COREML_DEPTH_MODEL}" NAME)
+        add_custom_command(TARGET DBSAR POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${COREML_DEPTH_MODEL}"
+                "$<TARGET_BUNDLE_DIR:DBSAR>/${COREML_MODEL_FILENAME}"
+            COMMENT "Bundling CoreML model ${COREML_MODEL_FILENAME} into app bundle"
+            VERBATIM
+        )
         message(STATUS "CoreML depth model: ${COREML_DEPTH_MODEL}")
     endif()
 elseif(IOS)
