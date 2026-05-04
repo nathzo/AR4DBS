@@ -151,7 +151,7 @@ void IOSCamera::handleSampleBuffer(CMSampleBufferRef sampleBuffer)
 
     // Wrap pixel buffer as cv::Mat (zero-copy)
     CVImageBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLockFlags_ReadOnly);
+    CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
     void  *base   = CVPixelBufferGetBaseAddress(pixelBuffer);
     size_t width  = CVPixelBufferGetWidth(pixelBuffer);
@@ -164,7 +164,7 @@ void IOSCamera::handleSampleBuffer(CMSampleBufferRef sampleBuffer)
     cv::Mat bgr;
     cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
 
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLockFlags_ReadOnly);
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
     emit frameReady(bgr);
 }
