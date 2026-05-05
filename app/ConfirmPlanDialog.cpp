@@ -230,6 +230,14 @@ SurgicalPlan ConfirmPlanDialog::plan() const
     return p;
 }
 
+void ConfirmPlanDialog::showEvent(QShowEvent *e)
+{
+    QDialog::showEvent(e);
+    const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
+    move(ag.left() + (ag.width()  - width())  / 2,
+         ag.top()  + (ag.height() - height()) / 2);
+}
+
 void ConfirmPlanDialog::keyPressEvent(QKeyEvent *event)
 {
     // Swallow Return/Enter so "Terminé" on the iOS keyboard only dismisses

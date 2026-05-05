@@ -151,30 +151,29 @@ MainWindow::MainWindow(QWidget *parent)
     m_glWidget = new GLWidget(arContainer);
     arLayout->addWidget(m_glWidget, 1);
 
-    auto arBtnStyle = [](const char *bg, const char *fg = "white") {
-        return QString(
-            "QPushButton { background:%1; color:%2; border:none;"
-            "  padding:14px; font-size:14pt; font-weight:bold; }"
-            "QPushButton:pressed { opacity:0.8; }"
-        ).arg(bg, fg);
-    };
-
-    // Button row at the bottom of the AR view
+    // Button row at the bottom of the AR view — same shape/layout as ScanScreen
     auto *arBtnRow = new QWidget(arContainer);
     arBtnRow->setStyleSheet("background: #1a1b1d;");
     auto *arBtnLayout = new QHBoxLayout(arBtnRow);
-    arBtnLayout->setContentsMargins(0, 0, 0, 0);
+    arBtnLayout->setContentsMargins(16, 8, 16, 16);
     arBtnLayout->setSpacing(0);
 
     m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
-    m_btnBackToMenu->setStyleSheet(arBtnStyle("#1a1b1d")); // DARK_BG
+    m_btnBackToMenu->setStyleSheet(
+        "QPushButton { background:#8A8C8F; color:#1a1b1d; border-radius:8px;"
+        "              padding:12px 24px; font-size:13pt; font-weight:bold; }"
+        "QPushButton:pressed { background:#6d6f72; }");
 
     m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
-    m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE
+    m_btnEditPlan->setStyleSheet(
+        "QPushButton { background:#75D0C5; color:#1a1b1d; border-radius:8px;"
+        "              padding:12px 32px; font-size:14pt; font-weight:bold; }"
+        "QPushButton:pressed { background:#5ab8ae; }");
     m_btnEditPlan->setVisible(false);
 
-    arBtnLayout->addWidget(m_btnBackToMenu, 1);
-    arBtnLayout->addWidget(m_btnEditPlan,   1);
+    arBtnLayout->addWidget(m_btnBackToMenu);
+    arBtnLayout->addStretch(1);
+    arBtnLayout->addWidget(m_btnEditPlan);
     arLayout->addWidget(arBtnRow);
 
     connect(m_controller, &AppController::frameReady,
