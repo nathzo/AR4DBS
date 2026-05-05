@@ -133,6 +133,9 @@ private:
 
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
     static constexpr double kAlpha = 0.07;
+    // Depth anchor EMA weight. Slow convergence keeps the incision marker stable
+    // across frames even when per-frame relTag sampling is noisy.
+    static constexpr double kAnchorAlpha = 0.05;
 
     // Async depth inference — background thread, never blocks the camera loop.
     // m_depthInFlight: true while a background estimate() call is running.

@@ -199,12 +199,18 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
         if (relPt < 1e-4f) continue;
 
 #ifdef Q_OS_IOS
-        const double estimatedDepth = relPt * depthAnchor; // depth convention (higher=farther)
+        // Threshold crossing: the incision is the first ray point where the
+        // measured surface is closer than the trajectory point itself, meaning
+        // the surface is now blocking the path. No exact depth match needed —
+        // only the relative ordering matters, making this robust to scale drift.
+        const double estimatedDepth = relPt * depthAnchor;
+        if (estimatedDepth < expectedDepth)
+            return pt;
 #else
         const double estimatedDepth = depthAnchor / relPt; // disparity convention (higher=closer)
-#endif
         if (std::abs(estimatedDepth - expectedDepth) < DEPTH_TOLERANCE * expectedDepth)
             return pt;
+#endif
     }
     return std::nullopt;
 }
@@ -549,8 +555,12 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Point3d(0,0,0), m_K,
             detections[0].rvec, detections[0].tvec, m_dist);
         const float relTag = sampleDepthAt(depthMap, tagPx);
-        if (relTag > 1e-4f)
-            m_depthAnchor = tagMetricDepth / relTag;
+        if (relTag > 1e-4f) {
+            const double newAnchor = tagMetricDepth / relTag;
+            m_depthAnchor = (m_depthAnchor < 1e-9)
+                ? newAnchor
+                : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
+        }
     }
 
     // Dispatch CoreML inference only when LiDAR is not providing depth.
@@ -600,13 +610,10 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Rendered first so it appears under trajectory lines and frame axes,
     // and shows even before the surgical frame is registered (no tags yet).
     if (m_showDepthOverlay && !depthMap.empty()) {
-        // LiDAR depth is in raw metres; normalize to [0,1] for visualization.
-        // Depth Anything v2 is already [0,1], so this is a no-op in that case.
+        // Both LiDAR (raw metres) and Depth Anything (raw model output) are in an
+        // arbitrary scale — normalize per-frame only for visualization.
         cv::Mat vizDepth;
-        if (m_usingLiDAR)
-            cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
-        else
-            vizDepth = depthMap;
+        cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
 
         // Invert so low depth values (close) map to high pixel values → red in JET.
         cv::Mat invDepth = 1.0f - vizDepth;

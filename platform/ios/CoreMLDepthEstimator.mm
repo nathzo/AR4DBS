@@ -289,14 +289,13 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
         }
     }
 
-    // Normalise raw output to [0,1], then invert so that 1 = closest.
-    // Depth Anything v2 outputs metric-like depth (larger = farther), which is the
-    // opposite of the disparity convention expected by AppController's anchor formula.
-    cv::Mat norm;
-    cv::normalize(disp, norm, 0.0, 1.0, cv::NORM_MINMAX, CV_32F);
-    norm = 1.0f - norm;   // invert: 0=far, 1=close
+    // Return raw model output (larger = farther). AppController normalises relative
+    // to the tag's known metric depth, so the inter-pixel ratios must be preserved.
+    // Applying NORM_MINMAX here would rescale those ratios every frame based on
+    // whatever happens to be the closest/farthest pixel in the scene, causing the
+    // incision marker to drift with camera distance.
     cv::Mat result;
-    cv::resize(norm, result, bgr.size(), 0, 0, cv::INTER_LINEAR);
+    cv::resize(disp, result, bgr.size(), 0, 0, cv::INTER_LINEAR);
     return result;
 }
 
