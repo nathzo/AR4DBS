@@ -224,8 +224,16 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
             if      (det.id == 0) p0 = &det;
             else if (det.id == 1) p1 = &det;
         }
-        if (p0 && p1)
-            m_halfTagSpacingM = cv::norm(p0->tvec - p1->tvec) / 2.0;
+        if (p0 && p1) {
+            const double measured = cv::norm(p0->tvec - p1->tvec) / 2.0;
+            // Very slow EMA: the inter-tag distance is a physical constant so we
+            // treat it as a value that converges once and then stays locked.
+            // α=0.03 converges to ~95% of the true value in ~100 frames (~3 s at
+            // 30 fps) and suppresses per-frame solvePnP noise almost entirely.
+            constexpr double kSpacingAlpha = 0.03;
+            m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
+                                + kSpacingAlpha * measured;
+        }
     }
 
     // ── 2. Build T_cam_frame for each visible tag ─────────────────────────────

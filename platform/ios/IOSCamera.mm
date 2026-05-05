@@ -118,8 +118,15 @@ void IOSCamera::start()
     requestCameraAccess([this](bool granted) {
         if (granted) {
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-                // Reset zoom every time we start — a previous ARKit session may have
-                // left the device with a non-1.0 zoom factor.
+                // ARKit may have left the device in a different activeFormat (its own
+                // higher-resolution world-tracking format). Re-applying the session
+                // preset inside beginConfiguration/commitConfiguration forces
+                // AVFoundation to re-negotiate the device format before we start.
+                // Then reset videoZoomFactor to 1.0 on that freshly selected format.
+                [m_impl->session beginConfiguration];
+                m_impl->session.sessionPreset = AVCaptureSessionPreset640x480;
+                [m_impl->session commitConfiguration];
+
                 NSError *err = nil;
                 if ([m_impl->device lockForConfiguration:&err]) {
                     m_impl->device.videoZoomFactor = 1.0;
