@@ -213,19 +213,14 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 
 cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 {
-    // ── 1. Update half-spacing (slow EMA — physical constant) ────────────────
-    {
-        const TagPose *p0 = nullptr, *p1 = nullptr;
-        for (const auto &det : detections) {
-            if      (det.id == 0) p0 = &det;
-            else if (det.id == 1) p1 = &det;
-        }
-        if (p0 && p1) {
-            const double measured = cv::norm(p0->tvec - p1->tvec) / 2.0;
-            constexpr double kSpacingAlpha = 0.03;
-            m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
-                                + kSpacingAlpha * measured;
-        }
+    // Spacing EMA alpha — physical constant, so converge slowly and stay locked.
+    constexpr double kSpacingAlpha = 0.03;
+
+    // ── 1. Locate both tags (needed for spacing update, hoisted to outer scope) ─
+    const TagPose *p0 = nullptr, *p1 = nullptr;
+    for (const auto &det : detections) {
+        if      (det.id == 0) p0 = &det;
+        else if (det.id == 1) p1 = &det;
     }
 
     // ── 2. Per-tag poses + unified PnP point collection ───────────────────────
@@ -317,11 +312,34 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
             objPts, imgPts, m_K, m_dist,
             rvec, tvec, /*useExtrinsicGuess=*/true,
             cv::SOLVEPNP_ITERATIVE);
-        if (ok)
+        if (ok) {
+            // Refine halfSpacingM using Leksell x-axis projection.
+            // R_result.col(0) is the Leksell +x axis expressed in camera space.
+            // Projecting (tvec_tag0 − tvec_tag1) onto it strips y/z mounting
+            // offsets and gives the pure horizontal (x) tag separation.
+            if (p0 && p1) {
+                cv::Mat R_result;
+                cv::Rodrigues(rvec, R_result);
+                const cv::Mat xAxis = R_result.col(0);
+                const cv::Mat inter = p0->tvec.reshape(1, 3) - p1->tvec.reshape(1, 3);
+                const double proj = xAxis.dot(inter);
+                if (proj > 0)
+                    m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
+                                        + kSpacingAlpha * proj / 2.0;
+            }
             return PoseUtils::toTransform(rvec, tvec);
+        }
     }
 
-    // Fallback: SO(3)-fused per-tag estimate (single tag, or if PnP failed)
+    // Fallback: Euclidean spacing update when unified PnP didn't run or failed.
+    // (single tag visible, or PnP returned false)
+    if (p0 && p1) {
+        const double measured = cv::norm(p0->tvec - p1->tvec) / 2.0;
+        m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
+                            + kSpacingAlpha * measured;
+    }
+
+    // SO(3)-fused per-tag estimate (single tag, or if PnP failed)
     return T_initial;
 }
 
