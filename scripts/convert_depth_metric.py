@@ -26,11 +26,11 @@ pip(
     "torch", "torchvision",
     "--index-url", "https://download.pytorch.org/whl/cpu",
 )
-pip("coremltools>=7.0", "huggingface_hub", "timm", "opencv-python-headless")
+pip("coremltools>=7.0", "timm", "opencv-python-headless")
 
+import urllib.request  # noqa: E402
 import torch  # noqa: E402  (installed above)
 import coremltools as ct  # noqa: E402
-from huggingface_hub import hf_hub_download  # noqa: E402
 
 # ── Clone Depth Anything V2 source for the DPT architecture ───────────────────
 SRC = "/tmp/depth-anything-v2"
@@ -42,22 +42,23 @@ if not os.path.exists(SRC):
 sys.path.insert(0, SRC)
 from depth_anything_v2.dpt import DepthAnythingV2  # noqa: E402
 
-# ── Download metric weights from HuggingFace ──────────────────────────────────
-weights_path = hf_hub_download(
-    repo_id="depth-anything/Depth-Anything-V2-Metric-Indoor-Small",
-    filename="depth_anything_v2_metric_indoor_vits.pth",
-    token=None,
+# ── Download metric weights (public, no authentication required) ───────────────
+weights_path = "/tmp/depth_anything_v2_metric_hypersim_vits.pth"
+urllib.request.urlretrieve(
+    "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small"
+    "/resolve/main/depth_anything_v2_metric_hypersim_vits.pth?download=true",
+    weights_path,
 )
 
 # ── Load model ─────────────────────────────────────────────────────────────────
-# max_depth=20 matches the published checkpoint training configuration.
+# max_depth=20 matches the Hypersim checkpoint training configuration.
 model = DepthAnythingV2(
     encoder="vits",
     features=64,
     out_channels=[48, 96, 192, 384],
     max_depth=20,
 )
-model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
 model.eval()
 
 # ── Trace ──────────────────────────────────────────────────────────────────────
