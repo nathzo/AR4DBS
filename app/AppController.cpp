@@ -213,20 +213,51 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 
 cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 {
+    // ── 1. Measure inter-tag spacing when both tags are visible ───────────────
+    // We only know that the midpoint between the two tags is at x = 100 mm.
+    // The individual tag x-positions are therefore 100 mm ± halfSpacing, where
+    // halfSpacing is the actual physical half-distance measured via solvePnP.
+    // This replaces the hard-coded tx values from tag_config.json.
+    {
+        const TagPose *p0 = nullptr, *p1 = nullptr;
+        for (const auto &det : detections) {
+            if      (det.id == 0) p0 = &det;
+            else if (det.id == 1) p1 = &det;
+        }
+        if (p0 && p1)
+            m_halfTagSpacingM = cv::norm(p0->tvec - p1->tvec) / 2.0;
+    }
+
+    // ── 2. Build T_cam_frame for each visible tag ─────────────────────────────
+    // ty, tz, and rotation are fixed physical constants (from tag_config.json).
+    // tx is overridden with the dynamically measured value:
+    //   tag 0 (left):  x = 100 mm + halfSpacing
+    //   tag 1 (right): x = 100 mm - halfSpacing
     std::vector<cv::Mat> framePoses;
     for (const auto &det : detections) {
         const TagConfig *cfg = nullptr;
         for (const auto &c : m_tagConfigs)
             if (c.id == det.id) { cfg = &c; break; }
         if (!cfg) continue;
+
+        cv::Mat r_cfg, t_cfg;
+        PoseUtils::fromTransform(cfg->T_frame_tag, r_cfg, t_cfg);
+
+        // Override tx; ty and tz come from the config unchanged.
+        t_cfg.at<double>(0) = (det.id == 0)
+            ? 0.10 + m_halfTagSpacingM   // left tag
+            : 0.10 - m_halfTagSpacingM;  // right tag
+
+        const cv::Mat T_frame_tag = PoseUtils::toTransform(r_cfg, t_cfg);
         const cv::Mat T_cam_tag   = PoseUtils::toTransform(det.rvec, det.tvec);
-        const cv::Mat T_cam_frame = T_cam_tag * cfg->T_frame_tag.inv();
+        const cv::Mat T_cam_frame = T_cam_tag * T_frame_tag.inv();
         framePoses.push_back(T_cam_frame);
     }
+
     if (framePoses.empty()) return {};
     if (framePoses.size() == 1) return framePoses[0];
 
-    // Average rotations in SO(3) (matrix space) then re-orthogonalise via SVD.
+    // ── 3. Average rotations in SO(3), average translations ──────────────────
     // Direct Rodrigues-vector averaging fails near the ±π boundary where the same
     // rotation has two antipodal representations — causing ~180° flips.
     cv::Mat RSum    = cv::Mat::zeros(3, 3, CV_64F);

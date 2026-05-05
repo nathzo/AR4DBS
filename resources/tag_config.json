@@ -1,12 +1,12 @@
 {
-    "comment": "Tag poses expressed in the Leksell frame coordinate system. Axes: x=0 right (tag 1) → x=200mm left (tag 0); y=0 posterior → y=200mm anterior; z=0 superior/out-of-tags → z=200mm at tag plane. Midpoint between both tags = (100, 100, 200) mm. Tag size is used by solvePnP to infer metric scale — no explicit inter-tag distance needs to be set.",
+    "comment": "Tag poses expressed in the Leksell frame coordinate system. Axes: x=0 right (tag 1) → x=200mm left (tag 0); y=0 posterior → y=200mm anterior; z=0 superior/out-of-tags → z=200mm at tag plane. Midpoint between both tags = (100, 100, 200) mm. NOTE: tx_m values are initial defaults only — the app measures the actual inter-tag distance from solvePnP at runtime (both tags must be visible simultaneously for the first calibration). ty_m, tz_m and ry_rad are the physically fixed constants.",
     "dictionary":    "DICT_4X4_50",
     "marker_size_m": 0.03,
     "tags": [
         {
             "id": 0,
             "name": "left",
-            "comment": "Tag 0 is on the left side (x=200mm). Position in Leksell frame: (200, 100, 200) mm. Rotation ry=pi aligns the tag's local axes with the Leksell axes (x and z are flipped relative to the tag's outward-normal convention).",
+            "comment": "Tag 0 is on the left side. tx_m is an initial default (overridden at runtime). Rotation ry=pi aligns the tag's local axes with the Leksell axes (x and z are flipped relative to the tag's outward-normal convention).",
             "tx_m":   0.20,
             "ty_m":   0.10,
             "tz_m":   0.20,
@@ -17,7 +17,7 @@
         {
             "id": 1,
             "name": "right",
-            "comment": "Tag 1 is on the right side (x=0mm). Position in Leksell frame: (0, 100, 200) mm.",
+            "comment": "Tag 1 is on the right side. tx_m is an initial default (overridden at runtime).",
             "tx_m":   0.00,
             "ty_m":   0.10,
             "tz_m":   0.20,

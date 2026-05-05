@@ -118,6 +118,13 @@ void IOSCamera::start()
     requestCameraAccess([this](bool granted) {
         if (granted) {
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                // Reset zoom every time we start — a previous ARKit session may have
+                // left the device with a non-1.0 zoom factor.
+                NSError *err = nil;
+                if ([m_impl->device lockForConfiguration:&err]) {
+                    m_impl->device.videoZoomFactor = 1.0;
+                    [m_impl->device unlockForConfiguration];
+                }
                 [m_impl->session startRunning];
             });
         } else {
