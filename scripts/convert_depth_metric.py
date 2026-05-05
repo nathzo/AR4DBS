@@ -98,6 +98,8 @@ dummy = torch.randn(1, 3, H, W)
 with torch.no_grad():
     exported = torch.export.export(model, (dummy,), strict=False)
 
+exported = exported.run_decompositions({})
+
 # ── Convert to CoreML ──────────────────────────────────────────────────────────
 mlmodel = ct.convert(
     exported,
