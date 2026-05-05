@@ -39,7 +39,7 @@ if not os.path.exists(SRC):
         "git", "clone", "--depth", "1",
         "https://github.com/DepthAnything/Depth-Anything-V2", SRC,
     ])
-sys.path.insert(0, SRC)
+sys.path.insert(0, os.path.join(SRC, "metric_depth"))
 from depth_anything_v2.dpt import DepthAnythingV2  # noqa: E402
 
 # ── Download metric weights (public, no authentication required) ───────────────
