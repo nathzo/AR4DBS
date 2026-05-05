@@ -167,7 +167,7 @@ MainWindow::MainWindow(QWidget *parent)
     arBtnLayout->setSpacing(0);
 
     m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
-    m_btnBackToMenu->setStyleSheet(arBtnStyle("#3a3b3d")); // neutral dark
+    m_btnBackToMenu->setStyleSheet(arBtnStyle("#1a1b1d")); // DARK_BG
 
     m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
     m_btnEditPlan->setStyleSheet(arBtnStyle("#75D0C5", "#1a1b1d")); // ARC_BLUE

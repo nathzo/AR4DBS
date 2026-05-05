@@ -6,10 +6,27 @@
 #include <QGroupBox>
 #include <QTabWidget>
 #include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QKeyEvent>
+
+// Selects all text when the embedded line edit gains focus so typing
+// replaces the existing value rather than appending to it.
+class SelectAllOnFocus : public QObject {
+public:
+    explicit SelectAllOnFocus(QObject *parent = nullptr) : QObject(parent) {}
+    bool eventFilter(QObject *obj, QEvent *event) override {
+        if (event->type() == QEvent::FocusIn)
+            QMetaObject::invokeMethod(obj, [obj]() {
+                if (auto *le = qobject_cast<QLineEdit *>(obj))
+                    le->selectAll();
+            }, Qt::QueuedConnection);
+        return false;
+    }
+};
 
 static QDoubleSpinBox *makeSpinBox(double min, double max, double val,
                                    const QString &suffix, QWidget *parent)
@@ -20,7 +37,12 @@ static QDoubleSpinBox *makeSpinBox(double min, double max, double val,
     sb->setSingleStep(0.1);
     sb->setValue(val);
     sb->setSuffix(suffix);
-    sb->setMinimumWidth(110);
+    sb->setMinimumWidth(90);
+
+    auto *filter = new SelectAllOnFocus(sb);
+    if (auto *le = sb->findChild<QLineEdit *>())
+        le->installEventFilter(filter);
+
     return sb;
 }
 
@@ -35,7 +57,7 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     form->setLabelAlignment(Qt::AlignRight);
 
     w.enabled = new QCheckBox("Activer", parent);
-    w.enabled->setChecked(t.valid);
+    w.enabled->setChecked(true); // always active by default; user must explicitly deactivate
 
     w.x    = makeSpinBox(0, 300, t.x_mm,     " mm",  parent);
     w.y    = makeSpinBox(0, 300, t.y_mm,     " mm",  parent);
@@ -58,7 +80,7 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
         w.ring->setEnabled(on);
         w.arc->setEnabled(on);
     };
-    updateEnabled(t.valid);
+    updateEnabled(true);
     QObject::connect(w.enabled, &QCheckBox::toggled, box, updateEnabled);
 
     // Store the group box as the managed widget — caller places it
@@ -75,7 +97,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     : QDialog(parent)
 {
     setWindowTitle("Confirmer le plan chirurgical");
-    // No fixed minimum width — must fit a vertical iPhone screen
+    setMaximumWidth(340);
     setStyleSheet(
         "QDialog, QGroupBox, QWidget {"
         "  background-color: #1a1b1d;"
@@ -98,7 +120,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "QTabBar::tab {"
         "  background: #2a2b2d;"
         "  color: #e0e0e0;"
-        "  padding: 12px 28px;"
+        "  padding: 12px 16px;"
         "  font-size: 12pt;"
         "  border: 1px solid #444;"
         "  border-bottom: none;"
@@ -167,8 +189,17 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     // Buttons
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    buttons->button(QDialogButtonBox::Ok)->setText("Confirmer");
-    buttons->button(QDialogButtonBox::Cancel)->setText("Annuler");
+
+    auto *confirmBtn = buttons->button(QDialogButtonBox::Ok);
+    confirmBtn->setText("Confirmer");
+    confirmBtn->setAutoDefault(false);
+    confirmBtn->setDefault(false);
+
+    auto *cancelBtn = buttons->button(QDialogButtonBox::Cancel);
+    cancelBtn->setText("Annuler");
+    cancelBtn->setAutoDefault(false);
+    cancelBtn->setDefault(false);
+
     mainLayout->addWidget(buttons);
 
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -193,4 +224,14 @@ SurgicalPlan ConfirmPlanDialog::plan() const
     p.left  = readWidgets(m_left);
     p.right = readWidgets(m_right);
     return p;
+}
+
+void ConfirmPlanDialog::keyPressEvent(QKeyEvent *event)
+{
+    // Swallow Return/Enter so "Terminé" on the iOS keyboard only dismisses
+    // the keyboard without confirming the plan. Only the "Confirmer" button
+    // triggers accept().
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        return;
+    QDialog::keyPressEvent(event);
 }
