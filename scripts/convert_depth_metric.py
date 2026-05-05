@@ -40,6 +40,19 @@ if not os.path.exists(SRC):
         "https://github.com/DepthAnything/Depth-Anything-V2", SRC,
     ])
 sys.path.insert(0, os.path.join(SRC, "metric_depth"))
+
+# Patch the int() casts in dpt.py that coremltools cannot lower to MIL ops.
+# The tracer already treats these values as constants, so removing int() is safe.
+_dpt_path = os.path.join(SRC, "metric_depth", "depth_anything_v2", "dpt.py")
+with open(_dpt_path) as _f:
+    _code = _f.read()
+_code = _code.replace(
+    "(int(patch_h * 14), int(patch_w * 14))",
+    "(patch_h * 14, patch_w * 14)",
+)
+with open(_dpt_path, "w") as _f:
+    _f.write(_code)
+
 from depth_anything_v2.dpt import DepthAnythingV2  # noqa: E402
 
 # ── Download metric weights (public, no authentication required) ───────────────
