@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(h|cpp|qml\\)$\")"
+      "Bash(grep -E \"\\\\.\\(h|cpp|qml\\)$\")",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }

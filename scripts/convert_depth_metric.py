@@ -23,7 +23,7 @@ def pip(*args: str) -> None:
 
 
 pip(
-    "torch==2.7.0", "torchvision==0.22.0",
+    "torch", "torchvision",
     "--index-url", "https://download.pytorch.org/whl/cpu",
 )
 pip("coremltools>=7.0", "huggingface_hub", "timm", "opencv-python-headless")

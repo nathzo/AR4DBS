@@ -77,6 +77,14 @@ jobs:
           path: resources/model-small.mlpackage
           key: depth-anything-v2-metric-indoor-small-v1
 
+      # coremltools requires Python ≤ 3.11 for its compiled C extensions (libcoremlpython).
+      # The runner default is Python 3.14 which lacks binary wheels — setup-python pins it.
+      - name: Set up Python 3.11 for CoreML conversion
+        if: steps.coreml-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
       - name: Convert Depth Anything v2 Metric to CoreML
         if: steps.coreml-cache.outputs.cache-hit != 'true'
         run: |
