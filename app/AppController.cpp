@@ -201,9 +201,8 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 #ifdef Q_OS_IOS
         // Threshold crossing: first ray point where the measured surface is
         // closer than the trajectory point — the surface now blocks the path.
-        const double estimatedDepth = m_usingLiDAR
-            ? relPt * depthAnchor   // LiDAR: metric depth, anchor = 1.0
-            : depthAnchor / relPt;  // Depth Anything: disparity, anchor = metric × disp
+        // Depth convention (LiDAR and Depth Anything v2 Metric): larger = farther.
+        const double estimatedDepth = relPt * depthAnchor;
         if (estimatedDepth < expectedDepth)
             return pt;
 #else
@@ -380,17 +379,16 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     cv::Rodrigues(rvec, R);
 
     // Returns the estimated metric surface depth at the pixel corresponding to pt.
-    // Depth Anything v2 (raw, no normalisation): disparity convention — larger = closer.
-    //   anchor = tagMetricDepth * relTag  →  surfaceDepth = anchor / rel ≈ metric depth
-    // LiDAR: already metric — anchor = 1.0, so surfaceDepth = rel * 1.0 = rel.
-    // Desktop MiDaS (normalised disparity): same disparity formula as Depth Anything.
+    // iOS (LiDAR and Depth Anything v2 Metric): depth convention — larger = farther.
+    //   surfaceDepth = rel * anchor  (anchor ≈ 1.0 for metric model, = 1.0 for LiDAR)
+    // Desktop MiDaS (normalised disparity — larger = closer):
+    //   surfaceDepth = anchor / rel
     auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
         const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
         const float rel = sampleDepthAt(depthMap, px);
         if (rel < 1e-4f) return 1e9; // OOB or no data → assume no occlusion
 #ifdef Q_OS_IOS
-        if (m_usingLiDAR) return rel * depthAnchor; // metric depth, anchor = 1.0
-        return depthAnchor / rel;                    // Depth Anything disparity
+        return rel * depthAnchor;
 #else
         return depthAnchor / rel;
 #endif
@@ -464,7 +462,7 @@ void AppController::onLidarAvailable(bool available)
     m_usingLiDAR  = available;
     m_depthAnchor = available ? 1.0 : 0.0;
     qDebug() << "AppController: depth source ="
-             << (available ? "LiDAR" : "Depth Anything v2");
+             << (available ? "LiDAR" : "Depth Anything v2 Metric");
 }
 
 void AppController::onLidarDepth(const cv::Mat &depthMetric)
@@ -549,14 +547,26 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     // Update metric anchor from tag geometry — only for Depth Anything v2.
     // LiDAR values are already in metres; anchor stays fixed at 1.0.
+    // Average over all visible tags so ordering instability and per-tag depth
+    // noise don't bias the anchor toward whichever tag lands first in the array.
     if (!m_usingLiDAR && !depthMap.empty() && tagsVisible) {
-        const double tagMetricDepth = cv::norm(detections[0].tvec);
-        const cv::Point2f tagPx = PoseUtils::project(
-            cv::Point3d(0,0,0), m_K,
-            detections[0].rvec, detections[0].tvec, m_dist);
-        const float relTag = sampleDepthAt(depthMap, tagPx);
-        if (relTag > 1e-4f) {
-            const double newAnchor = tagMetricDepth * relTag; // disparity: anchor = metric × disp
+        double anchorSum   = 0.0;
+        int    anchorCount = 0;
+        for (const auto &det : detections) {
+            const double      depth = cv::norm(det.tvec);
+            const cv::Point2f px    = PoseUtils::project(
+                cv::Point3d(0,0,0), m_K, det.rvec, det.tvec, m_dist);
+            const float rel = sampleDepthAt(depthMap, px);
+            if (rel > 1e-4f) {
+                // Depth convention (larger = farther): anchor = tagMetricDepth / relTag.
+                // For a well-calibrated metric model rel ≈ depth so anchor ≈ 1.0;
+                // averaging across all visible tags reduces per-tag sampling noise.
+                anchorSum += depth / rel;
+                ++anchorCount;
+            }
+        }
+        if (anchorCount > 0) {
+            const double newAnchor = anchorSum / anchorCount;
             m_depthAnchor = (m_depthAnchor < 1e-9)
                 ? newAnchor
                 : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
@@ -592,7 +602,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
             m_showDepthOverlay);
-        dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: Depth Anywhere v2",
+        dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: DA v2 Metric",
             true);
         dbg(m_iosDepth ? "iosDepth model: LOADED" : "iosDepth model: NULL",
             m_usingLiDAR || m_iosDepth != nullptr);
@@ -614,10 +624,9 @@ void AppController::onARFrame(const cv::Mat &frame,
         cv::Mat vizDepth;
         cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
 
-        // Depth Anything disparity (larger = closer): high values already map to
-        // red in JET — no inversion needed.
-        // LiDAR metric depth (larger = farther): invert so close → high → red.
-        cv::Mat invDepth = m_usingLiDAR ? cv::Mat(1.0f - vizDepth) : vizDepth;
+        // Both LiDAR and Depth Anything v2 Metric use depth convention (larger = farther).
+        // Invert so close surfaces map to high values → red in JET.
+        cv::Mat invDepth = 1.0f - vizDepth;
         cv::Mat depth8u, colored;
         invDepth.convertTo(depth8u, CV_8U, 255.0);
         cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);

@@ -65,28 +65,23 @@ jobs:
                -o opencv-ios.zip
           unzip -q opencv-ios.zip -d ~/opencv-ios
 
-      # ── Depth Anything v2 CoreML model (Apple official, no conversion needed) ────
-      # Downloads DepthAnythingV2SmallF16.mlpackage from the apple/ HuggingFace repo.
-      # Xcode compiles it to model-small.mlmodelc and bundles it in the app at build time.
-      # Cached with a fixed key — bump the key to force a re-download.
+      # ── Depth Anything v2 Metric Indoor Small CoreML model ───────────────────────
+      # Converted from the HuggingFace PyTorch checkpoint via scripts/convert_depth_metric.py.
+      # The metric variant outputs absolute depth in metres (no tag anchor needed for scale).
+      # Cached with a fixed key — bump the key to force reconversion.
 
-      - name: Restore Depth Anything v2 CoreML model from cache
+      - name: Restore Depth Anything v2 Metric CoreML model from cache
         id: coreml-cache
         uses: actions/cache@v4
         with:
           path: resources/model-small.mlpackage
-          key: depth-anything-v2-small-f16-v1
+          key: depth-anything-v2-metric-indoor-small-v1
 
-      - name: Download Depth Anything v2 CoreML model
+      - name: Convert Depth Anything v2 Metric to CoreML
         if: steps.coreml-cache.outputs.cache-hit != 'true'
         run: |
-          GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 \
-            https://huggingface.co/apple/coreml-depth-anything-v2-small \
-            /tmp/da-model
-          cd /tmp/da-model
-          git lfs pull --include "DepthAnythingV2SmallF16.mlpackage/**"
-          cp -r DepthAnythingV2SmallF16.mlpackage \
-                "$GITHUB_WORKSPACE/resources/model-small.mlpackage"
+          python scripts/convert_depth_metric.py \
+            "$GITHUB_WORKSPACE/resources/model-small.mlpackage"
 
       # ── Compile CoreML model (.mlpackage → .mlmodelc) ─────────────────────────
       # xcrun coremlcompiler is the only reliable way to get the compiled .mlmodelc
