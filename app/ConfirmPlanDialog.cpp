@@ -6,43 +6,38 @@
 #include <QGroupBox>
 #include <QTabWidget>
 #include <QDoubleSpinBox>
-#include <QLineEdit>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QKeyEvent>
+#include <QFocusEvent>
+#include <QGuiApplication>
+#include <QScreen>
 
-// Selects all text when the embedded line edit gains focus so typing
-// replaces the existing value rather than appending to it.
-class SelectAllOnFocus : public QObject {
+// Subclass so focusInEvent can select all text, making the first keystroke
+// replace the displayed value rather than appending to it.
+class AutoSelectSpinBox : public QDoubleSpinBox {
 public:
-    explicit SelectAllOnFocus(QObject *parent = nullptr) : QObject(parent) {}
-    bool eventFilter(QObject *obj, QEvent *event) override {
-        if (event->type() == QEvent::FocusIn)
-            QMetaObject::invokeMethod(obj, [obj]() {
-                if (auto *le = qobject_cast<QLineEdit *>(obj))
-                    le->selectAll();
-            }, Qt::QueuedConnection);
-        return false;
+    using QDoubleSpinBox::QDoubleSpinBox;
+protected:
+    void focusInEvent(QFocusEvent *e) override {
+        QDoubleSpinBox::focusInEvent(e);
+        QMetaObject::invokeMethod(this, &QAbstractSpinBox::selectAll,
+                                  Qt::QueuedConnection);
     }
 };
 
-static QDoubleSpinBox *makeSpinBox(double min, double max, double val,
-                                   const QString &suffix, QWidget *parent)
+static AutoSelectSpinBox *makeSpinBox(double min, double max, double val,
+                                      const QString &suffix, QWidget *parent)
 {
-    auto *sb = new QDoubleSpinBox(parent);
+    auto *sb = new AutoSelectSpinBox(parent);
     sb->setRange(min, max);
     sb->setDecimals(1);
     sb->setSingleStep(0.1);
     sb->setValue(val);
     sb->setSuffix(suffix);
     sb->setMinimumWidth(90);
-
-    auto *filter = new SelectAllOnFocus(sb);
-    if (auto *le = sb->findChild<QLineEdit *>())
-        le->installEventFilter(filter);
-
     return sb;
 }
 
@@ -97,7 +92,12 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     : QDialog(parent)
 {
     setWindowTitle("Confirmer le plan chirurgical");
-    setMaximumWidth(340);
+    // Fill the portrait screen width with a small equal margin on each side.
+    {
+        const QRect sg = QGuiApplication::primaryScreen()->availableGeometry();
+        const int portraitW = qMin(sg.width(), sg.height());
+        setFixedWidth(portraitW - 32); // 16 px margin each side
+    }
     setStyleSheet(
         "QDialog, QGroupBox, QWidget {"
         "  background-color: #1a1b1d;"
@@ -147,16 +147,16 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  font-size: 12pt;"
         "  font-weight: bold;"
         "}"
-        "QPushButton[text='Confirmer'] { background: #c45255; color: white; }"
-        "QPushButton[text='Annuler']   { background: #75D0C5; color: #1a1b1d; }"
+        "QPushButton[text='Annuler'] { background: #75D0C5; color: #1a1b1d; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);
 
     // OCR status banner
     auto *banner = new QLabel(this);
+    banner->setWordWrap(true);
     if (initial.hasAny()) {
-        banner->setText("✓ Coordonnées détectées automatiquement. Vérifiez avant de confirmer.");
+        banner->setText("✓ Coordonnées détectées. Vérifiez avant de confirmer.");
         banner->setStyleSheet("background: #1e3a3a; color: #75D0C5; padding: 8px; border-radius: 4px;");
     } else {
         banner->setText("Coordonnées non détectées. Saisissez les valeurs manuellement.");
@@ -194,6 +194,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     confirmBtn->setText("Confirmer");
     confirmBtn->setAutoDefault(false);
     confirmBtn->setDefault(false);
+    confirmBtn->setStyleSheet(
+        "QPushButton { background: #c45255; color: white;"
+        "  border-radius: 8px; padding: 10px 28px;"
+        "  font-size: 12pt; font-weight: bold; }");
 
     auto *cancelBtn = buttons->button(QDialogButtonBox::Cancel);
     cancelBtn->setText("Annuler");
