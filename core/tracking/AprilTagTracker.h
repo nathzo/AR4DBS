@@ -5,8 +5,9 @@
 
 struct TagPose {
     int     id;
-    cv::Mat rvec; // Rodrigues rotation (tag → camera)
-    cv::Mat tvec; // translation in metres (tag → camera)
+    cv::Mat rvec;    // Rodrigues rotation (tag → camera)
+    cv::Mat tvec;    // translation in metres (tag → camera)
+    std::vector<cv::Point2f> corners; // 4 detected corners in full-res image coords
 };
 
 class AprilTagTracker

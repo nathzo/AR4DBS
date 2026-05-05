@@ -144,8 +144,9 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
                 best = 1;
         }
 
-        tp.rvec = rvecs[best];
-        tp.tvec = tvecs[best];
+        tp.rvec    = rvecs[best];
+        tp.tvec    = tvecs[best];
+        tp.corners = m_corners[i];   // full-res corners for unified PnP
         result.push_back(std::move(tp));
     }
     return result;

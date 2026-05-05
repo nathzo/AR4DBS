@@ -17,7 +17,7 @@ public:
 
         float lineWidth    = 2.f;
         float targetRadius = 12.f;
-        float crossArm     = 10.f;
+        float crossArm     = 15.f;
 
         float glowWidthMul = 5.f;
         float glowAlpha    = 0.30f;

@@ -213,11 +213,7 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 
 cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 {
-    // ── 1. Measure inter-tag spacing when both tags are visible ───────────────
-    // We only know that the midpoint between the two tags is at x = 100 mm.
-    // The individual tag x-positions are therefore 100 mm ± halfSpacing, where
-    // halfSpacing is the actual physical half-distance measured via solvePnP.
-    // This replaces the hard-coded tx values from tag_config.json.
+    // ── 1. Update half-spacing (slow EMA — physical constant) ────────────────
     {
         const TagPose *p0 = nullptr, *p1 = nullptr;
         for (const auto &det : detections) {
@@ -226,65 +222,107 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
         }
         if (p0 && p1) {
             const double measured = cv::norm(p0->tvec - p1->tvec) / 2.0;
-            // Very slow EMA: the inter-tag distance is a physical constant so we
-            // treat it as a value that converges once and then stays locked.
-            // α=0.03 converges to ~95% of the true value in ~100 frames (~3 s at
-            // 30 fps) and suppresses per-frame solvePnP noise almost entirely.
             constexpr double kSpacingAlpha = 0.03;
             m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
                                 + kSpacingAlpha * measured;
         }
     }
 
-    // ── 2. Build T_cam_frame for each visible tag ─────────────────────────────
-    // ty, tz, and rotation are fixed physical constants (from tag_config.json).
-    // tx is overridden with the dynamically measured value:
-    //   tag 0 (left):  x = 100 mm + halfSpacing
-    //   tag 1 (right): x = 100 mm - halfSpacing
-    std::vector<cv::Mat> framePoses;
+    // ── 2. Per-tag poses + unified PnP point collection ───────────────────────
+    // Per-tag IPPE_SQUARE results are fused into an initial guess.
+    // Simultaneously, each tag's corners are projected to Leksell-frame 3-D
+    // coordinates so that a single multi-point PnP can refine the result.
+    std::vector<cv::Mat>    framePoses;
+    std::vector<cv::Point3f> objPts;
+    std::vector<cv::Point2f> imgPts;
+
     for (const auto &det : detections) {
         const TagConfig *cfg = nullptr;
         for (const auto &c : m_tagConfigs)
             if (c.id == det.id) { cfg = &c; break; }
         if (!cfg) continue;
 
+        // Build T_frame_tag with dynamic tx
         cv::Mat r_cfg, t_cfg;
         PoseUtils::fromTransform(cfg->T_frame_tag, r_cfg, t_cfg);
-
-        // Override tx; ty and tz come from the config unchanged.
         t_cfg.at<double>(0) = (det.id == 0)
-            ? 0.10 + m_halfTagSpacingM   // left tag
-            : 0.10 - m_halfTagSpacingM;  // right tag
-
+            ? 0.10 + m_halfTagSpacingM
+            : 0.10 - m_halfTagSpacingM;
         const cv::Mat T_frame_tag = PoseUtils::toTransform(r_cfg, t_cfg);
-        const cv::Mat T_cam_tag   = PoseUtils::toTransform(det.rvec, det.tvec);
-        const cv::Mat T_cam_frame = T_cam_tag * T_frame_tag.inv();
-        framePoses.push_back(T_cam_frame);
+
+        // Per-tag frame pose (IPPE_SQUARE result)
+        const cv::Mat T_cam_tag = PoseUtils::toTransform(det.rvec, det.tvec);
+        framePoses.push_back(T_cam_tag * T_frame_tag.inv());
+
+        // Leksell-frame 3-D positions of this tag's 4 corners.
+        // T_frame_tag transforms tag-local points to Leksell frame:
+        //   p_leksell = R_cfg * p_local + t_cfg
+        if (det.corners.size() == 4) {
+            cv::Mat R_cfg;
+            cv::Rodrigues(r_cfg, R_cfg);
+            const float h = m_markerSize / 2.f;
+            const cv::Point3f local[4] = {
+                {-h,  h, 0.f}, { h,  h, 0.f},
+                { h, -h, 0.f}, {-h, -h, 0.f}
+            };
+            for (int c = 0; c < 4; ++c) {
+                const cv::Mat p = (cv::Mat_<double>(3,1)
+                    << local[c].x, local[c].y, local[c].z);
+                const cv::Mat pf = R_cfg * p + t_cfg.reshape(1, 3);
+                objPts.emplace_back(
+                    static_cast<float>(pf.at<double>(0)),
+                    static_cast<float>(pf.at<double>(1)),
+                    static_cast<float>(pf.at<double>(2)));
+                imgPts.push_back(det.corners[c]);
+            }
+        }
     }
 
     if (framePoses.empty()) return {};
-    if (framePoses.size() == 1) return framePoses[0];
 
-    // ── 3. Average rotations in SO(3), average translations ──────────────────
-    // Direct Rodrigues-vector averaging fails near the ±π boundary where the same
-    // rotation has two antipodal representations — causing ~180° flips.
-    cv::Mat RSum    = cv::Mat::zeros(3, 3, CV_64F);
-    cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
-    for (const auto &T : framePoses) {
-        cv::Mat r, t;
-        PoseUtils::fromTransform(T, r, t);
-        cv::Mat R;
-        cv::Rodrigues(r, R);
-        RSum    += R;
-        tvecSum += t.reshape(1, 3);
+    // ── 3. Fuse per-tag estimates in SO(3) → initial guess ───────────────────
+    cv::Mat T_initial;
+    if (framePoses.size() == 1) {
+        T_initial = framePoses[0];
+    } else {
+        cv::Mat RSum    = cv::Mat::zeros(3, 3, CV_64F);
+        cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
+        for (const auto &T : framePoses) {
+            cv::Mat r, t, R;
+            PoseUtils::fromTransform(T, r, t);
+            cv::Rodrigues(r, R);
+            RSum    += R;
+            tvecSum += t.reshape(1, 3);
+        }
+        const double n = static_cast<double>(framePoses.size());
+        cv::Mat U, S, Vt;
+        cv::SVD::compute(RSum, S, U, Vt);
+        if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+        cv::Mat rFused;
+        cv::Rodrigues(U * Vt, rFused);
+        T_initial = PoseUtils::toTransform(rFused, tvecSum / n);
     }
-    const double n = static_cast<double>(framePoses.size());
-    cv::Mat U, S, Vt;
-    cv::SVD::compute(RSum, S, U, Vt);
-    if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
-    cv::Mat rFused;
-    cv::Rodrigues(U * Vt, rFused);
-    return PoseUtils::toTransform(rFused, tvecSum / n);
+
+    // ── 4. Unified multi-point PnP refinement ────────────────────────────────
+    // When both tags are fully visible (8 correspondences), run one solvePnP
+    // over all corners together. The wide inter-tag baseline makes the depth
+    // axis far better constrained than any single-tag solve, reducing the
+    // angle-dependent drift seen with independent per-tag estimates.
+    // The SO(3)-fused result above is used as the initial guess so
+    // SOLVEPNP_ITERATIVE always starts from a good position.
+    if (objPts.size() >= 8) {
+        cv::Mat rvec, tvec;
+        PoseUtils::fromTransform(T_initial, rvec, tvec);
+        const bool ok = cv::solvePnP(
+            objPts, imgPts, m_K, m_dist,
+            rvec, tvec, /*useExtrinsicGuess=*/true,
+            cv::SOLVEPNP_ITERATIVE);
+        if (ok)
+            return PoseUtils::toTransform(rvec, tvec);
+    }
+
+    // Fallback: SO(3)-fused per-tag estimate (single tag, or if PnP failed)
+    return T_initial;
 }
 
 // ── Simple overlay renderer (shared by both AprilTag and ARKit paths) ─────────
