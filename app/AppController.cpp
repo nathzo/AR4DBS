@@ -199,11 +199,11 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
         if (relPt < 1e-4f) continue;
 
 #ifdef Q_OS_IOS
-        // Threshold crossing: the incision is the first ray point where the
-        // measured surface is closer than the trajectory point itself, meaning
-        // the surface is now blocking the path. No exact depth match needed —
-        // only the relative ordering matters, making this robust to scale drift.
-        const double estimatedDepth = relPt * depthAnchor;
+        // Threshold crossing: first ray point where the measured surface is
+        // closer than the trajectory point — the surface now blocks the path.
+        const double estimatedDepth = m_usingLiDAR
+            ? relPt * depthAnchor   // LiDAR: metric depth, anchor = 1.0
+            : depthAnchor / relPt;  // Depth Anything: disparity, anchor = metric × disp
         if (estimatedDepth < expectedDepth)
             return pt;
 #else
@@ -380,17 +380,17 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     cv::Rodrigues(rvec, R);
 
     // Returns the estimated metric surface depth at the pixel corresponding to pt.
-    // Formula depends on depth model convention:
-    //   iOS (Depth Anything v2): depth convention — higher values are farther.
-    //     surfaceDepth = rel * depthAnchor  (anchor = tagMetricDepth / relTag)
-    //   Desktop (MiDaS): disparity convention — higher values are closer.
-    //     surfaceDepth = depthAnchor / rel  (anchor = tagMetricDepth * relTag)
+    // Depth Anything v2 (raw, no normalisation): disparity convention — larger = closer.
+    //   anchor = tagMetricDepth * relTag  →  surfaceDepth = anchor / rel ≈ metric depth
+    // LiDAR: already metric — anchor = 1.0, so surfaceDepth = rel * 1.0 = rel.
+    // Desktop MiDaS (normalised disparity): same disparity formula as Depth Anything.
     auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
         const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
         const float rel = sampleDepthAt(depthMap, px);
         if (rel < 1e-4f) return 1e9; // OOB or no data → assume no occlusion
 #ifdef Q_OS_IOS
-        return rel * depthAnchor;
+        if (m_usingLiDAR) return rel * depthAnchor; // metric depth, anchor = 1.0
+        return depthAnchor / rel;                    // Depth Anything disparity
 #else
         return depthAnchor / rel;
 #endif
@@ -556,7 +556,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             detections[0].rvec, detections[0].tvec, m_dist);
         const float relTag = sampleDepthAt(depthMap, tagPx);
         if (relTag > 1e-4f) {
-            const double newAnchor = tagMetricDepth / relTag;
+            const double newAnchor = tagMetricDepth * relTag; // disparity: anchor = metric × disp
             m_depthAnchor = (m_depthAnchor < 1e-9)
                 ? newAnchor
                 : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
@@ -610,13 +610,14 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Rendered first so it appears under trajectory lines and frame axes,
     // and shows even before the surgical frame is registered (no tags yet).
     if (m_showDepthOverlay && !depthMap.empty()) {
-        // Both LiDAR (raw metres) and Depth Anything (raw model output) are in an
-        // arbitrary scale — normalize per-frame only for visualization.
+        // Normalize per-frame for visualization only (does not affect computation).
         cv::Mat vizDepth;
         cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
 
-        // Invert so low depth values (close) map to high pixel values → red in JET.
-        cv::Mat invDepth = 1.0f - vizDepth;
+        // Depth Anything disparity (larger = closer): high values already map to
+        // red in JET — no inversion needed.
+        // LiDAR metric depth (larger = farther): invert so close → high → red.
+        cv::Mat invDepth = m_usingLiDAR ? cv::Mat(1.0f - vizDepth) : vizDepth;
         cv::Mat depth8u, colored;
         invDepth.convertTo(depth8u, CV_8U, 255.0);
         cv::applyColorMap(depth8u, colored, cv::COLORMAP_JET);

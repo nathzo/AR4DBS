@@ -128,7 +128,7 @@ private:
 
     // Scale anchor: converts the depth map to metric metres.
     //   LiDAR path:          always 1.0 (LiDAR values are already in metres).
-    //   Depth Anything v2:   tagMetricDepth / relTag, recomputed each frame tags visible.
+    //   Depth Anything v2:   tagMetricDepth * relTag (disparity convention), EMA-smoothed.
     double m_depthAnchor = 0.0;
 
     // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
