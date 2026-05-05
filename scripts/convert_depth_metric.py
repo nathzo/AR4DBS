@@ -41,8 +41,7 @@ if not os.path.exists(SRC):
     ])
 sys.path.insert(0, os.path.join(SRC, "metric_depth"))
 
-# Patch the int() casts in dpt.py that coremltools cannot lower to MIL ops.
-# The tracer already treats these values as constants, so removing int() is safe.
+# Patch 1 — dpt.py: remove int() casts that coremltools cannot lower to MIL ops.
 _dpt_path = os.path.join(SRC, "metric_depth", "depth_anything_v2", "dpt.py")
 with open(_dpt_path) as _f:
     _code = _f.read()
@@ -52,6 +51,22 @@ _code = _code.replace(
 )
 with open(_dpt_path, "w") as _f:
     _f.write(_code)
+
+# Patch 2 — patch_embed.py: remove assert statements whose H % patch_H arithmetic
+# produces an aten::Int op that coremltools cannot lower to a MIL op.
+import glob as _glob
+for _pe_path in _glob.glob(os.path.join(SRC, "**", "patch_embed.py"), recursive=True):
+    with open(_pe_path) as _f:
+        _code = _f.read()
+    _patched = []
+    for _line in _code.splitlines(keepends=True):
+        stripped = _line.lstrip()
+        if stripped.startswith("assert H % ") or stripped.startswith("assert W % "):
+            _patched.append(_line.replace("assert", "# assert", 1))
+        else:
+            _patched.append(_line)
+    with open(_pe_path, "w") as _f:
+        _f.writelines(_patched)
 
 from depth_anything_v2.dpt import DepthAnythingV2  # noqa: E402
 
@@ -74,17 +89,18 @@ model = DepthAnythingV2(
 model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
 model.eval()
 
-# ── Trace ──────────────────────────────────────────────────────────────────────
-# Fixed 518x518 input — no dynamic shapes, so tracing is safe.
-# Values are ImageNet-normalised floats; CoreMLDepthEstimator handles that.
+# ── Export ─────────────────────────────────────────────────────────────────────
+# torch.export produces a cleaner FX graph than torch.jit.trace: it resolves
+# shape-dependent arithmetic (patch_h * 14 etc.) to compile-time constants so
+# coremltools never sees an aten::Int op it cannot lower to a MIL op.
 H, W = 518, 518
 dummy = torch.randn(1, 3, H, W)
 with torch.no_grad():
-    traced = torch.jit.trace(model, dummy)
+    exported = torch.export.export(model, (dummy,), strict=False)
 
 # ── Convert to CoreML ──────────────────────────────────────────────────────────
 mlmodel = ct.convert(
-    traced,
+    exported,
     inputs=[ct.TensorType(name="image", shape=(1, 3, H, W))],
     outputs=[ct.TensorType(name="depth")],
     compute_precision=ct.precision.FLOAT16,
