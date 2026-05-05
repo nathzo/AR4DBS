@@ -6,6 +6,7 @@ class QDoubleSpinBox;
 class QCheckBox;
 class QKeyEvent;
 class QShowEvent;
+class QPaintEvent;
 
 // Shows the surgical plan detected by OCR (or empty fields for manual entry).
 // The user can edit any value before confirming.
@@ -36,6 +37,7 @@ private:
     static LeksellTarget readWidgets(const TargetWidgets &w);
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void showEvent(QShowEvent *event) override;
 };

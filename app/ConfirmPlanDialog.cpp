@@ -12,6 +12,8 @@
 #include <QPushButton>
 #include <QKeyEvent>
 #include <QFocusEvent>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QGuiApplication>
 #include <QScreen>
 
@@ -92,6 +94,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     : QDialog(parent)
 {
     setWindowTitle("Confirmer le plan chirurgical");
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    setAttribute(Qt::WA_TranslucentBackground);
     // Fill the portrait screen width with a small equal margin on each side.
     {
         const QRect sg = QGuiApplication::primaryScreen()->availableGeometry();
@@ -99,7 +103,9 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         setFixedWidth(portraitW - 32); // 16 px margin each side
     }
     setStyleSheet(
-        "QDialog, QGroupBox, QWidget {"
+        // QDialog background is transparent — paintEvent draws the rounded rect.
+        "QDialog { background: transparent; }"
+        "QGroupBox, QWidget {"
         "  background-color: #1a1b1d;"
         "  color: #e0e0e0;"
         "  font-size: 11pt;"
@@ -151,6 +157,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     );
 
     auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
 
     // OCR status banner
     auto *banner = new QLabel(this);
@@ -228,6 +235,15 @@ SurgicalPlan ConfirmPlanDialog::plan() const
     p.left  = readWidgets(m_left);
     p.right = readWidgets(m_right);
     return p;
+}
+
+void ConfirmPlanDialog::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x1a, 0x1b, 0x1d)); // DARK_BG
+    p.drawRoundedRect(rect(), 16, 16);
 }
 
 void ConfirmPlanDialog::showEvent(QShowEvent *e)
