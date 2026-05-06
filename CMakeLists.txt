@@ -369,7 +369,7 @@ endif()
 if(IOS)
     set_target_properties(DBSAR PROPERTIES
         MACOSX_BUNDLE                   TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME       "DBS AR"
+        MACOSX_BUNDLE_BUNDLE_NAME       "AR4DBS"
         MACOSX_BUNDLE_BUNDLE_VERSION    "${PROJECT_VERSION}"
         MACOSX_BUNDLE_INFO_PLIST        "${CMAKE_SOURCE_DIR}/platform/ios/Info.plist.in"
 
