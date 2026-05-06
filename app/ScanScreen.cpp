@@ -31,7 +31,7 @@ ScanScreen::ScanScreen(QWidget *parent)
     : QWidget(parent)
     , m_impl(new Impl)
 {
-    setStyleSheet("background-color: #1a1b1d;");
+    setStyleSheet("background-color: black;");
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);

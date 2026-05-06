@@ -17,7 +17,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-static constexpr float kConfidenceThreshold = 0.70f;
+static constexpr float kConfidenceThreshold = 0.80f;
 
 // ── AutoSelectSpinBox ─────────────────────────────────────────────────────────
 // Selects all text on focus so the first keystroke replaces the value.
@@ -45,7 +45,7 @@ static AutoSelectSpinBox *makeSpinBox(double max, bool detected, double val,
     sb->setSingleStep(0.1);
     sb->setSuffix(suffix);
     sb->setSpecialValueText(" —");          // shown when value == minimum (-1)
-    sb->setMinimumWidth(90);
+    sb->setMinimumWidth(150);
     sb->setValue(detected ? val : sb->minimum());
     return sb;
 }
@@ -73,6 +73,9 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     box->setObjectName(title);
     auto *form = new QFormLayout(box);
     form->setLabelAlignment(Qt::AlignRight);
+    form->setVerticalSpacing(14);
+    form->setHorizontalSpacing(16);
+    form->setContentsMargins(16, 16, 16, 16);
 
     w.enabled = new QCheckBox("Activer", parent);
     w.enabled->setChecked(true);
@@ -139,49 +142,49 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     {
-        const QRect sg = QGuiApplication::primaryScreen()->availableGeometry();
-        const int portraitW = qMin(sg.width(), sg.height());
-        setFixedWidth(portraitW - 32);
+        const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
+        setFixedSize(ag.width(), ag.height());
     }
     setStyleSheet(
         "QDialog { background: transparent; }"
         "QGroupBox, QWidget {"
-        "  background-color: #1a1b1d;"
+        "  background-color: black;"
         "  color: #e0e0e0;"
-        "  font-size: 11pt;"
+        "  font-size: 14pt;"
         "}"
         "QGroupBox {"
         "  border: 1px solid #75D0C5;"
-        "  border-radius: 6px;"
-        "  margin-top: 8px;"
-        "  padding-top: 6px;"
+        "  border-radius: 8px;"
+        "  margin-top: 12px;"
+        "  padding-top: 10px;"
         "  font-weight: bold;"
         "  color: #75D0C5;"
         "}"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-        "QTabWidget::pane { border: 1px solid #75D0C5; border-radius: 6px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 12px; }"
+        "QTabWidget::pane { border: 1px solid #75D0C5; border-radius: 8px; }"
         "QTabBar::tab {"
         "  background: #2a2b2d; color: #e0e0e0;"
-        "  padding: 12px 16px; font-size: 12pt;"
+        "  padding: 16px 28px; font-size: 14pt;"
         "  border: 1px solid #444; border-bottom: none;"
-        "  border-top-left-radius: 6px; border-top-right-radius: 6px;"
+        "  border-top-left-radius: 8px; border-top-right-radius: 8px;"
         "}"
         "QTabBar::tab:selected { background: #75D0C5; color: #1a1b1d; font-weight: bold; }"
         "QDoubleSpinBox {"
         "  background: #2a2b2d; color: #e0e0e0;"
-        "  border: 1px solid #444; border-radius: 4px; padding: 3px 6px;"
+        "  border: 1px solid #444; border-radius: 6px; padding: 10px 12px;"
         "}"
         "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; border: none; }"
         "QCheckBox { color: #75D0C5; font-weight: bold; }"
         "QPushButton {"
-        "  border-radius: 8px; padding: 10px 28px;"
-        "  font-size: 12pt; font-weight: bold;"
+        "  border-radius: 10px; padding: 16px 40px;"
+        "  font-size: 15pt; font-weight: bold;"
         "}"
         "QPushButton[text='Annuler'] { background: #75D0C5; color: #1a1b1d; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setContentsMargins(20, 20, 20, 20);
+    mainLayout->setSpacing(14);
 
     // OCR status banner
     auto *banner = new QLabel(this);
@@ -206,8 +209,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     m_confirmBtn->setDefault(false);
     m_confirmBtn->setStyleSheet(
         "QPushButton { background: #c45255; color: white;"
-        "  border-radius: 8px; padding: 10px 28px;"
-        "  font-size: 12pt; font-weight: bold; }"
+        "  border-radius: 10px; padding: 16px 40px;"
+        "  font-size: 15pt; font-weight: bold; }"
         "QPushButton:disabled { background: #5a2e2f; color: #888; }");
 
     auto *cancelBtn = buttons->button(QDialogButtonBox::Cancel);
@@ -220,7 +223,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
 
     auto *leftPage = new QWidget(tabs);
     auto *leftLayout = new QVBoxLayout(leftPage);
-    leftLayout->setContentsMargins(8, 8, 8, 8);
+    leftLayout->setContentsMargins(16, 16, 16, 16);
+    leftLayout->setSpacing(12);
     m_left = buildSide("Gauche (G)", initial.left, leftPage);
     leftLayout->addWidget(leftPage->findChild<QGroupBox *>("Gauche (G)"));
     leftLayout->addStretch();
@@ -228,7 +232,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
 
     auto *rightPage = new QWidget(tabs);
     auto *rightLayout = new QVBoxLayout(rightPage);
-    rightLayout->setContentsMargins(8, 8, 8, 8);
+    rightLayout->setContentsMargins(16, 16, 16, 16);
+    rightLayout->setSpacing(12);
     m_right = buildSide("Droite (D)", initial.right, rightPage);
     rightLayout->addWidget(rightPage->findChild<QGroupBox *>("Droite (D)"));
     rightLayout->addStretch();
@@ -299,18 +304,16 @@ SurgicalPlan ConfirmPlanDialog::plan() const
 void ConfirmPlanDialog::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x1a, 0x1b, 0x1d));
-    p.drawRoundedRect(rect(), 16, 16);
+    p.setBrush(Qt::black);
+    p.drawRect(rect());
 }
 
 void ConfirmPlanDialog::showEvent(QShowEvent *e)
 {
     QDialog::showEvent(e);
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
-    move(ag.left() + (ag.width()  - width())  / 2,
-         ag.top()  + (ag.height() - height()) / 2);
+    move(ag.topLeft());
 }
 
 void ConfirmPlanDialog::keyPressEvent(QKeyEvent *event)

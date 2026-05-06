@@ -50,11 +50,11 @@ int main(int argc, char *argv[])
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING);
 
     QApplication app(argc, argv);
-    app.setApplicationName("DBS AR");
+    app.setApplicationName("AR4DBS");
     app.setOrganizationName("NeuroRestore");
 
     MainWindow window;
-    window.setWindowTitle("DBS AR");
+    window.setWindowTitle("AR4DBS");
     window.resize(1280, 720);
     window.show();
 

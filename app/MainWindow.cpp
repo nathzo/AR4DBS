@@ -52,7 +52,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     // Force dark background on the root window so nothing system-coloured shows
     // through during transitions or around safe-area insets on iOS.
-    setStyleSheet("QMainWindow { background-color: #1a1b1d; }");
+    setStyleSheet("QMainWindow { background-color: #000000; }");
 
     // ── Controller — runs on a dedicated thread so detect+blend never block UI ─
     m_controller       = new AppController;   // no parent — will be moved to thread
@@ -153,7 +153,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Button row at the bottom of the AR view — same shape/layout as ScanScreen
     auto *arBtnRow = new QWidget(arContainer);
-    arBtnRow->setStyleSheet("background: #1a1b1d;");
+    arBtnRow->setStyleSheet("background: #000000;");
     auto *arBtnLayout = new QHBoxLayout(arBtnRow);
     arBtnLayout->setContentsMargins(16, 8, 16, 16);
     arBtnLayout->setSpacing(0);
