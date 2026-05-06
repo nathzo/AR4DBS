@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QFont>
 #include <QPixmap>
+#include <QGuiApplication>
+#include <QScreen>
 
 static constexpr auto DARK_BG      = "#1a1b1d";
 static constexpr auto IMPULSE_RED  = "#DE5F5E";
@@ -18,15 +20,15 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 
     auto *logo = new QLabel(this);
     QPixmap logoPixmap(":/resources/logo.png");
-    logo->setPixmap(logoPixmap.scaled(150, 150,
-                                      Qt::KeepAspectRatio,
-                                      Qt::SmoothTransformation));
+    const qreal dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
+    const int px = qRound(150 * dpr);
+    QPixmap scaledPix = logoPixmap.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    scaledPix.setDevicePixelRatio(dpr);
+    logo->setPixmap(scaledPix);
     logo->setAlignment(Qt::AlignCenter);
 
     auto *title = new QLabel("AR4DBS", this);
-    QFont tf;
-    tf.setPointSize(36);
-    tf.setBold(true);
+    QFont tf("Arial", 36, QFont::Bold);
     title->setFont(tf);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QString("color: %1;").arg(IMPULSE_RED));
@@ -39,6 +41,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
                    "  border: none;"
                    "  border-radius: 12px;"
                    "  padding: 18px 48px;"
+                   "  font-family: 'Arial';"
                    "  font-size: 16pt;"
                    "  font-weight: bold;"
                    "}"

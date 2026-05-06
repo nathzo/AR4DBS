@@ -49,7 +49,7 @@ ScanScreen::ScanScreen(QWidget *parent)
         this);
     m_impl->status->setAlignment(Qt::AlignCenter);
     m_impl->status->setStyleSheet(
-        "color: #75D0C5; background: rgba(26,27,29,200); padding: 6px; font-size: 12pt;");
+        "color: #75D0C5; background: rgba(117,208,197,200); padding: 6px; font-size: 12pt;");
     root->addWidget(m_impl->status);
 
     // Buttons row
@@ -60,14 +60,14 @@ ScanScreen::ScanScreen(QWidget *parent)
     auto *btnBack = new QPushButton("← Retour", this);
     btnBack->setStyleSheet(
         "QPushButton { background:#75D0C5; color: black; border-radius:8px;"
-        "              padding:12px 24px; font-size:13pt; font-weight:bold; }"
+        "              padding:12px 24px; font-family:'Arial'; font-size:13pt; font-weight:bold; }"
         "QPushButton:pressed { background:#5ab8ae; }");
 
     auto *btnCapture = new QPushButton(
         PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement", this);
     btnCapture->setStyleSheet(
         "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-        "              padding:12px 32px; font-size:14pt; font-weight:bold; }"
+        "              padding:12px 32px; font-family:'Arial'; font-size:14pt; font-weight:bold; }"
         "QPushButton:pressed { background:#a33c3f; }");
 
     btnRow->addWidget(btnBack);

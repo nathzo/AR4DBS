@@ -2,6 +2,7 @@
 #include <QMessageLogContext>
 #include <QtGlobal>
 #include <QMetaType>
+#include <QFont>
 #include "MainWindow.h"
 #include "AppController.h" // pulls in Q_DECLARE_METATYPE(cv::Mat)
 
@@ -52,6 +53,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName("AR4DBS");
     app.setOrganizationName("NeuroRestore");
+    app.setFont(QFont("Arial", 12));
 
     MainWindow window;
     window.setWindowTitle("AR4DBS");

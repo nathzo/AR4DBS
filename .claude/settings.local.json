@@ -7,7 +7,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebSearch",
       "WebFetch(domain:api.github.com)",
-      "WebFetch(domain:machinelearning.apple.com)"
+      "WebFetch(domain:machinelearning.apple.com)",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)"
     ]
   }
 }
