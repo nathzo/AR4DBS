@@ -4,12 +4,14 @@
 
 class QDoubleSpinBox;
 class QCheckBox;
+class QPushButton;
 class QKeyEvent;
 class QShowEvent;
 class QPaintEvent;
 
 // Shows the surgical plan detected by OCR (or empty fields for manual entry).
-// The user can edit any value before confirming.
+// Fields with OCR confidence < 70 % are highlighted in red and block confirmation
+// until the user explicitly replaces the value.
 class ConfirmPlanDialog : public QDialog
 {
     Q_OBJECT
@@ -29,12 +31,19 @@ private:
         QDoubleSpinBox *arc     = nullptr;
     };
 
-    TargetWidgets m_left, m_right;
+    TargetWidgets  m_left, m_right;
+    QPushButton   *m_confirmBtn   = nullptr;
+    int            m_flaggedCount = 0;
 
     TargetWidgets buildSide(const QString       &title,
                             const LeksellTarget &initial,
                             class QWidget       *parent);
     static LeksellTarget readWidgets(const TargetWidgets &w);
+
+    // Called from valueChanged on any flagged spinbox.
+    void clearFlag(QDoubleSpinBox *sb);
+    // Re-evaluates whether Confirmer should be enabled.
+    void updateConfirmButton();
 
 protected:
     void paintEvent(QPaintEvent *event) override;

@@ -9,6 +9,13 @@ struct LeksellTarget {
     double ring_deg = 0;   // arc-carrier rotation (degrees)
     double arc_deg  = 0;   // electrode tilt from vertical (degrees)
     bool   valid    = false;
+
+    // Per-field OCR confidence.
+    // -1.0  = field was not detected (cell should appear empty).
+    //  0–1  = Vision recognition confidence for that field.
+    // Index: 0=x, 1=y, 2=z, 3=ring, 4=arc
+    static constexpr int kFieldCount = 5;
+    float confidence[kFieldCount] = {-1.f, -1.f, -1.f, -1.f, -1.f};
 };
 
 struct SurgicalPlan {

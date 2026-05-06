@@ -17,8 +17,13 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-// Subclass so focusInEvent can select all text, making the first keystroke
-// replace the displayed value rather than appending to it.
+static constexpr float kConfidenceThreshold = 0.70f;
+
+// ── AutoSelectSpinBox ─────────────────────────────────────────────────────────
+// Selects all text on focus so the first keystroke replaces the value.
+// Minimum is always -1.0; setValue(-1) shows the special "—" placeholder,
+// indicating a field that was not detected by OCR.
+
 class AutoSelectSpinBox : public QDoubleSpinBox {
 public:
     using QDoubleSpinBox::QDoubleSpinBox;
@@ -30,18 +35,33 @@ protected:
     }
 };
 
-static AutoSelectSpinBox *makeSpinBox(double min, double max, double val,
+// Creates a spinbox with -1 as the "not detected" sentinel (shown as " —").
+static AutoSelectSpinBox *makeSpinBox(double max, bool detected, double val,
                                       const QString &suffix, QWidget *parent)
 {
     auto *sb = new AutoSelectSpinBox(parent);
-    sb->setRange(min, max);
+    sb->setRange(-1.0, max);
     sb->setDecimals(1);
     sb->setSingleStep(0.1);
-    sb->setValue(val);
     sb->setSuffix(suffix);
+    sb->setSpecialValueText(" —");          // shown when value == minimum (-1)
     sb->setMinimumWidth(90);
+    sb->setValue(detected ? val : sb->minimum());
     return sb;
 }
+
+// ── Flag styling ──────────────────────────────────────────────────────────────
+
+static const char *kFlaggedStyle =
+    "QDoubleSpinBox {"
+    "  background: rgba(196,82,85,0.18);"
+    "  border: 1px solid #c45255;"
+    "  border-radius: 4px;"
+    "  padding: 3px 6px;"
+    "  color: #e0e0e0;"
+    "}";
+
+// ── buildSide ─────────────────────────────────────────────────────────────────
 
 ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     const QString &title, const LeksellTarget &t, QWidget *parent)
@@ -50,22 +70,30 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
 
     auto *box = new QGroupBox(title, parent);
     box->setCheckable(false);
+    box->setObjectName(title);
     auto *form = new QFormLayout(box);
     form->setLabelAlignment(Qt::AlignRight);
 
     w.enabled = new QCheckBox("Activer", parent);
-    w.enabled->setChecked(true); // always active by default; user must explicitly deactivate
+    w.enabled->setChecked(true);
 
-    w.x    = makeSpinBox(0, 300, t.x_mm,     " mm",  parent);
-    w.y    = makeSpinBox(0, 300, t.y_mm,     " mm",  parent);
-    w.z    = makeSpinBox(0, 200, t.z_mm,     " mm",  parent);
-    w.ring = makeSpinBox(0, 360, t.ring_deg, " °",   parent);
-    w.arc  = makeSpinBox(0, 180, t.arc_deg,  " °",   parent);
+    // confidence[] < 0 → field not detected; 0–1 → Vision confidence
+    bool xDet    = t.confidence[0] >= 0.f;
+    bool yDet    = t.confidence[1] >= 0.f;
+    bool zDet    = t.confidence[2] >= 0.f;
+    bool ringDet = t.confidence[3] >= 0.f;
+    bool arcDet  = t.confidence[4] >= 0.f;
+
+    w.x    = makeSpinBox(300, xDet,    t.x_mm,     " mm", parent);
+    w.y    = makeSpinBox(300, yDet,    t.y_mm,     " mm", parent);
+    w.z    = makeSpinBox(200, zDet,    t.z_mm,     " mm", parent);
+    w.ring = makeSpinBox(360, ringDet, t.ring_deg, " °",  parent);
+    w.arc  = makeSpinBox(180, arcDet,  t.arc_deg,  " °",  parent);
 
     form->addRow(w.enabled);
-    form->addRow("X (mm) :",       w.x);
-    form->addRow("Y (mm) :",       w.y);
-    form->addRow("Z (mm) :",       w.z);
+    form->addRow("X (mm) :",        w.x);
+    form->addRow("Y (mm) :",        w.y);
+    form->addRow("Z (mm) :",        w.z);
     form->addRow("Ring (degrés) :", w.ring);
     form->addRow("Arc  (degrés) :", w.arc);
 
@@ -79,16 +107,30 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     };
     updateEnabled(true);
     QObject::connect(w.enabled, &QCheckBox::toggled, box, updateEnabled);
+    // Re-evaluate the Confirmer gate when a side is toggled on/off.
+    QObject::connect(w.enabled, &QCheckBox::toggled, this,
+                     [this](bool) { updateConfirmButton(); });
 
-    // Store the group box as the managed widget — caller places it
-    // We repurpose parent->layout() indirectly; the caller is responsible
-    // for adding box to a layout.
-    // To allow the caller to retrieve the box, we set it as a child named
-    // after the title.
-    box->setObjectName(title);
+    // Flag spinboxes with confidence below threshold (includes undetected: conf = -1).
+    auto maybeFlag = [&](QDoubleSpinBox *sb, float conf) {
+        if (conf >= kConfidenceThreshold) return; // high confidence: no flag
+        sb->setProperty("flagged", true);
+        sb->setStyleSheet(kFlaggedStyle);
+        ++m_flaggedCount;
+        QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                         this, [this, sb](double) { clearFlag(sb); });
+    };
+
+    maybeFlag(w.x,    t.confidence[0]);
+    maybeFlag(w.y,    t.confidence[1]);
+    maybeFlag(w.z,    t.confidence[2]);
+    maybeFlag(w.ring, t.confidence[3]);
+    maybeFlag(w.arc,  t.confidence[4]);
 
     return w;
 }
+
+// ── Constructor ───────────────────────────────────────────────────────────────
 
 ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *parent)
     : QDialog(parent)
@@ -96,14 +138,12 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     setWindowTitle("Confirmer le plan chirurgical");
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
-    // Fill the portrait screen width with a small equal margin on each side.
     {
         const QRect sg = QGuiApplication::primaryScreen()->availableGeometry();
         const int portraitW = qMin(sg.width(), sg.height());
-        setFixedWidth(portraitW - 32); // 16 px margin each side
+        setFixedWidth(portraitW - 32);
     }
     setStyleSheet(
-        // QDialog background is transparent — paintEvent draws the rounded rect.
         "QDialog { background: transparent; }"
         "QGroupBox, QWidget {"
         "  background-color: #1a1b1d;"
@@ -119,39 +159,23 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  color: #75D0C5;"
         "}"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-        "QTabWidget::pane {"
-        "  border: 1px solid #75D0C5;"
-        "  border-radius: 6px;"
-        "}"
+        "QTabWidget::pane { border: 1px solid #75D0C5; border-radius: 6px; }"
         "QTabBar::tab {"
-        "  background: #2a2b2d;"
-        "  color: #e0e0e0;"
-        "  padding: 12px 16px;"
-        "  font-size: 12pt;"
-        "  border: 1px solid #444;"
-        "  border-bottom: none;"
-        "  border-top-left-radius: 6px;"
-        "  border-top-right-radius: 6px;"
+        "  background: #2a2b2d; color: #e0e0e0;"
+        "  padding: 12px 16px; font-size: 12pt;"
+        "  border: 1px solid #444; border-bottom: none;"
+        "  border-top-left-radius: 6px; border-top-right-radius: 6px;"
         "}"
-        "QTabBar::tab:selected {"
-        "  background: #75D0C5;"
-        "  color: #1a1b1d;"
-        "  font-weight: bold;"
-        "}"
+        "QTabBar::tab:selected { background: #75D0C5; color: #1a1b1d; font-weight: bold; }"
         "QDoubleSpinBox {"
-        "  background: #2a2b2d;"
-        "  color: #e0e0e0;"
-        "  border: 1px solid #444;"
-        "  border-radius: 4px;"
-        "  padding: 3px 6px;"
+        "  background: #2a2b2d; color: #e0e0e0;"
+        "  border: 1px solid #444; border-radius: 4px; padding: 3px 6px;"
         "}"
         "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; border: none; }"
         "QCheckBox { color: #75D0C5; font-weight: bold; }"
         "QPushButton {"
-        "  border-radius: 8px;"
-        "  padding: 10px 28px;"
-        "  font-size: 12pt;"
-        "  font-weight: bold;"
+        "  border-radius: 8px; padding: 10px 28px;"
+        "  font-size: 12pt; font-weight: bold;"
         "}"
         "QPushButton[text='Annuler'] { background: #75D0C5; color: #1a1b1d; }"
     );
@@ -171,61 +195,94 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     }
     mainLayout->addWidget(banner);
 
-    // Two tabs — one per side — so the form fits a vertical iPhone screen
-    auto *tabs = new QTabWidget(this);
-    mainLayout->addWidget(tabs);
-
-    // Left side tab
-    auto *leftPage = new QWidget(tabs);
-    auto *leftLayout = new QVBoxLayout(leftPage);
-    leftLayout->setContentsMargins(8, 8, 8, 8);
-    m_left = buildSide("Gauche (G)", initial.left, leftPage);
-    leftLayout->addWidget(findChild<QGroupBox *>("Gauche (G)"));
-    leftLayout->addStretch();
-    tabs->addTab(leftPage, "Gauche (G)");
-
-    // Right side tab
-    auto *rightPage = new QWidget(tabs);
-    auto *rightLayout = new QVBoxLayout(rightPage);
-    rightLayout->setContentsMargins(8, 8, 8, 8);
-    m_right = buildSide("Droite (D)", initial.right, rightPage);
-    rightLayout->addWidget(findChild<QGroupBox *>("Droite (D)"));
-    rightLayout->addStretch();
-    tabs->addTab(rightPage, "Droite (D)");
-
-    // Buttons
+    // Create the confirm button early so buildSide can reference m_confirmBtn
+    // through updateConfirmButton() called from the checkbox toggle connection.
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 
-    auto *confirmBtn = buttons->button(QDialogButtonBox::Ok);
-    confirmBtn->setText("Confirmer");
-    confirmBtn->setAutoDefault(false);
-    confirmBtn->setDefault(false);
-    confirmBtn->setStyleSheet(
+    m_confirmBtn = buttons->button(QDialogButtonBox::Ok);
+    m_confirmBtn->setText("Confirmer");
+    m_confirmBtn->setAutoDefault(false);
+    m_confirmBtn->setDefault(false);
+    m_confirmBtn->setStyleSheet(
         "QPushButton { background: #c45255; color: white;"
         "  border-radius: 8px; padding: 10px 28px;"
-        "  font-size: 12pt; font-weight: bold; }");
+        "  font-size: 12pt; font-weight: bold; }"
+        "QPushButton:disabled { background: #5a2e2f; color: #888; }");
 
     auto *cancelBtn = buttons->button(QDialogButtonBox::Cancel);
     cancelBtn->setText("Annuler");
     cancelBtn->setAutoDefault(false);
     cancelBtn->setDefault(false);
 
+    // Build tabs (buildSide may increment m_flaggedCount and connect valueChanged)
+    auto *tabs = new QTabWidget(this);
+
+    auto *leftPage = new QWidget(tabs);
+    auto *leftLayout = new QVBoxLayout(leftPage);
+    leftLayout->setContentsMargins(8, 8, 8, 8);
+    m_left = buildSide("Gauche (G)", initial.left, leftPage);
+    leftLayout->addWidget(leftPage->findChild<QGroupBox *>("Gauche (G)"));
+    leftLayout->addStretch();
+    tabs->addTab(leftPage, "Gauche (G)");
+
+    auto *rightPage = new QWidget(tabs);
+    auto *rightLayout = new QVBoxLayout(rightPage);
+    rightLayout->setContentsMargins(8, 8, 8, 8);
+    m_right = buildSide("Droite (D)", initial.right, rightPage);
+    rightLayout->addWidget(rightPage->findChild<QGroupBox *>("Droite (D)"));
+    rightLayout->addStretch();
+    tabs->addTab(rightPage, "Droite (D)");
+
+    mainLayout->addWidget(tabs);
     mainLayout->addWidget(buttons);
 
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    // Set initial Confirmer state based on flagged count.
+    updateConfirmButton();
 }
+
+// ── Flag management ───────────────────────────────────────────────────────────
+
+void ConfirmPlanDialog::clearFlag(QDoubleSpinBox *sb)
+{
+    if (!sb->property("flagged").toBool()) return;
+    if (sb->value() < 0.0) return; // still "—": user hasn't entered a real value
+
+    sb->setProperty("flagged", false);
+    sb->setStyleSheet(""); // revert to dialog-level stylesheet
+    --m_flaggedCount;
+    updateConfirmButton();
+}
+
+void ConfirmPlanDialog::updateConfirmButton()
+{
+    // Only count flagged fields on sides that are currently active.
+    auto countFlagged = [](const TargetWidgets &w) -> int {
+        if (!w.enabled || !w.enabled->isChecked()) return 0;
+        int n = 0;
+        for (auto *sb : { w.x, w.y, w.z, w.ring, w.arc })
+            if (sb && sb->property("flagged").toBool()) ++n;
+        return n;
+    };
+    const int effective = countFlagged(m_left) + countFlagged(m_right);
+    m_confirmBtn->setEnabled(effective == 0);
+}
+
+// ── Read-back ─────────────────────────────────────────────────────────────────
 
 LeksellTarget ConfirmPlanDialog::readWidgets(const TargetWidgets &w)
 {
     LeksellTarget t;
-    t.valid    = w.enabled->isChecked();
-    t.x_mm     = w.x->value();
-    t.y_mm     = w.y->value();
-    t.z_mm     = w.z->value();
-    t.ring_deg = w.ring->value();
-    t.arc_deg  = w.arc->value();
+    t.valid = w.enabled->isChecked();
+    // Fields left at the sentinel (-1) were never filled; leave them at 0 default.
+    if (w.x->value()    >= 0) t.x_mm     = w.x->value();
+    if (w.y->value()    >= 0) t.y_mm     = w.y->value();
+    if (w.z->value()    >= 0) t.z_mm     = w.z->value();
+    if (w.ring->value() >= 0) t.ring_deg = w.ring->value();
+    if (w.arc->value()  >= 0) t.arc_deg  = w.arc->value();
     return t;
 }
 
@@ -237,12 +294,14 @@ SurgicalPlan ConfirmPlanDialog::plan() const
     return p;
 }
 
+// ── Paint / input overrides ───────────────────────────────────────────────────
+
 void ConfirmPlanDialog::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x1a, 0x1b, 0x1d)); // DARK_BG
+    p.setBrush(QColor(0x1a, 0x1b, 0x1d));
     p.drawRoundedRect(rect(), 16, 16);
 }
 
@@ -256,10 +315,7 @@ void ConfirmPlanDialog::showEvent(QShowEvent *e)
 
 void ConfirmPlanDialog::keyPressEvent(QKeyEvent *event)
 {
-    // Swallow Return/Enter so "Terminé" on the iOS keyboard only dismisses
-    // the keyboard without confirming the plan. Only the "Confirmer" button
-    // triggers accept().
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-        return;
+        return; // "Terminé" on iOS keyboard only hides the keyboard
     QDialog::keyPressEvent(event);
 }
