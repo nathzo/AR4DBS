@@ -3,6 +3,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QFont>
+#include <QFontDatabase>
 #include <QPixmap>
 #include <QGuiApplication>
 #include <QScreen>
@@ -28,7 +29,9 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     logo->setAlignment(Qt::AlignCenter);
 
     auto *title = new QLabel("AR4DBS", this);
-    QFont tf("Arial", 36, QFont::Bold);
+    int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
+    QString family = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+    QFont tf(family, 36, QFont::Bold);
     title->setFont(tf);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QString("color: %1;").arg(IMPULSE_RED));
