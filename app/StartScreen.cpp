@@ -11,19 +11,16 @@ static constexpr auto ARC_BLUE     = "#75D0C5";
 
 StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 {
-    setStyleSheet(QString("background-color: %1;").arg("#000000"));
+    setStyleSheet("background-color: black; color: white;");
     auto *layout = new QVBoxLayout(this);
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(24);
 
     auto *logo = new QLabel(this);
     QPixmap logoPixmap(":/resources/logo.webp");
-    if (logoPixmap.isNull())
-        qWarning("StartScreen: failed to load logo — check resources.qrc and rebuild");
-    else
-        logo->setPixmap(logoPixmap.scaled(200, 200,
-                                          Qt::KeepAspectRatio,
-                                          Qt::SmoothTransformation));
+    logo->setPixmap(logoPixmap.scaled(2000, 2000,
+                                      Qt::KeepAspectRatio,
+                                      Qt::SmoothTransformation));
     logo->setAlignment(Qt::AlignCenter);
 
     auto *title = new QLabel("AR4DBS", this);
