@@ -160,13 +160,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
     m_btnBackToMenu->setStyleSheet(
-        "QPushButton { background:#8A8C8F; color:#1a1b1d; border-radius:8px;"
+        "QPushButton { background:#8A8C8F; color: black; border-radius:8px;"
         "              padding:12px 24px; font-size:13pt; font-weight:bold; }"
         "QPushButton:pressed { background:#6d6f72; }");
 
     m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
     m_btnEditPlan->setStyleSheet(
-        "QPushButton { background:#75D0C5; color:#1a1b1d; border-radius:8px;"
+        "QPushButton { background:#75D0C5; color: black; border-radius:8px;"
         "              padding:12px 32px; font-size:14pt; font-weight:bold; }"
         "QPushButton:pressed { background:#5ab8ae; }");
     m_btnEditPlan->setVisible(false);

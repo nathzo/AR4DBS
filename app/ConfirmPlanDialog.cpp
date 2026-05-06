@@ -17,7 +17,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-static constexpr float kConfidenceThreshold = 0.80f;
+static constexpr float kConfidenceThreshold = 0.90f;
 
 // ── AutoSelectSpinBox ─────────────────────────────────────────────────────────
 // Selects all text on focus so the first keystroke replaces the value.
@@ -168,7 +168,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  border: 1px solid #444; border-bottom: none;"
         "  border-top-left-radius: 8px; border-top-right-radius: 8px;"
         "}"
-        "QTabBar::tab:selected { background: #75D0C5; color: #1a1b1d; font-weight: bold; }"
+        "QTabBar::tab:selected { background: #75D0C5; color: black; font-weight: bold; }"
         "QDoubleSpinBox {"
         "  background: #2a2b2d; color: #e0e0e0;"
         "  border: 1px solid #444; border-radius: 6px; padding: 10px 12px;"
@@ -179,7 +179,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  border-radius: 10px; padding: 16px 40px;"
         "  font-size: 15pt; font-weight: bold;"
         "}"
-        "QPushButton[text='Annuler'] { background: #75D0C5; color: #1a1b1d; }"
+        "QPushButton[text='Annuler'] { background: #75D0C5; color: black; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);

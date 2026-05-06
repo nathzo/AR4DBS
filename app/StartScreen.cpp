@@ -49,7 +49,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     auto *btnNew = new QPushButton("Nouvelle chirurgie", this);
     btnNew->setStyleSheet(btnStyle(IMPULSE_RED));
     auto *btnTest = new QPushButton("Mode test AR", this);
-    btnTest->setStyleSheet(btnStyle(ARC_BLUE, DARK_BG));
+    btnTest->setStyleSheet(btnStyle(ARC_BLUE, "#000000"));
 
     layout->addStretch();
     layout->addWidget(logo,    0, Qt::AlignCenter);
