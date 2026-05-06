@@ -118,10 +118,5 @@ void ScanScreen::onCapture()
 
     SurgicalPlan plan = PlanScanner::scan(m_impl->lastFrame);
 
-    if (plan.hasAny())
-        m_impl->status->setText("✓ Coordonnées détectées");
-    else
-        m_impl->status->setText("Coordonnées non détectées — saisie manuelle");
-
     emit planDetected(plan);
 }

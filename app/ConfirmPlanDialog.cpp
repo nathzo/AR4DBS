@@ -94,46 +94,12 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     w.ring = makeSpinBox(360, ringDet, t.ring_deg, " °",  parent);
     w.arc  = makeSpinBox(180, arcDet,  t.arc_deg,  " °",  parent);
 
-    // Wraps a spinbox with a confidence badge label to the right.
-    // The label is stored on the spinbox as a Qt property so clearFlag can update it.
-    auto makeFieldRow = [&](QDoubleSpinBox *sb, float conf) -> QWidget * {
-        auto *row = new QWidget(parent);
-        row->setFixedHeight(52);
-        auto *hbox = new QHBoxLayout(row);
-        hbox->setContentsMargins(0, 0, 0, 0);
-        hbox->setSpacing(10);
-        hbox->addWidget(sb, 1);
-
-        auto *badge = new QLabel(row);
-        badge->setFixedWidth(62);
-        badge->setFixedHeight(52);
-        badge->setAlignment(Qt::AlignCenter);
-
-        if (conf < 0.f) {
-            // Field not detected — no percentage to show
-            badge->setText("n/d");
-            badge->setStyleSheet("color: #555; font-size: 11pt;");
-        } else {
-            const int pct = static_cast<int>(conf * 100.f);
-            badge->setText(QString("%1%").arg(pct));
-            if (conf < kConfidenceThreshold)
-                badge->setStyleSheet(
-                    "color: #c45255; font-size: 12pt; font-weight: bold;");
-            else
-                badge->setStyleSheet(
-                    "color: #75D0C5; font-size: 12pt;");
-        }
-
-        hbox->addWidget(badge);
-        return row;
-    };
-
     form->addRow(w.enabled);
-    form->addRow("X (mm) :",        makeFieldRow(w.x,    t.confidence[0]));
-    form->addRow("Y (mm) :",        makeFieldRow(w.y,    t.confidence[1]));
-    form->addRow("Z (mm) :",        makeFieldRow(w.z,    t.confidence[2]));
-    form->addRow("Ring (degrés) :", makeFieldRow(w.ring, t.confidence[3]));
-    form->addRow("Arc  (degrés) :", makeFieldRow(w.arc,  t.confidence[4]));
+    form->addRow("X (mm) :",        w.x);
+    form->addRow("Y (mm) :",        w.y);
+    form->addRow("Z (mm) :",        w.z);
+    form->addRow("Ring (degrés) :", w.ring);
+    form->addRow("Arc  (degrés) :", w.arc);
 
     // Disable spinboxes when side is unchecked
     auto updateEnabled = [w](bool on) {
