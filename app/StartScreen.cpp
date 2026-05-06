@@ -6,7 +6,7 @@
 #include <QPixmap>
 
 static constexpr auto DARK_BG      = "#1a1b1d";
-static constexpr auto IMPULSE_RED  = "#c45255";
+static constexpr auto IMPULSE_RED  = "#DE5F5E";
 static constexpr auto ARC_BLUE     = "#75D0C5";
 
 StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
@@ -18,7 +18,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 
     auto *logo = new QLabel(this);
     QPixmap logoPixmap(":/resources/logo.png");
-    logo->setPixmap(logoPixmap.scaled(200, 200,
+    logo->setPixmap(logoPixmap.scaled(150, 150,
                                       Qt::KeepAspectRatio,
                                       Qt::SmoothTransformation));
     logo->setAlignment(Qt::AlignCenter);

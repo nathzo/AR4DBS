@@ -27,7 +27,7 @@ void GLWidget::paintEvent(QPaintEvent *event)
     Q_UNUSED(event)
 
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(0x1a, 0x1b, 0x1d));
+    painter.fillRect(rect(), Qt::black);
 
     if (m_image.isNull())
         return;

@@ -13,7 +13,7 @@ public:
     struct Style {
         QColor lineColor     {117, 208, 197};  // ARC_BLUE    #75D0C5
         QColor targetColor   {233, 223,  77};  // VOLT_YELLOW #E9DF4D
-        QColor incisionColor {196,  82,  85};  // IMPULSE_RED #c45255
+        QColor incisionColor {222,  95,  94};  // IMPULSE_RED #DE5F5E
 
         float lineWidth    = 2.f;
         float targetRadius = 12.f;

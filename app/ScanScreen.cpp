@@ -66,7 +66,7 @@ ScanScreen::ScanScreen(QWidget *parent)
     auto *btnCapture = new QPushButton(
         PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement", this);
     btnCapture->setStyleSheet(
-        "QPushButton { background:#c45255; color:white; border-radius:8px;"
+        "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
         "              padding:12px 32px; font-size:14pt; font-weight:bold; }"
         "QPushButton:pressed { background:#a33c3f; }");
 
