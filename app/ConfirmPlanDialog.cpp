@@ -17,7 +17,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-static constexpr float kConfidenceThreshold = 0.95f;
+static constexpr float kConfidenceThreshold = 0.98f;
 
 // ── AutoSelectSpinBox ─────────────────────────────────────────────────────────
 // Selects all text on focus so the first keystroke replaces the value.

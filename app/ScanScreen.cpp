@@ -49,7 +49,7 @@ ScanScreen::ScanScreen(QWidget *parent)
         this);
     m_impl->status->setAlignment(Qt::AlignCenter);
     m_impl->status->setStyleSheet(
-        "color: #75D0C5; background: rgba(117,208,197,200); padding: 6px; font-size: 12pt;");
+        "color: #75D0C5; background: rgba(117,208,197,50); padding: 6px; font-size: 12pt;");
     root->addWidget(m_impl->status);
 
     // Buttons row
