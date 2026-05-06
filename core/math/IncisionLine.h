@@ -17,7 +17,7 @@ public:
 
     // Construct from Leksell stereotactic coordinates.
     // lengthM: visualised trajectory length from target toward skull (metres).
-    static IncisionLine fromLeksell(const LeksellTarget &t, double lengthM = 0.50);
+    static IncisionLine fromLeksell(const LeksellTarget &t, double lengthM = 0.30);
 
     cv::Point3d target()  const { return m_target;  } // DBS target (deep end)
     cv::Point3d lineEnd() const { return m_lineEnd; } // skull-side end of trajectory
