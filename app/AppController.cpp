@@ -29,8 +29,8 @@ AppController::AppController(QObject *parent) : QObject(parent) {}
 AppController::~AppController()
 {
 #ifdef Q_OS_IOS
-    // Wait for any background depth inference to finish before members are destroyed.
-    while (m_depthInFlight.load())
+    // Wait for the model-load thread and any in-flight inference before destroying members.
+    while (m_depthModelLoading.load() || m_depthInFlight.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 #endif
 }
@@ -58,14 +58,25 @@ bool AppController::init(const QString &calibPath,
 
     if (!depthModelPath.isEmpty()) {
 #ifdef Q_OS_IOS
-        // Step 3: on iOS use the CoreML estimator (Neural Engine, no LiDAR).
-        m_iosDepth = std::make_unique<CoreMLDepthEstimator>(depthModelPath.toStdString());
-        if (!m_iosDepth->isLoaded()) {
-            qWarning() << "AppController: CoreML depth model not loaded from" << depthModelPath;
-            m_iosDepth.reset();
-        } else {
-            qDebug() << "AppController: iOS CoreML depth estimation enabled";
-        }
+        // CoreML model loading triggers ANE compilation on first run, which can block
+        // for >20 s and trips the iOS scene-create watchdog (0x8BADF00D).
+        // Load on a background thread so the UI appears immediately.
+        // All accesses to m_iosDepth on the camera thread are gated on
+        // m_depthModelReady (acquire), which is set here with release ordering
+        // only after m_iosDepth is fully constructed and safe to use.
+        m_depthModelLoading.store(true);
+        std::string modelPath = depthModelPath.toStdString();
+        std::thread([this, modelPath]() {
+            auto est = std::make_unique<CoreMLDepthEstimator>(modelPath);
+            if (est->isLoaded()) {
+                m_iosDepth = std::move(est);
+                m_depthModelReady.store(true, std::memory_order_release);
+                qDebug() << "AppController: iOS CoreML depth estimation enabled";
+            } else {
+                qWarning() << "AppController: CoreML depth model failed to load";
+            }
+            m_depthModelLoading.store(false);
+        }).detach();
 #else
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
         if (!m_depth->isLoaded()) {
@@ -536,9 +547,11 @@ void AppController::onARFrame(const cv::Mat &frame,
         }
     }
 
-    // Dispatch CoreML inference only when LiDAR is not providing depth.
-    // When LiDAR is active, onLidarDepth() updates m_depthMapReady directly.
-    if (!m_usingLiDAR && m_iosDepth && !m_depthInFlight.exchange(true)) {
+    // Dispatch CoreML inference only when LiDAR is not providing depth and the model
+    // has finished loading (m_depthModelReady acquire-load pairs with the release-store
+    // in the load thread, guaranteeing m_iosDepth is visible and fully constructed).
+    if (!m_usingLiDAR && m_depthModelReady.load(std::memory_order_acquire)
+            && !m_depthInFlight.exchange(true)) {
         std::thread([this, frame]() mutable {
             cv::Mat depth = m_iosDepth->estimate(frame);
             {
@@ -574,8 +587,10 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_showDepthOverlay);
         dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: DA v2 Metric",
             true);
-        dbg(m_iosDepth ? "iosDepth model: LOADED" : "iosDepth model: NULL",
-            m_usingLiDAR || m_iosDepth != nullptr);
+        dbg(m_depthModelReady.load() ? "iosDepth model: LOADED"
+            : m_depthModelLoading.load() ? "iosDepth model: loading..."
+            : "iosDepth model: NULL",
+            m_usingLiDAR || m_depthModelReady.load());
         dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
             tagsVisible);
         if (!m_usingLiDAR)

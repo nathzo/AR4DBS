@@ -140,5 +140,12 @@ private:
     std::atomic<bool> m_depthInFlight{false};
     std::mutex        m_depthMutex;
     cv::Mat           m_depthMapReady;
+
+    // Model loading is async (CoreML ANE compilation can take >20 s on first run).
+    // m_depthModelLoading: true while the background load thread is alive.
+    // m_depthModelReady:   set to true (release) once m_iosDepth is safe to use.
+    // Always check m_depthModelReady (acquire) before accessing m_iosDepth on any thread.
+    std::atomic<bool> m_depthModelLoading{false};
+    std::atomic<bool> m_depthModelReady{false};
 #endif
 };
