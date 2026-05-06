@@ -218,21 +218,10 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 
 cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 {
-    // Spacing EMA alpha — physical constant, so converge slowly and stay locked.
-    constexpr double kSpacingAlpha = 0.03;
-
-    // ── 1. Locate both tags (needed for spacing update, hoisted to outer scope) ─
-    const TagPose *p0 = nullptr, *p1 = nullptr;
-    for (const auto &det : detections) {
-        if      (det.id == 0) p0 = &det;
-        else if (det.id == 1) p1 = &det;
-    }
-
-    // ── 2. Per-tag poses + unified PnP point collection ───────────────────────
-    // Per-tag IPPE_SQUARE results are fused into an initial guess.
-    // Simultaneously, each tag's corners are projected to Leksell-frame 3-D
-    // coordinates so that a single multi-point PnP can refine the result.
-    std::vector<cv::Mat>    framePoses;
+    // ── 1. Per-tag poses + unified PnP point collection ───────────────────────
+    // Each tag has a fixed absolute Leksell position stored in tag_config.json,
+    // so a single visible tag is sufficient to establish the full frame pose.
+    std::vector<cv::Mat>     framePoses;
     std::vector<cv::Point3f> objPts;
     std::vector<cv::Point2f> imgPts;
 
@@ -242,23 +231,16 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
             if (c.id == det.id) { cfg = &c; break; }
         if (!cfg) continue;
 
-        // Build T_frame_tag with dynamic tx
-        cv::Mat r_cfg, t_cfg;
-        PoseUtils::fromTransform(cfg->T_frame_tag, r_cfg, t_cfg);
-        t_cfg.at<double>(0) = (det.id == 0)
-            ? 0.10 + m_halfTagSpacingM
-            : 0.10 - m_halfTagSpacingM;
-        const cv::Mat T_frame_tag = PoseUtils::toTransform(r_cfg, t_cfg);
-
         // Per-tag frame pose (IPPE_SQUARE result)
         const cv::Mat T_cam_tag = PoseUtils::toTransform(det.rvec, det.tvec);
-        framePoses.push_back(T_cam_tag * T_frame_tag.inv());
+        framePoses.push_back(T_cam_tag * cfg->T_frame_tag.inv());
 
         // Leksell-frame 3-D positions of this tag's 4 corners.
-        // T_frame_tag transforms tag-local points to Leksell frame:
+        // cfg->T_frame_tag transforms tag-local points to Leksell frame:
         //   p_leksell = R_cfg * p_local + t_cfg
         if (det.corners.size() == 4) {
-            cv::Mat R_cfg;
+            cv::Mat r_cfg, t_cfg, R_cfg;
+            PoseUtils::fromTransform(cfg->T_frame_tag, r_cfg, t_cfg);
             cv::Rodrigues(r_cfg, R_cfg);
             const float h = m_markerSize / 2.f;
             const cv::Point3f local[4] = {
@@ -280,7 +262,7 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 
     if (framePoses.empty()) return {};
 
-    // ── 3. Fuse per-tag estimates in SO(3) → initial guess ───────────────────
+    // ── 2. Fuse per-tag estimates in SO(3) → initial guess ───────────────────
     cv::Mat T_initial;
     if (framePoses.size() == 1) {
         T_initial = framePoses[0];
@@ -303,13 +285,10 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
         T_initial = PoseUtils::toTransform(rFused, tvecSum / n);
     }
 
-    // ── 4. Unified multi-point PnP refinement ────────────────────────────────
+    // ── 3. Unified multi-point PnP refinement ────────────────────────────────
     // When both tags are fully visible (8 correspondences), run one solvePnP
     // over all corners together. The wide inter-tag baseline makes the depth
-    // axis far better constrained than any single-tag solve, reducing the
-    // angle-dependent drift seen with independent per-tag estimates.
-    // The SO(3)-fused result above is used as the initial guess so
-    // SOLVEPNP_ITERATIVE always starts from a good position.
+    // axis far better constrained than any single-tag solve.
     if (objPts.size() >= 8) {
         cv::Mat rvec, tvec;
         PoseUtils::fromTransform(T_initial, rvec, tvec);
@@ -317,34 +296,11 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
             objPts, imgPts, m_K, m_dist,
             rvec, tvec, /*useExtrinsicGuess=*/true,
             cv::SOLVEPNP_ITERATIVE);
-        if (ok) {
-            // Refine halfSpacingM using Leksell x-axis projection.
-            // R_result.col(0) is the Leksell +x axis expressed in camera space.
-            // Projecting (tvec_tag0 − tvec_tag1) onto it strips y/z mounting
-            // offsets and gives the pure horizontal (x) tag separation.
-            if (p0 && p1) {
-                cv::Mat R_result;
-                cv::Rodrigues(rvec, R_result);
-                const cv::Mat xAxis = R_result.col(0);
-                const cv::Mat inter = p0->tvec.reshape(1, 3) - p1->tvec.reshape(1, 3);
-                const double proj = xAxis.dot(inter);
-                if (proj > 0)
-                    m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
-                                        + kSpacingAlpha * proj / 2.0;
-            }
+        if (ok)
             return PoseUtils::toTransform(rvec, tvec);
-        }
     }
 
-    // Fallback: Euclidean spacing update when unified PnP didn't run or failed.
-    // (single tag visible, or PnP returned false)
-    if (p0 && p1) {
-        const double measured = cv::norm(p0->tvec - p1->tvec) / 2.0;
-        m_halfTagSpacingM = (1.0 - kSpacingAlpha) * m_halfTagSpacingM
-                            + kSpacingAlpha * measured;
-    }
-
-    // SO(3)-fused per-tag estimate (single tag, or if PnP failed)
+    // SO(3)-fused per-tag estimate (single tag, or if unified PnP failed)
     return T_initial;
 }
 

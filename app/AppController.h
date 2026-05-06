@@ -97,11 +97,6 @@ private:
     float   m_markerSize = 0.05f; // overwritten from tag_config.json marker_size_m
     std::vector<TagConfig>           m_tagConfigs;
 
-    // Half the metric distance between the two tag centres, measured at runtime
-    // from solvePnP. Updated whenever both tags are visible simultaneously.
-    // Default of 0.10 m assumes a 200 mm inter-tag span (matching the JSON
-    // initial values) and is used as a fallback when only one tag is visible.
-    mutable double m_halfTagSpacingM = 0.10;
     std::unique_ptr<AprilTagTracker> m_tracker;
     std::unique_ptr<OverlayRenderer> m_renderer;
     std::unique_ptr<DepthEstimator>  m_depth;
