@@ -553,12 +553,16 @@ void AppController::onARFrame(const cv::Mat &frame,
         double anchorSum   = 0.0;
         int    anchorCount = 0;
         for (const auto &det : detections) {
-            const double      depth = cv::norm(det.tvec);
+            // Use the Z-component of tvec (perpendicular depth), not Euclidean
+            // distance. Depth models output Z-depth; expectedDepth is also Z.
+            // Using cv::norm() would inflate the anchor by 1/cos(angle) for
+            // off-axis tags, making every surfaceDepth read too large.
+            const double      depth = det.tvec.at<double>(2);
             const cv::Point2f px    = PoseUtils::project(
                 cv::Point3d(0,0,0), m_K, det.rvec, det.tvec, m_dist);
             const float rel = sampleDepthAt(depthMap, px);
             if (rel > 1e-4f) {
-                // Depth convention (larger = farther): anchor = tagMetricDepth / relTag.
+                // Depth convention (larger = farther): anchor = tagZDepth / relTag.
                 // For a well-calibrated metric model rel ≈ depth so anchor ≈ 1.0;
                 // averaging across all visible tags reduces per-tag sampling noise.
                 anchorSum += depth / rel;
