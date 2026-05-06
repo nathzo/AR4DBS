@@ -269,23 +269,39 @@ cv::Mat CoreMLDepthEstimator::estimate(const cv::Mat &bgr)
                 std::to_string((int)outFV.type) + " key=" + outKey.UTF8String;
             return {};
         }
-        NSUInteger n     = outArr.shape.count;
-        const int  outH  = outArr.shape[n-2].intValue;
-        const int  outW  = outArr.shape[n-1].intValue;
+        NSUInteger n      = outArr.shape.count;
+        const int  outH   = outArr.shape[n-2].intValue;
+        const int  outW   = outArr.shape[n-1].intValue;
+        // MLMultiArray rows may be padded; strides[n-2] gives the actual element
+        // distance between rows (may be > outW). Reading src[i] linearly ignores
+        // that padding and produces stripes of garbage (zeros → red in the overlay).
+        const int  rowStride = outArr.strides[n-2].intValue;  // elements between rows
         disp = cv::Mat(outH, outW, CV_32F);
         if (outArr.dataType == MLMultiArrayDataTypeFloat16) {
             const uint16_t *src = static_cast<const uint16_t*>(outArr.dataPointer);
             float          *dst = disp.ptr<float>();
-            const size_t    N   = (size_t)outH * outW;
-            for (size_t i = 0; i < N; ++i) {
-                uint32_t bits = ((uint32_t)(src[i] & 0x8000u) << 16)
-                              | ((uint32_t)((src[i] & 0x7C00u) + 0x1C000u) << 13)
-                              | ((uint32_t)(src[i] & 0x03FFu) << 13);
-                std::memcpy(&dst[i], &bits, sizeof(float));
+            for (int y = 0; y < outH; ++y) {
+                const uint16_t *row = src + (ptrdiff_t)y * rowStride;
+                float          *out = dst + y * outW;
+                for (int x = 0; x < outW; ++x) {
+                    uint16_t v    = row[x];
+                    uint32_t bits = ((uint32_t)(v & 0x8000u) << 16)
+                                  | ((uint32_t)((v & 0x7C00u) + 0x1C000u) << 13)
+                                  | ((uint32_t)(v & 0x03FFu) << 13);
+                    std::memcpy(&out[x], &bits, sizeof(float));
+                }
             }
         } else {
-            std::memcpy(disp.data, outArr.dataPointer,
-                        (size_t)outH * outW * sizeof(float));
+            const float *src = static_cast<const float*>(outArr.dataPointer);
+            float       *dst = disp.ptr<float>();
+            if (rowStride == outW) {
+                std::memcpy(dst, src, (size_t)outH * outW * sizeof(float));
+            } else {
+                for (int y = 0; y < outH; ++y)
+                    std::memcpy(dst + y * outW,
+                                src + (ptrdiff_t)y * rowStride,
+                                outW * sizeof(float));
+            }
         }
     }
 
