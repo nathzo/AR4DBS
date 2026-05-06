@@ -188,8 +188,6 @@ set(CORE_SOURCES
 
     core/math/IncisionLine.h
     core/math/IncisionLine.cpp
-    core/math/RayCaster.h
-    core/math/RayCaster.cpp
     core/math/PoseUtils.h
     core/math/PoseUtils.cpp
     core/rendering/OverlayRenderer.h

@@ -28,6 +28,8 @@ class CoreMLDepthEstimator;
 struct TagConfig {
     int     id;
     cv::Mat T_frame_tag; // 4x4 CV_64F homogeneous transform
+    cv::Mat R_frame_tag; // 3x3 rotation  (precomputed from T_frame_tag)
+    cv::Mat t_frame_tag; // 3x1 translation (precomputed from T_frame_tag)
 };
 
 class AppController : public QObject

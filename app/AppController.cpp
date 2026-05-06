@@ -239,9 +239,8 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
         // cfg->T_frame_tag transforms tag-local points to Leksell frame:
         //   p_leksell = R_cfg * p_local + t_cfg
         if (det.corners.size() == 4) {
-            cv::Mat r_cfg, t_cfg, R_cfg;
-            PoseUtils::fromTransform(cfg->T_frame_tag, r_cfg, t_cfg);
-            cv::Rodrigues(r_cfg, R_cfg);
+            const cv::Mat &R_cfg = cfg->R_frame_tag;
+            const cv::Mat &t_cfg = cfg->t_frame_tag;
             const float h = m_markerSize / 2.f;
             const cv::Point3f local[4] = {
                 {-h,  h, 0.f}, { h,  h, 0.f},
@@ -372,20 +371,24 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         const cv::Point3d &tgt = line.target();
         const cv::Point3d &end = line.lineEnd();
 
+        // Pre-compute all RAY_SAMPLES+1 points and test visibility once each.
+        // Adjacent segments share endpoints, so the naive per-segment approach
+        // calls visible() twice for every interior point. Caching halves the
+        // number of project()+sampleDepthAt() calls (120 → 61 per trajectory).
+        const cv::Point3d diff = { tgt.x-end.x, tgt.y-end.y, tgt.z-end.z };
+        std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
+        std::array<bool,        RAY_SAMPLES + 1> ptVis;
+        for (int s = 0; s <= RAY_SAMPLES; ++s) {
+            const double t = static_cast<double>(s) / RAY_SAMPLES;
+            pts[s]   = { end.x + t*diff.x, end.y + t*diff.y, end.z + t*diff.z };
+            ptVis[s] = visible(pts[s]);
+        }
         for (int s = 0; s < RAY_SAMPLES; ++s) {
-            const double t0 = static_cast<double>(s)   / RAY_SAMPLES;
-            const double t1 = static_cast<double>(s+1) / RAY_SAMPLES;
-            const cv::Point3d p0 = {end.x + t0*(tgt.x-end.x),
-                                    end.y + t0*(tgt.y-end.y),
-                                    end.z + t0*(tgt.z-end.z)};
-            const cv::Point3d p1 = {end.x + t1*(tgt.x-end.x),
-                                    end.y + t1*(tgt.y-end.y),
-                                    end.z + t1*(tgt.z-end.z)};
-            if (visible(p0) && visible(p1))
-                m_renderer->drawSegment(p0, p1, m_K, rvec, tvec);
+            if (ptVis[s] && ptVis[s+1])
+                m_renderer->drawSegment(pts[s], pts[s+1], m_K, rvec, tvec);
         }
 
-        if (visible(tgt))
+        if (ptVis[RAY_SAMPLES]) // tgt == pts[RAY_SAMPLES], already tested above
             m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
 
         auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
@@ -547,6 +550,13 @@ void AppController::onARFrame(const cv::Mat &frame,
     }
 
     // ── 6. Render ─────────────────────────────────────────────────────────────
+    // Fast path: nothing to draw, emit the original frame without cloning.
+    if (!m_showDepthOverlay && (T_cam_frame.empty() || !anyLine)) {
+        m_lastFrameMs = m_frameTimer.elapsed();
+        emit frameReady(frame);
+        return;
+    }
+
     cv::Mat out = frame.clone();
 
     // Debug diagnostics — test AR mode only
@@ -653,6 +663,9 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
         cv::Mat tvec = (cv::Mat_<double>(3,1)
             << obj["tx_m"].toDouble(0), obj["ty_m"].toDouble(0), obj["tz_m"].toDouble(0));
         cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
+        cv::Mat r_tmp;
+        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
+        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
         configs.push_back(std::move(cfg));
     }
     return configs;
