@@ -45,6 +45,7 @@ static AutoSelectSpinBox *makeSpinBox(double max, bool detected, double val,
     sb->setSingleStep(0.1);
     sb->setSuffix(suffix);
     sb->setSpecialValueText(" —");          // shown when value == minimum (-1)
+    sb->setFixedHeight(52);                 // uniform row height across all fields
     sb->setMinimumWidth(150);
     sb->setValue(detected ? val : sb->minimum());
     return sb;

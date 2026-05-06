@@ -17,8 +17,8 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     layout->setSpacing(24);
 
     auto *logo = new QLabel(this);
-    QPixmap logoPixmap(":/resources/logo.webp");
-    logo->setPixmap(logoPixmap.scaled(2000, 2000,
+    QPixmap logoPixmap(":/resources/logo.png");
+    logo->setPixmap(logoPixmap.scaled(200, 200,
                                       Qt::KeepAspectRatio,
                                       Qt::SmoothTransformation));
     logo->setAlignment(Qt::AlignCenter);

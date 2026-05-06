@@ -59,7 +59,7 @@ ScanScreen::ScanScreen(QWidget *parent)
 
     auto *btnBack = new QPushButton("← Retour", this);
     btnBack->setStyleSheet(
-        "QPushButton { background:#75D0C5; color:#1a1b1d; border-radius:8px;"
+        "QPushButton { background:#75D0C5; color: black; border-radius:8px;"
         "              padding:12px 24px; font-size:13pt; font-weight:bold; }"
         "QPushButton:pressed { background:#5ab8ae; }");
 
