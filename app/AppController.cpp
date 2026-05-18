@@ -321,11 +321,38 @@ void AppController::renderOverlayOnto(cv::Mat &out,
                                       const cv::Mat &rvec,
                                       const cv::Mat &tvec)
 {
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+
+    // Skip any sub-segment whose endpoint is behind the camera plane (Z ≤ 0).
+    // Without this check, cv::projectPoints reflects behind-camera points through
+    // the principal point, making the line appear to flip to the opposite side of
+    // the image when the viewpoint is near-parallel to the trajectory.
+    auto inFront = [&](const cv::Point3d &pt) -> bool {
+        const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
+        return (R * v + tvec.reshape(1, 3)).at<double>(2) > 0;
+    };
+
     for (int i = 0; i < 2; ++i) {
         if (!m_lines[i]) continue;
         const auto &line = *m_lines[i];
-        m_renderer->drawSegment(line.lineEnd(), line.target(), m_K, rvec, tvec);
-        m_renderer->drawTargetMarker(line.target(), m_K, rvec, tvec);
+        const cv::Point3d &tgt = line.target();
+        const cv::Point3d &end = line.lineEnd();
+
+        const cv::Point3d diff = { tgt.x-end.x, tgt.y-end.y, tgt.z-end.z };
+        std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
+        std::array<bool,        RAY_SAMPLES + 1> ptVis;
+        for (int s = 0; s <= RAY_SAMPLES; ++s) {
+            const double t = static_cast<double>(s) / RAY_SAMPLES;
+            pts[s]   = { end.x + t*diff.x, end.y + t*diff.y, end.z + t*diff.z };
+            ptVis[s] = inFront(pts[s]);
+        }
+        for (int s = 0; s < RAY_SAMPLES; ++s) {
+            if (ptVis[s] && ptVis[s+1])
+                m_renderer->drawSegment(pts[s], pts[s+1], m_K, rvec, tvec);
+        }
+        if (ptVis[RAY_SAMPLES])
+            m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
     }
 }
 
