@@ -330,7 +330,8 @@ void AppController::renderOverlayOnto(cv::Mat &out,
     // the image when the viewpoint is near-parallel to the trajectory.
     auto inFront = [&](const cv::Point3d &pt) -> bool {
         const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
-        return (R * v + tvec.reshape(1, 3)).at<double>(2) > 0;
+        const cv::Mat result = R * v + tvec.reshape(1, 3);
+        return result.at<double>(2) > 0;
     };
 
     for (int i = 0; i < 2; ++i) {
