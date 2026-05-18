@@ -547,10 +547,13 @@ void AppController::onARFrame(const cv::Mat &frame,
         }
     }
 
-    // Dispatch CoreML inference only when LiDAR is not providing depth and the model
-    // has finished loading (m_depthModelReady acquire-load pairs with the release-store
-    // in the load thread, guaranteeing m_iosDepth is visible and fully constructed).
-    if (!m_usingLiDAR && m_depthModelReady.load(std::memory_order_acquire)
+    // Dispatch CoreML inference only when explicitly enabled (m_mlDepthEnabled),
+    // LiDAR is not providing depth, and the model has finished loading.
+    // m_mlDepthEnabled is false by default: on non-LiDAR devices depth estimation
+    // is disabled entirely (no overlay, no occlusion). Set it to true to re-enable
+    // the Depth Anything v2 fallback.
+    if (m_mlDepthEnabled && !m_usingLiDAR
+            && m_depthModelReady.load(std::memory_order_acquire)
             && !m_depthInFlight.exchange(true)) {
         std::thread([this, frame]() mutable {
             cv::Mat depth = m_iosDepth->estimate(frame);
@@ -587,13 +590,15 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_showDepthOverlay);
         dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: DA v2 Metric",
             true);
-        dbg(m_depthModelReady.load() ? "iosDepth model: LOADED"
+        dbg(m_usingLiDAR ? "iosDepth model: N/A (LiDAR)"
+            : !m_mlDepthEnabled ? "iosDepth model: disabled"
+            : m_depthModelReady.load() ? "iosDepth model: LOADED"
             : m_depthModelLoading.load() ? "iosDepth model: loading..."
             : "iosDepth model: NULL",
-            m_usingLiDAR || m_depthModelReady.load());
+            m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
         dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
             tagsVisible);
-        if (!m_usingLiDAR)
+        if (!m_usingLiDAR && m_mlDepthEnabled)
             dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
                 !m_depthInFlight.load());
         dbg(depthMap.empty() ? "depthMap: EMPTY" :

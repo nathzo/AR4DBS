@@ -123,6 +123,11 @@ private:
     // When true, CoreML inference is skipped and m_depthAnchor is fixed at 1.0.
     bool m_usingLiDAR = false;
 
+    // Enables CoreML monocular depth on non-LiDAR devices.
+    // Currently false: depth estimation requires LiDAR. Set to true to re-enable
+    // Depth Anything v2 fallback on non-LiDAR iPhones.
+    bool m_mlDepthEnabled = false;
+
     // Scale anchor: converts the depth map to metric metres.
     //   LiDAR path:          always 1.0 (LiDAR values are already in metres).
     //   Depth Anything v2:   tagMetricDepth * relTag (disparity convention), EMA-smoothed.
