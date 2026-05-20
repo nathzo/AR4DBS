@@ -191,7 +191,9 @@ MainWindow::MainWindow(QWidget *parent)
         m_arCamera->stop();
         m_btnEditPlan->setVisible(false);
 #ifdef Q_OS_IOS
-        m_controller->setShowDepthOverlay(false);
+        QMetaObject::invokeMethod(m_controller,
+            [this]() { m_controller->setShowDepthOverlay(false); },
+            Qt::QueuedConnection);
 #endif
         m_stack->setCurrentIndex(0);
     });
@@ -216,10 +218,15 @@ MainWindow::MainWindow(QWidget *parent)
     // Start screen → direct AR (testing shortcut — loads default test targets)
     connect(m_startScreen, &StartScreen::directARRequested, this, [this]() {
         m_currentPlan = defaultTestPlan();
-        m_controller->setSurgicalPlan(m_currentPlan);
+        const SurgicalPlan plan = m_currentPlan;
+        QMetaObject::invokeMethod(m_controller,
+            [this, plan]() { m_controller->setSurgicalPlan(plan); },
+            Qt::QueuedConnection);
         m_btnEditPlan->setVisible(true);
 #ifdef Q_OS_IOS
-        m_controller->setShowDepthOverlay(true);
+        QMetaObject::invokeMethod(m_controller,
+            [this]() { m_controller->setShowDepthOverlay(true); },
+            Qt::QueuedConnection);
 #endif
         startAR();
     });
@@ -275,7 +282,10 @@ void MainWindow::startAR()
 #ifdef Q_OS_IOS
     // Re-register the surgical frame on each new AR session start so that
     // returning from the menu and re-entering AR picks up a fresh anchor.
-    m_controller->resetARRegistration();
+    // Use QueuedConnection so this runs on the controller thread, not the main
+    // thread — avoids a data race with any onARFrame still draining from the queue.
+    QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
+                              Qt::QueuedConnection);
 #endif
     m_arCamera->start();
 }
@@ -293,7 +303,10 @@ void MainWindow::onPlanDetected(const SurgicalPlan &detected)
     }
 
     m_currentPlan = dlg.plan();
-    m_controller->setSurgicalPlan(m_currentPlan);
+    const SurgicalPlan plan = m_currentPlan;
+    QMetaObject::invokeMethod(m_controller,
+        [this, plan]() { m_controller->setSurgicalPlan(plan); },
+        Qt::QueuedConnection);
     m_btnEditPlan->setVisible(true);
     startAR();
 }
@@ -305,11 +318,15 @@ void MainWindow::editPlan()
     ConfirmPlanDialog dlg(m_currentPlan, this);
     if (dlg.exec() == QDialog::Accepted) {
         m_currentPlan = dlg.plan();
-        m_controller->setSurgicalPlan(m_currentPlan);
+        const SurgicalPlan plan = m_currentPlan;
+        QMetaObject::invokeMethod(m_controller,
+            [this, plan]() { m_controller->setSurgicalPlan(plan); },
+            Qt::QueuedConnection);
     }
 
 #ifdef Q_OS_IOS
-    m_controller->resetARRegistration();
+    QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
+                              Qt::QueuedConnection);
 #endif
     m_arCamera->start();
 }
