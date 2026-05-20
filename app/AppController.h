@@ -133,22 +133,22 @@ private:
     //   Depth Anything v2:   tagMetricDepth * relTag (disparity convention), EMA-smoothed.
     double m_depthAnchor = 0.0;
 
-    // Two-phase complementary filter blend weights.
-    // kAlphaInit — high weight for the first kInitFrames blended frames so the
-    //              filter converges quickly from the cold-start measurement
-    //              (~5 frames to 97%, ~0.17 s at 30 fps).
-    // kAlpha     — steady-state weight for long-term stability once locked.
-    // kInitFrames — number of blended frames to spend in the fast-convergence phase.
-    static constexpr double kAlphaInit  = 0.5;
+    // Steady-state tag measurement blend weight.
+    // Small = smooth / slow absolute correction; large = fast / noisy.
     static constexpr double kAlpha      = 0.07;
+    // Number of frames averaged before the first overlay is shown.
+    // Averaging kInitFrames independent measurements reduces noise by
+    // √kInitFrames ≈ 4× compared to a single cold-start frame, so the
+    // overlay appears for the first time already in a stable position.
     static constexpr int    kInitFrames = 15;
-    // Depth anchor EMA weight. Slow convergence keeps the incision marker stable
-    // across frames even when per-frame relTag sampling is noisy.
+    // Depth anchor EMA weight. Slow convergence keeps the incision marker
+    // stable across frames even when per-frame relTag sampling is noisy.
     static constexpr double kAnchorAlpha = 0.05;
 
-    // Counts blended frames since the last cold start.  Below kInitFrames the
-    // filter uses kAlphaInit; at or above it switches to kAlpha.
-    int m_initFrameCount = 0;
+    // Accumulates T_cam_frame poses during startup.  Once kInitFrames entries
+    // are collected they are averaged in SO(3)+R³ to form the initial filter
+    // state, then the buffer is cleared and normal blending takes over.
+    std::vector<cv::Mat> m_initPoseBuffer;
 
     // Async depth inference — background thread, never blocks the camera loop.
     // m_depthInFlight: true while a background estimate() call is running.
