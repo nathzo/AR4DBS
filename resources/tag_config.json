@@ -1,14 +1,14 @@
 {
     "comment": "Tag poses expressed in the Leksell frame coordinate system. Axes: x=0 right → x=200mm left; y=0 posterior → y=200mm anterior; z=0 superior/out-of-tags (toward camera) → z=200mm at tag plane. Tag positions are fixed physical measurements — each tag independently establishes the full coordinate frame. ry=pi aligns the tag's local axes with the Leksell axes (ArUco z points toward camera = Leksell −z; ArUco x points right = Leksell −x, both flipped by Ry(pi)).",
     "dictionary":    "DICT_4X4_50",
-    "marker_size_m": 0.03,
+    "marker_size_m": 0.06,
     "tags": [
         {
             "id": 0,
             "name": "left",
             "tx_m":   0.2325,
             "ty_m":   0.100,
-            "tz_m":   0.200,
+            "tz_m":   0.170,
             "rx_rad": 0.00,
             "ry_rad": 3.141592653589793,
             "rz_rad": 0.00
@@ -18,7 +18,7 @@
             "name": "right",
             "tx_m":  -0.0325,
             "ty_m":   0.100,
-            "tz_m":   0.200,
+            "tz_m":   0.170,
             "rx_rad": 0.00,
             "ry_rad": 3.141592653589793,
             "rz_rad": 0.00

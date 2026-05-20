@@ -115,7 +115,7 @@ void OverlayRenderer::paintIncision(QPointF c) const
     m_painter->drawLine(QPointF(c.x()-arm*1.2f, c.y()), QPointF(c.x()+arm*1.2f, c.y()));
     m_painter->drawLine(QPointF(c.x(), c.y()-arm*1.4f), QPointF(c.x(), c.y()+arm*1.4f));
 
-    m_painter->setPen(QPen(m_style.incisionColor, 7.f, Qt::SolidLine, Qt::RoundCap));
+    m_painter->setPen(QPen(m_style.incisionColor, 8.f, Qt::SolidLine, Qt::RoundCap));
     m_painter->drawLine(QPointF(c.x()-arm, c.y()), QPointF(c.x()+arm, c.y()));
     m_painter->drawLine(QPointF(c.x(), c.y()-arm), QPointF(c.x(), c.y()+arm));
 

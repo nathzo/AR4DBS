@@ -112,6 +112,36 @@ std::vector<TagPose> AprilTagTracker::detect(const cv::Mat &frame, const cv::Mat
         for (auto &pt : quad)
             pt *= invScale;
 
+    // 5. Re-run subpixel refinement at full resolution.
+    // CORNER_REFINE_SUBPIX ran inside the ArUco detector on m_small (0.4×);
+    // after scaling by ×2.5 its ±0.3 px accuracy becomes ±0.75 px in full-res
+    // space.  Running cornerSubPix again on m_grey (the full-res grayscale,
+    // already in memory from step 1) brings corner accuracy back to genuine
+    // ±0.3 px at the scale that m_K was calibrated at, directly reducing the
+    // per-frame pose noise fed into solvePnP.
+    if (!m_corners.empty()) {
+        // Flatten all tag corners into one vector.  cornerSubPix refines each
+        // point independently, so batching all tags together is equivalent to
+        // calling it once per tag.
+        std::vector<cv::Point2f> allCorners;
+        allCorners.reserve(m_corners.size() * 4);
+        for (const auto &quad : m_corners)
+            for (const auto &pt : quad)
+                allCorners.push_back(pt);
+
+        cv::cornerSubPix(m_grey, allCorners,
+                         cv::Size(5, 5),    // 11×11 search window — appropriate
+                         cv::Size(-1, -1),  // for tag size at surgical distance
+                         cv::TermCriteria(cv::TermCriteria::EPS +
+                                          cv::TermCriteria::COUNT, 30, 0.1));
+
+        // Write refined positions back into m_corners.
+        int idx = 0;
+        for (auto &quad : m_corners)
+            for (auto &pt : quad)
+                pt = allCorners[idx++];
+    }
+
     std::vector<TagPose> result;
     result.reserve(m_ids.size());
     for (size_t i = 0; i < m_ids.size(); ++i) {

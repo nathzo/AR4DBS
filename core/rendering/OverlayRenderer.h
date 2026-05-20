@@ -11,11 +11,11 @@ class OverlayRenderer
 {
 public:
     struct Style {
-        QColor lineColor     {117, 208, 197};  // ARC_BLUE    #75D0C5
-        QColor targetColor   {233, 223,  77};  // VOLT_YELLOW #E9DF4D
-        QColor incisionColor {222,  95,  94};  // IMPULSE_RED #DE5F5E
+        QColor lineColor     {222,  95,  94};  // IMPULSE_RED #DE5F5E
+        QColor targetColor   {117, 208, 197};  // ARC_BLUE    #75D0C5
+        QColor incisionColor {233, 223,  77};  // VOLT_YELLOW #E9DF4D
 
-        float lineWidth    = 2.f;
+        float lineWidth    = 4.f;
         float targetRadius = 12.f;
         float crossArm     = 15.f;
 

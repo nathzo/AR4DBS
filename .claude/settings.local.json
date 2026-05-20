@@ -12,7 +12,11 @@
       "Bash(python -c ' *)",
       "Bash(cmake --build . --target DBSAR --config Debug)",
       "PowerShell(& \"C:\\\\Qt\\\\Tools\\\\CMake_64\\\\bin\\\\cmake.exe\" --build \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\build\\\\Desktop_Qt_6_11_0_MSVC2022_64bit-Debug\" --target DBSAR --config Debug 2>&1)",
-      "PowerShell($env:PATH = \"C:\\\\Qt\\\\Tools\\\\QtCreator\\\\bin\\\\jom;$env:PATH\"; & \"C:\\\\Qt\\\\Tools\\\\CMake_64\\\\bin\\\\cmake.exe\" --build \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\build\\\\Desktop_Qt_6_11_0_MSVC2022_64bit-Debug\" --target DBSAR --config Debug 2>&1 | Select-Object -Last 40)"
+      "PowerShell($env:PATH = \"C:\\\\Qt\\\\Tools\\\\QtCreator\\\\bin\\\\jom;$env:PATH\"; & \"C:\\\\Qt\\\\Tools\\\\CMake_64\\\\bin\\\\cmake.exe\" --build \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\build\\\\Desktop_Qt_6_11_0_MSVC2022_64bit-Debug\" --target DBSAR --config Debug 2>&1 | Select-Object -Last 40)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\" -Recurse -File)",
+      "Bash(Select-Object -Property FullName, Extension)",
+      "Bash(Sort-Object Extension)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
