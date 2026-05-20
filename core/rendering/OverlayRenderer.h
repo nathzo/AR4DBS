@@ -19,7 +19,7 @@ public:
         float targetRadius = 12.f;
         float crossArm     = 15.f;
 
-        float glowWidthMul = 5.f;
+        float glowWidthMul = 3.f;
         float glowAlpha    = 0.30f;
     };
 

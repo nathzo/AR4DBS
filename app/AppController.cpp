@@ -453,6 +453,7 @@ void AppController::resetARRegistration()
     m_T_cam_frame_filt    = cv::Mat();
     m_world_T_camera_prev = cv::Mat();
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
+    m_initFrameCount      = 0;
 }
 
 void AppController::onLidarAvailable(bool available)
@@ -495,14 +496,26 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── 3. Update: blend prediction with measurement ─────────────────────────
     if (!T_from_tags.empty()) {
         if (T_cam_frame.empty()) {
-            // No prediction yet (first frame) — initialise directly from tags.
+            // No prediction yet (first frame) — initialise directly from tags
+            // and reset the init counter so the fast-convergence phase starts
+            // from this frame.
             T_cam_frame = T_from_tags;
+            m_initFrameCount = 0;
         } else {
             // Complementary filter — blend in SO(3), not in Rodrigues space.
             // Linear rvec blending fails when |rvec| ≈ π because the same
             // rotation has two representations (rvec and -rvec); blending across
             // that sign boundary produces a nonsense rotation (~180° flip).
             // Blending rotation matrices and re-orthogonalizing via SVD is safe.
+
+            // Two-phase alpha: converge quickly from the cold-start noise for
+            // the first kInitFrames blended frames, then hold at the steady-state
+            // weight.  With kAlphaInit=0.5 the filter reaches 97% of the correct
+            // pose in ~5 frames (~0.17 s) instead of ~41 frames (~1.4 s).
+            const double alpha = (m_initFrameCount < kInitFrames) ? kAlphaInit
+                                                                   : kAlpha;
+            ++m_initFrameCount;
+
             cv::Mat r_pred, t_pred, r_meas, t_meas;
             PoseUtils::fromTransform(T_cam_frame, r_pred, t_pred);
             PoseUtils::fromTransform(T_from_tags, r_meas, t_meas);
@@ -510,7 +523,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat R_pred, R_meas;
             cv::Rodrigues(r_pred, R_pred);
             cv::Rodrigues(r_meas, R_meas);
-            cv::Mat R_raw = (1.0 - kAlpha) * R_pred + kAlpha * R_meas;
+            cv::Mat R_raw = (1.0 - alpha) * R_pred + alpha * R_meas;
 
             // SVD projects the blended matrix back onto SO(3).
             // The det check flips a reflection (det=-1) to a proper rotation.
@@ -520,7 +533,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat r_fused;
             cv::Rodrigues(U * Vt, r_fused);
 
-            const cv::Mat t_fused = (1.0 - kAlpha) * t_pred + kAlpha * t_meas;
+            const cv::Mat t_fused = (1.0 - alpha) * t_pred + alpha * t_meas;
             T_cam_frame = PoseUtils::toTransform(r_fused, t_fused);
         }
     }

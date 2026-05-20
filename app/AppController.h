@@ -133,11 +133,22 @@ private:
     //   Depth Anything v2:   tagMetricDepth * relTag (disparity convention), EMA-smoothed.
     double m_depthAnchor = 0.0;
 
-    // Tag measurement blend weight. Small = smooth/slow correction; large = fast/noisy.
-    static constexpr double kAlpha = 0.07;
+    // Two-phase complementary filter blend weights.
+    // kAlphaInit — high weight for the first kInitFrames blended frames so the
+    //              filter converges quickly from the cold-start measurement
+    //              (~5 frames to 97%, ~0.17 s at 30 fps).
+    // kAlpha     — steady-state weight for long-term stability once locked.
+    // kInitFrames — number of blended frames to spend in the fast-convergence phase.
+    static constexpr double kAlphaInit  = 0.5;
+    static constexpr double kAlpha      = 0.07;
+    static constexpr int    kInitFrames = 15;
     // Depth anchor EMA weight. Slow convergence keeps the incision marker stable
     // across frames even when per-frame relTag sampling is noisy.
     static constexpr double kAnchorAlpha = 0.05;
+
+    // Counts blended frames since the last cold start.  Below kInitFrames the
+    // filter uses kAlphaInit; at or above it switches to kAlpha.
+    int m_initFrameCount = 0;
 
     // Async depth inference — background thread, never blocks the camera loop.
     // m_depthInFlight: true while a background estimate() call is running.
