@@ -608,7 +608,11 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     // ── 6. Render ─────────────────────────────────────────────────────────────
     // Fast path: nothing to draw, emit the original frame without cloning.
-    if (!m_showDepthOverlay && (T_cam_frame.empty() || !anyLine)) {
+    // Also suppressed while the filter is still in its fast-convergence phase
+    // (m_initFrameCount < kInitFrames) so the overlay appears for the first time
+    // already in its stable, converged position rather than drifting into it.
+    if (!m_showDepthOverlay && (T_cam_frame.empty() || !anyLine ||
+                                m_initFrameCount < kInitFrames)) {
         m_lastFrameMs = m_frameTimer.elapsed();
         emit frameReady(frame);
         return;
@@ -664,7 +668,10 @@ void AppController::onARFrame(const cv::Mat &frame,
         cv::addWeighted(out, 0.7, colored, 0.3, 0, out);
     }
 
-    if (T_cam_frame.empty() || !anyLine) {
+    // Suppress the surgical overlay until the filter has fully converged.
+    // The depth visualisation and debug text above still render during this
+    // period, so the user can see that the camera is being tracked.
+    if (T_cam_frame.empty() || !anyLine || m_initFrameCount < kInitFrames) {
         m_lastFrameMs = m_frameTimer.elapsed();
         emit frameReady(out);
         return;
