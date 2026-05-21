@@ -35,7 +35,7 @@ protected:
     }
     void keyPressEvent(QKeyEvent *e) override {
         if (e->key() == Qt::Key_Comma || e->key() == Qt::Key_Period) {
-            const QChar dp = locale().decimalPoint();
+            const QChar dp = locale().decimalPoint().at(0);
             const int key  = (dp == QLatin1Char('.')) ? Qt::Key_Period : Qt::Key_Comma;
             QKeyEvent mapped(e->type(), key, e->modifiers(), QString(dp));
             QDoubleSpinBox::keyPressEvent(&mapped);
