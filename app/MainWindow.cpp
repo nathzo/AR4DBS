@@ -367,7 +367,7 @@ void MainWindow::setArLocked(bool locked)
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText("Recalibrer");
     } else {
-        m_calibLabel->setText("Calibration requise — placez la caméra face aux repères");
+        m_calibLabel->setText("Calibration requise : placez la caméra face aux repères");
         m_calibLabel->setStyleSheet(
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");

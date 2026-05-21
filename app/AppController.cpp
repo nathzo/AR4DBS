@@ -9,6 +9,8 @@
 #endif
 
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <string>
 
 #include <QFile>
@@ -481,10 +483,27 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── Tracking ──────────────────────────────────────────────────────────────
     cv::Mat T_cam_leksell;
 
+    // Debug metrics populated during init phase; displayed in depth-overlay panel.
+    int    dbgCorners  = 0;
+    double dbgAngleDeg = -1.0; // negative = not computable (no pose)
+    double dbgReprojPx = -1.0;
+
     if (m_T_world_leksell.empty()) {
         // Init phase: detect tags and test quality conditions for locking.
         const auto    detections  = m_tracker->detect(frame);
         const cv::Mat T_from_tags = fusePoses(detections);
+
+        // Collect metrics for the debug overlay.
+        for (const auto &d : detections)
+            dbgCorners += static_cast<int>(d.corners.size());
+        if (!T_from_tags.empty()) {
+            cv::Mat rvec, tvec, R;
+            PoseUtils::fromTransform(T_from_tags, rvec, tvec);
+            cv::Rodrigues(rvec, R);
+            const double cosA = std::max(-1.0, std::min(1.0, -R.at<double>(2, 2)));
+            dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
+            dbgReprojPx = computeReprojError(detections, rvec, tvec);
+        }
 
         // Update depth anchor from visible tags (Depth Anything v2 only).
         if (!m_usingLiDAR && !detections.empty()) {
@@ -575,8 +594,24 @@ void AppController::onARFrame(const cv::Mat &frame,
             : m_depthModelLoading.load() ? "iosDepth model: loading..."
             : "iosDepth model: NULL",
             m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
-        dbg(!m_T_world_leksell.empty() ? "tracking: LOCKED" : "tracking: searching...",
+        dbg(!m_T_world_leksell.empty() ? "anchor: ESTABLISHED" : "anchor: calibrating...",
             !m_T_world_leksell.empty());
+        {
+            char buf[64];
+            if (m_T_world_leksell.empty()) {
+                std::snprintf(buf, sizeof(buf), "corners: %d / 8", dbgCorners);
+                dbg(buf, dbgCorners >= 8);
+                if (dbgAngleDeg >= 0.0) {
+                    std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need <=15)", dbgAngleDeg);
+                    dbg(buf, dbgAngleDeg <= 15.0);
+                    std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=0.8)", dbgReprojPx);
+                    dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= kMaxInitReprojPx);
+                } else {
+                    dbg("angle:  -- (no pose)", false);
+                    dbg("reproj: -- (no pose)", false);
+                }
+            }
+        }
         if (!m_usingLiDAR && m_mlDepthEnabled)
             dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
                 !m_depthInFlight.load());
