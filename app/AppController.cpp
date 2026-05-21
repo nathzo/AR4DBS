@@ -453,8 +453,10 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 void AppController::resetARRegistration()
 {
     m_T_world_leksell     = cv::Mat();
-    m_anchorTrackingState = 2; // reset baseline; next lock will record fresh quality
+    m_anchorTrackingState = 2;
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
+    m_prevWorldTCamera    = cv::Mat();
+    m_lowFeatFrames       = 0;
     emit lockStateChanged(false);
 }
 
@@ -556,7 +558,32 @@ void AppController::onARFrame(const cv::Mat &frame,
     } else {
         // Locked phase: derive pose purely from ARKit world tracking.
         T_cam_leksell = world_T_camera_cv.inv() * m_T_world_leksell;
+
+        // Re-calibrate if features stay low while the camera is actively moving.
+        // Low count at rest is normal (IMU takes over); only flag it during motion.
+        if (!m_prevWorldTCamera.empty()) {
+            const cv::Mat t_now  = world_T_camera_cv.col(3).rowRange(0, 3);
+            const cv::Mat t_prev = m_prevWorldTCamera.col(3).rowRange(0, 3);
+            const double transDelta = cv::norm(t_now - t_prev);
+
+            const cv::Mat R_now   = world_T_camera_cv.rowRange(0, 3).colRange(0, 3);
+            const cv::Mat R_prev  = m_prevWorldTCamera.rowRange(0, 3).colRange(0, 3);
+            const cv::Mat R_delta = R_now * R_prev.t();
+            const double  tr      = R_delta.at<double>(0,0) + R_delta.at<double>(1,1)
+                                  + R_delta.at<double>(2,2);
+            const double rotDelta = std::acos(std::max(-1.0, std::min(1.0, (tr - 1.0) / 2.0)));
+
+            const bool moving = transDelta > 0.003 || rotDelta > (0.3 * M_PI / 180.0);
+            if (moving && featurePoints < 30)
+                ++m_lowFeatFrames;
+            else
+                m_lowFeatFrames = 0;
+
+            if (m_lowFeatFrames >= 10)
+                resetARRegistration();
+        }
     }
+    m_prevWorldTCamera = world_T_camera_cv.clone();
 
     // ── Depth map ─────────────────────────────────────────────────────────────
     cv::Mat depthMap;
@@ -618,6 +645,11 @@ void AppController::onARFrame(const cv::Mat &frame,
             char buf[64];
             std::snprintf(buf, sizeof(buf), "features: %d", m_featurePointCount);
             dbg(buf, m_featurePointCount >= 50);
+        }
+        if (!m_T_world_leksell.empty()) {
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "drift guard: %d / 10", m_lowFeatFrames);
+            dbg(buf, m_lowFeatFrames == 0);
         }
         {
             char buf[64];

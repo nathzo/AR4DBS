@@ -132,7 +132,10 @@ private:
     int m_trackingState       = 2; // assume normal until first signal
     int m_anchorTrackingState = 2; // quality recorded at lock time; re-lock triggers
                                    // when current quality drops below this value
-    int m_featurePointCount   = 0;
+    int     m_featurePointCount = 0;
+
+    cv::Mat m_prevWorldTCamera;   // previous frame's world_T_camera_cv for motion detection
+    int     m_lowFeatFrames = 0;  // consecutive frames: moving + low feature count
 
     // ── Anchor-locking state ─────────────────────────────────────────────────
     // Empty until both tags are seen face-on with low reprojection error.
