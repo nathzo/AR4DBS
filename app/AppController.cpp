@@ -483,8 +483,10 @@ void AppController::onLidarDepth(const cv::Mat &depthMetric)
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
-                               const cv::Mat &world_T_camera)
+                               const cv::Mat &world_T_camera,
+                               int featurePoints)
 {
+    m_featurePointCount = featurePoints;
     m_frameTimer.restart();
     const bool anyLine = m_lines[0] || m_lines[1];
 
@@ -612,6 +614,11 @@ void AppController::onARFrame(const cv::Mat &frame,
             : m_trackingState == 1 ? "ARKit: LIMITED"
             : "ARKit: UNAVAILABLE",
             m_trackingState == 2);
+        {
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "features: %d", m_featurePointCount);
+            dbg(buf, m_featurePointCount >= 50);
+        }
         {
             char buf[64];
             if (m_T_world_leksell.empty()) {

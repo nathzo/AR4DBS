@@ -87,7 +87,9 @@ struct ARKitSession::Impl {
             world_T_camera.at<double>(row, col) =
                 static_cast<double>(T.columns[col][row]);
 
-    emit impl->q->frameReady(bgr, world_T_camera);
+    const int featureCount = frame.rawFeaturePoints
+        ? static_cast<int>(frame.rawFeaturePoints.count) : 0;
+    emit impl->q->frameReady(bgr, world_T_camera, featureCount);
 
     // Emit tracking quality only on transitions to avoid flooding the signal queue.
     const int state = static_cast<int>(frame.camera.trackingState);

@@ -23,7 +23,7 @@ public:
     struct Impl;
 
 signals:
-    void frameReady(const cv::Mat &bgr, const cv::Mat &world_T_camera);
+    void frameReady(const cv::Mat &bgr, const cv::Mat &world_T_camera, int featurePoints);
     void calibrationReady(const cv::Mat &K);
     void lidarAvailable(bool available);              // emitted once in start()
     void lidarDepthReady(const cv::Mat &depthMetric); // emitted each frame when LiDAR active

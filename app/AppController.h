@@ -55,7 +55,7 @@ public slots:
 #ifdef Q_OS_IOS
     // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
     // onARFrame is called from MainWindow's busy-guard lambda on the worker thread.
-    void onARFrame(const cv::Mat &frame, const cv::Mat &world_T_camera);
+    void onARFrame(const cv::Mat &frame, const cv::Mat &world_T_camera, int featurePoints = 0);
     void resetARRegistration(); // call before each AR session start
 
     // LiDAR integration — connected to ARKitSession signals.
@@ -132,6 +132,7 @@ private:
     int m_trackingState       = 2; // assume normal until first signal
     int m_anchorTrackingState = 2; // quality recorded at lock time; re-lock triggers
                                    // when current quality drops below this value
+    int m_featurePointCount   = 0;
 
     // ── Anchor-locking state ─────────────────────────────────────────────────
     // Empty until both tags are seen face-on with low reprojection error.

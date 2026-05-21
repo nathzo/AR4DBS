@@ -130,11 +130,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_arCamera, &ARKitSession::trackingQualityChanged,
             m_controller, &AppController::onTrackingQualityChanged);
     connect(m_arCamera, &ARKitSession::frameReady, this,
-            [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera) {
+            [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera, int featurePoints) {
         if (!busy->testAndSetAcquire(0, 1)) return;
         QMetaObject::invokeMethod(m_controller,
-            [this, frame, world_T_camera, busy]() {
-                m_controller->onARFrame(frame, world_T_camera);
+            [this, frame, world_T_camera, featurePoints, busy]() {
+                m_controller->onARFrame(frame, world_T_camera, featurePoints);
                 busy->storeRelease(0);
             });
     });
