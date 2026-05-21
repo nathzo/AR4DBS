@@ -27,6 +27,8 @@ signals:
     void calibrationReady(const cv::Mat &K);
     void lidarAvailable(bool available);              // emitted once in start()
     void lidarDepthReady(const cv::Mat &depthMetric); // emitted each frame when LiDAR active
+    // 0 = normal, 1 = limited, 2 = not available. Emitted only on transition.
+    void trackingQualityChanged(int arTrackingState);
 
 private:
     Impl *m_impl;

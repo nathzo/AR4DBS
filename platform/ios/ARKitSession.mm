@@ -11,14 +11,15 @@ static constexpr qint64 MIN_FRAME_MS = 33; // ~30 fps cap
 
 // ── Forward-declare Impl so the delegate can reference it ────────────────────
 struct ARKitSession::Impl {
-    ARSession    *session       = nil;
-    id            delegate      = nil; // ARDelegate (Obj-C type hidden from header)
-    bool          calibEmitted  = false;
-    bool          lidarActive   = false; // true when LiDAR frameSemantics is enabled
-    int           cameraWidth   = 0;    // stored after first frame for LiDAR resize
-    int           cameraHeight  = 0;
+    ARSession    *session           = nil;
+    id            delegate          = nil; // ARDelegate (Obj-C type hidden from header)
+    bool          calibEmitted      = false;
+    bool          lidarActive       = false; // true when LiDAR frameSemantics is enabled
+    int           cameraWidth       = 0;    // stored after first frame for LiDAR resize
+    int           cameraHeight      = 0;
+    int           lastTrackingState = -1;   // -1 = uninitialised; triggers emit on first frame
     QElapsedTimer frameTimer;
-    ARKitSession *q             = nullptr; // back-pointer for signal emission
+    ARKitSession *q                 = nullptr; // back-pointer for signal emission
 };
 
 // ── Objective-C delegate ──────────────────────────────────────────────────────
@@ -87,6 +88,13 @@ struct ARKitSession::Impl {
                 static_cast<double>(T.columns[col][row]);
 
     emit impl->q->frameReady(bgr, world_T_camera);
+
+    // Emit tracking quality only on transitions to avoid flooding the signal queue.
+    const int state = static_cast<int>(frame.camera.trackingState);
+    if (state != impl->lastTrackingState) {
+        impl->lastTrackingState = state;
+        emit impl->q->trackingQualityChanged(state);
+    }
 
     // Extract LiDAR depth when active.
     // sceneDepth.depthMap is kCVPixelFormatType_DepthFloat32 — metric metres,
@@ -164,9 +172,10 @@ ARKitSession::~ARKitSession()
 
 void ARKitSession::start()
 {
-    m_impl->calibEmitted = false;
-    m_impl->cameraWidth  = 0;
-    m_impl->cameraHeight = 0;
+    m_impl->calibEmitted      = false;
+    m_impl->cameraWidth       = 0;
+    m_impl->cameraHeight      = 0;
+    m_impl->lastTrackingState = -1;
 
     ARWorldTrackingConfiguration *config =
         [[ARWorldTrackingConfiguration alloc] init];

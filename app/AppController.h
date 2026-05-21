@@ -61,6 +61,9 @@ public slots:
     // LiDAR integration — connected to ARKitSession signals.
     void onLidarAvailable(bool available);
     void onLidarDepth(const cv::Mat &depthMetric);
+
+    // ARTrackingState mirror for the debug overlay: 0=normal, 1=limited, 2=unavailable.
+    void onTrackingQualityChanged(int state);
 #endif
 
 signals:
@@ -124,6 +127,10 @@ private:
     bool m_showDepthOverlay = false;
 
 #ifdef Q_OS_IOS
+    // ── ARKit tracking quality ───────────────────────────────────────────────
+    // 0 = normal, 1 = limited, 2 = not available. Updated via onTrackingQualityChanged.
+    int m_trackingState = 0;
+
     // ── Anchor-locking state ─────────────────────────────────────────────────
     // Empty until both tags are seen face-on with low reprojection error.
     // Once set, the overlay runs purely from ARKit world tracking.
@@ -135,7 +142,7 @@ private:
     // Face-on reads as ~180° in our convention (R(2,2) ≈ +1 → cosA = -R(2,2) ≈ -1).
     // Valid range: [175°, 180°], so cosA ≤ -cos(5°) ≈ -0.9962.
     static constexpr double kMaxInitAngleCos = 0.9962; // cos(5°) tolerance around 180°
-    static constexpr double kMaxInitReprojPx = 1;   // RMS reprojection error cap
+    static constexpr double kMaxInitReprojPx = 0.8;   // RMS reprojection error cap
 
     static constexpr double kAnchorAlpha = 0.05;
 

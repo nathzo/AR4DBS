@@ -465,6 +465,11 @@ void AppController::onLidarAvailable(bool available)
              << (available ? "LiDAR" : "Depth Anything v2 Metric");
 }
 
+void AppController::onTrackingQualityChanged(int state)
+{
+    m_trackingState = state;
+}
+
 void AppController::onLidarDepth(const cv::Mat &depthMetric)
 {
     std::lock_guard<std::mutex> lk(m_depthMutex);
@@ -596,6 +601,10 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
         dbg(!m_T_world_leksell.empty() ? "anchor: ESTABLISHED" : "anchor: calibrating...",
             !m_T_world_leksell.empty());
+        dbg(m_trackingState == 0 ? "ARKit: normal"
+            : m_trackingState == 1 ? "ARKit: LIMITED"
+            : "ARKit: UNAVAILABLE",
+            m_trackingState == 0);
         {
             char buf[64];
             if (m_T_world_leksell.empty()) {
