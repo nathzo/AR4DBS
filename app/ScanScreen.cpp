@@ -102,7 +102,16 @@ ScanScreen::~ScanScreen()
     delete m_impl;
 }
 
-void ScanScreen::startCamera() { m_impl->camera->start(); }
+void ScanScreen::startCamera()
+{
+    // Reset the status label to its idle message whenever the camera is
+    // (re)started — e.g. after the user cancels the confirmation dialog.
+    m_impl->status->setText(
+        PlanScanner::isAvailable()
+            ? "Pointez l'écran Medtronic et appuyez sur Capturer"
+            : "OCR non disponible — saisissez les coordonnées manuellement");
+    m_impl->camera->start();
+}
 void ScanScreen::stopCamera()  { if (m_impl->camera) m_impl->camera->stop(); }
 
 void ScanScreen::onCapture()

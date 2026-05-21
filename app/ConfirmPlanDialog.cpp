@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QKeyEvent>
 #include <QFocusEvent>
+#include <QInputMethodEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QGuiApplication>
@@ -52,6 +53,7 @@ protected:
     }
     void keyPressEvent(QKeyEvent *e) override {
         // Normalize both , and . to the locale's decimal-point character.
+        // (Hardware keyboard path — soft-keyboard input arrives via inputMethodEvent.)
         if (e->key() == Qt::Key_Comma || e->key() == Qt::Key_Period) {
             const QChar dp = locale().decimalPoint().at(0);
             const int key  = (dp == QLatin1Char('.')) ? Qt::Key_Period : Qt::Key_Comma;
@@ -71,6 +73,27 @@ protected:
             return;
         }
         QDoubleSpinBox::keyPressEvent(e);
+    }
+
+    // Soft-keyboard (iOS) input arrives here, not via keyPressEvent.
+    void inputMethodEvent(QInputMethodEvent *e) override {
+        const QString commit = e->commitString();
+        if (!commit.isEmpty()) {
+            const QChar dp  = locale().decimalPoint().at(0);
+            const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',')
+                                                       : QLatin1Char('.');
+            if (commit.contains(alt)) {
+                QString fixed = commit;
+                fixed.replace(alt, dp);
+                QInputMethodEvent mapped(e->preeditString(), e->attributes());
+                mapped.setCommitString(fixed,
+                                       e->replacementStart(),
+                                       e->replacementLength());
+                QDoubleSpinBox::inputMethodEvent(&mapped);
+                return;
+            }
+        }
+        QDoubleSpinBox::inputMethodEvent(e);
     }
 
 private:
@@ -104,6 +127,8 @@ static const char *kFlaggedStyle =
     "  border-radius: 4px;"
     "  padding: 3px 6px;"
     "  color: #e0e0e0;"
+    "  selection-color: #e0e0e0;"
+    "  selection-background-color: #7a2e30;"
     "}";
 
 // ── buildSide ─────────────────────────────────────────────────────────────────
@@ -229,14 +254,22 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         "QDoubleSpinBox {"
         "  background: #2a2b2d; color: #e0e0e0;"
         "  border: 1px solid #444; border-radius: 6px; padding: 10px 12px;"
+        "  selection-color: #e0e0e0; selection-background-color: #2d5f7a;"
         "}"
-        "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; border: none; }"
+        "QDoubleSpinBox::up-button {"
+        "  subcontrol-origin: border; subcontrol-position: top right;"
+        "  width: 0; height: 0; border: none; margin: 0;"
+        "}"
+        "QDoubleSpinBox::down-button {"
+        "  subcontrol-origin: border; subcontrol-position: bottom right;"
+        "  width: 0; height: 0; border: none; margin: 0;"
+        "}"
         "QCheckBox { color: #75D0C5; font-family: 'Arial'; font-weight: bold; }"
         "QPushButton {"
         "  border-radius: 10px; padding: 16px 40px;"
         "  font-family: 'Arial'; font-size: 15pt; font-weight: bold;"
         "}"
-        "QPushButton[text='Annuler'] { background: #75D0C5; color: black; }"
+        "QPushButton[text='Annuler'] { background: #8A8C8F; color: black; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);
