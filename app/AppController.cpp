@@ -111,6 +111,9 @@ void AppController::setSurgicalPlan(const SurgicalPlan &plan)
     m_lines[1] = plan.hasRight()
         ? std::make_unique<IncisionLine>(IncisionLine::fromLeksell(plan.right))
         : nullptr;
+#ifdef Q_OS_IOS
+    for (auto &lock : m_lockedIncision) lock = LockedIncision{};
+#endif
 }
 
 void AppController::onNewFrame(const cv::Mat &frame)
@@ -226,6 +229,44 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
     }
     return std::nullopt;
 }
+
+// ── Incision quality gate ─────────────────────────────────────────────────────
+
+#ifdef Q_OS_IOS
+// Returns true when:
+//   1. The measured depth at the candidate pixel agrees with the expected camera-space
+//      Z within kDepthMatchTol (rules out bad LiDAR pixels and Depth Anything artefacts).
+//   2. On LiDAR: the ARConfidenceLevel at that pixel is kMinLidarConf (= High).
+//      This specifically rejects hair pixels, which produce low-confidence readings.
+bool AppController::checkIncisionQuality(const cv::Point3d &pt,
+                                          const cv::Mat     &rvec,
+                                          const cv::Mat     &tvec,
+                                          double             depthAnchor,
+                                          const cv::Mat     &depthMap,
+                                          const cv::Mat     &confidenceMap) const
+{
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+    const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
+    const double expectedDepth = (R * v + tvec.reshape(1, 3)).at<double>(2);
+    if (expectedDepth <= 0) return false;
+
+    const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
+    const float rel = sampleDepthAt(depthMap, px);
+    if (rel < 1e-4f) return false;
+
+    const double measured = static_cast<double>(rel) * depthAnchor;
+    if (std::abs(measured - expectedDepth) > kDepthMatchTol * expectedDepth) return false;
+
+    if (m_usingLiDAR && !confidenceMap.empty()) {
+        const int cx = std::max(0, std::min(confidenceMap.cols - 1, static_cast<int>(px.x)));
+        const int cy = std::max(0, std::min(confidenceMap.rows - 1, static_cast<int>(px.y)));
+        if (static_cast<int>(confidenceMap.at<uint8_t>(cy, cx)) < kMinLidarConf) return false;
+    }
+
+    return true;
+}
+#endif
 
 // ── Pose fusion ───────────────────────────────────────────────────────────────
 
@@ -369,7 +410,8 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
                                         const cv::Mat &rvec,
                                         const cv::Mat &tvec,
                                         const cv::Mat &depthMap,
-                                        double         depthAnchor)
+                                        double         depthAnchor,
+                                        const cv::Mat &confidenceMap)
 {
     cv::Mat R;
     cv::Rodrigues(rvec, R);
@@ -432,9 +474,59 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         if (ptVis[RAY_SAMPLES]) // tgt == pts[RAY_SAMPLES], already tested above
             m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
 
+#ifdef Q_OS_IOS
+        // Lock-and-project: once N consecutive high-quality frames agree on the same
+        // Leksell-space point, freeze it there — no more depth sampling each frame.
+        LockedIncision &lock = m_lockedIncision[i];
+        if (lock.locked) {
+            m_renderer->drawIncisionMarker(lock.leksellPt, m_K, rvec, tvec);
+        } else {
+            auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
+            if (hit.has_value()) {
+                if (checkIncisionQuality(*hit, rvec, tvec, depthAnchor, depthMap, confidenceMap)) {
+                    if (lock.streakCount == 0) {
+                        lock.streakSum   = *hit;
+                        lock.streakCount = 1;
+                    } else {
+                        const cv::Point3d avg = {
+                            lock.streakSum.x / lock.streakCount,
+                            lock.streakSum.y / lock.streakCount,
+                            lock.streakSum.z / lock.streakCount
+                        };
+                        const cv::Point3d diff = {
+                            hit->x - avg.x, hit->y - avg.y, hit->z - avg.z
+                        };
+                        const double dist = std::sqrt(
+                            diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
+                        if (dist < kIncisionLockRadius) {
+                            lock.streakSum  += *hit;
+                            lock.streakCount++;
+                        } else {
+                            lock.streakSum   = *hit;
+                            lock.streakCount = 1;
+                        }
+                    }
+                    if (lock.streakCount >= kIncisionLockFrames) {
+                        lock.leksellPt = {
+                            lock.streakSum.x / lock.streakCount,
+                            lock.streakSum.y / lock.streakCount,
+                            lock.streakSum.z / lock.streakCount
+                        };
+                        lock.locked = true;
+                    }
+                } else {
+                    lock.streakCount = 0;
+                }
+                m_renderer->drawIncisionMarker(*hit, m_K, rvec, tvec);
+            } else {
+                lock.streakCount = 0;
+            }
+        }
+#else
         auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
         if (hit.has_value())
             m_renderer->drawIncisionMarker(hit.value(), m_K, rvec, tvec);
+#endif
     }
 }
 
@@ -457,6 +549,7 @@ void AppController::resetARRegistration()
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
     m_prevWorldTCamera    = cv::Mat();
     m_lowFeatFrames       = 0;
+    for (auto &lock : m_lockedIncision) lock = LockedIncision{};
     if (!m_streakPoses.empty()) {
         m_streakPoses.clear();
         emit calibrationProgressChanged(false);
@@ -482,10 +575,11 @@ void AppController::onTrackingQualityChanged(int state)
         resetARRegistration();
 }
 
-void AppController::onLidarDepth(const cv::Mat &depthMetric)
+void AppController::onLidarDepth(const cv::Mat &depthMetric, const cv::Mat &confidence)
 {
     std::lock_guard<std::mutex> lk(m_depthMutex);
     m_depthMapReady = depthMetric;
+    m_confidenceMap = confidence;
 }
 
 void AppController::onARFrame(const cv::Mat &frame,
@@ -622,10 +716,11 @@ void AppController::onARFrame(const cv::Mat &frame,
     m_prevWorldTCamera = world_T_camera_cv.clone();
 
     // ── Depth map ─────────────────────────────────────────────────────────────
-    cv::Mat depthMap;
+    cv::Mat depthMap, confidenceMap;
     {
         std::lock_guard<std::mutex> lk(m_depthMutex);
-        depthMap = m_depthMapReady;
+        depthMap      = m_depthMapReady;
+        confidenceMap = m_confidenceMap;
     }
 
     if (m_mlDepthEnabled && !m_usingLiDAR
@@ -697,6 +792,25 @@ void AppController::onARFrame(const cv::Mat &frame,
             std::snprintf(buf, sizeof(buf), "drift guard: %d / 10", m_lowFeatFrames);
             dbg(buf, m_lowFeatFrames == 0);
         }
+        if (!m_T_world_leksell.empty()) {
+            const char *const sides[2] = {"L", "R"};
+            for (int i = 0; i < 2; ++i) {
+                if (!m_lines[i]) continue;
+                char buf[64];
+                const LockedIncision &lock = m_lockedIncision[i];
+                if (lock.locked) {
+                    std::snprintf(buf, sizeof(buf), "incision %s: LOCKED", sides[i]);
+                    dbg(buf, true);
+                } else if (lock.streakCount > 0) {
+                    std::snprintf(buf, sizeof(buf), "incision %s: streak %d / %d",
+                                  sides[i], lock.streakCount, kIncisionLockFrames);
+                    dbg(buf, false);
+                } else {
+                    std::snprintf(buf, sizeof(buf), "incision %s: searching", sides[i]);
+                    dbg(buf, false);
+                }
+            }
+        }
         {
             char buf[64];
             if (m_T_world_leksell.empty()) {
@@ -719,6 +833,11 @@ void AppController::onARFrame(const cv::Mat &frame,
         dbg(depthMap.empty() ? "depthMap: EMPTY" :
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());
+        if (m_usingLiDAR)
+            dbg(confidenceMap.empty() ? "conf map: EMPTY" :
+                "conf map: " + std::to_string(confidenceMap.cols) + "x"
+                              + std::to_string(confidenceMap.rows),
+                !confidenceMap.empty());
     }
 
     // Depth visualization overlay: red = close, blue = far.
@@ -746,7 +865,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f);
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
-        renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor);
+        renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor, confidenceMap);
     } else {
         renderOverlayOnto(out, rvec, tvec);
     }

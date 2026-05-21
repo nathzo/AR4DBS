@@ -60,7 +60,7 @@ public slots:
 
     // LiDAR integration — connected to ARKitSession signals.
     void onLidarAvailable(bool available);
-    void onLidarDepth(const cv::Mat &depthMetric);
+    void onLidarDepth(const cv::Mat &depthMetric, const cv::Mat &confidence);
 
     // ARTrackingState mirror for the debug overlay: 0=normal, 1=limited, 2=unavailable.
     void onTrackingQualityChanged(int state);
@@ -86,11 +86,14 @@ private:
 
     // Occlusion-aware overlay. depthAnchor = metric_depth_tag × rel_depth_tag;
     // used by both onNewFrame (desktop) and onARFrame (iOS).
+    // confidenceMap is the LiDAR ARConfidenceLevel map (CV_8U, values 0/1/2);
+    // pass empty Mat on non-LiDAR paths — the confidence gate is skipped automatically.
     void renderWithOcclusion(cv::Mat       &out,
                              const cv::Mat &rvec,
                              const cv::Mat &tvec,
                              const cv::Mat &depthMap,
-                             double         depthAnchor);
+                             double         depthAnchor,
+                             const cv::Mat &confidenceMap = cv::Mat());
 
     // Walks the trajectory and returns the first point where the line enters
     // the head surface. depthAnchor = metric_depth_tag × rel_depth_tag.
@@ -100,6 +103,17 @@ private:
         const cv::Mat     &tvec,
         double             depthAnchor,
         const IncisionLine &line) const;
+
+#ifdef Q_OS_IOS
+    // Returns true when the candidate incision point is depth-consistent and
+    // (on LiDAR) has high sensor confidence — used to gate the locking streak.
+    bool checkIncisionQuality(const cv::Point3d &pt,
+                              const cv::Mat     &rvec,
+                              const cv::Mat     &tvec,
+                              double             depthAnchor,
+                              const cv::Mat     &depthMap,
+                              const cv::Mat     &confidenceMap) const;
+#endif
 
 #ifdef Q_OS_IOS
     bool   meetsInitConditions(const std::vector<TagPose> &detections,
@@ -155,6 +169,23 @@ private:
 
     static constexpr double kAnchorAlpha = 0.05;
 
+    // ── Incision marker locking ──────────────────────────────────────────────
+    // Once N consecutive depth-consistent, high-confidence frames agree on the
+    // same 3-D point, it is stored in Leksell space and projected each frame
+    // without further depth sampling — stable on hair and at any camera distance.
+    struct LockedIncision {
+        cv::Point3d leksellPt;
+        bool        locked      = false;
+        int         streakCount = 0;
+        cv::Point3d streakSum;
+    };
+    LockedIncision m_lockedIncision[2]; // [0]=left, [1]=right
+
+    static constexpr int    kIncisionLockFrames = 5;    // consecutive qualifying frames to lock
+    static constexpr double kIncisionLockRadius = 0.003; // 3 mm coherence window (metres)
+    static constexpr double kDepthMatchTol      = 0.05;  // 5% depth agreement required
+    static constexpr int    kMinLidarConf       = 2;     // ARConfidenceLevelHigh
+
     // ── CoreML / LiDAR depth ─────────────────────────────────────────────────
     std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
     bool   m_usingLiDAR     = false;
@@ -164,6 +195,7 @@ private:
     std::atomic<bool> m_depthInFlight{false};
     std::mutex        m_depthMutex;
     cv::Mat           m_depthMapReady;
+    cv::Mat           m_confidenceMap; // ARConfidenceLevel map, guarded by m_depthMutex
 
     std::atomic<bool> m_depthModelLoading{false};
     std::atomic<bool> m_depthModelReady{false};

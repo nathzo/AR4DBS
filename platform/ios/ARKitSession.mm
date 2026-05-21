@@ -128,7 +128,34 @@ struct ARKitSession::Impl {
                    cv::Size(impl->cameraWidth, impl->cameraHeight),
                    0, 0, cv::INTER_LINEAR);
 
-        emit impl->q->lidarDepthReady(depthScaled);
+        // Extract per-pixel confidence (ARConfidenceLevel: 0=low, 1=medium, 2=high).
+        // Format is kCVPixelFormatType_OneComponent8 — one uint8 per pixel.
+        // Use INTER_NEAREST: confidence values are discrete enum labels, not scalars.
+        cv::Mat confidenceScaled;
+        if (frame.sceneDepth.confidenceMap != nil) {
+            CVPixelBufferRef confBuf = frame.sceneDepth.confidenceMap;
+            CVPixelBufferLockBaseAddress(confBuf, kCVPixelBufferLock_ReadOnly);
+
+            const size_t  cw      = CVPixelBufferGetWidth(confBuf);
+            const size_t  ch      = CVPixelBufferGetHeight(confBuf);
+            const size_t  confBPR = CVPixelBufferGetBytesPerRow(confBuf);
+            const uint8_t *base   = static_cast<const uint8_t *>(
+                                        CVPixelBufferGetBaseAddress(confBuf));
+
+            cv::Mat confRaw(static_cast<int>(ch), static_cast<int>(cw), CV_8U);
+            for (size_t r = 0; r < ch; ++r)
+                memcpy(confRaw.ptr<uint8_t>(static_cast<int>(r)),
+                       base + r * confBPR,
+                       cw * sizeof(uint8_t));
+
+            CVPixelBufferUnlockBaseAddress(confBuf, kCVPixelBufferLock_ReadOnly);
+
+            cv::resize(confRaw, confidenceScaled,
+                       cv::Size(impl->cameraWidth, impl->cameraHeight),
+                       0, 0, cv::INTER_NEAREST);
+        }
+
+        emit impl->q->lidarDepthReady(depthScaled, confidenceScaled);
     }
 }
 
