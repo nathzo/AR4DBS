@@ -33,46 +33,65 @@ ScanScreen::ScanScreen(QWidget *parent)
 {
     setStyleSheet("background-color: black;");
 
+    // Root: vertical in Qt-portrait space.
+    // Qt-top  → physical LEFT  in landscape  (camera fill)
+    // Qt-bottom → physical RIGHT in landscape  (controls panel)
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Camera preview
+    // ── Camera preview ────────────────────────────────────────────────────────
+    // stretch=1 so it fills all space above the controls panel.
     m_impl->preview = new GLWidget(this);
     root->addWidget(m_impl->preview, 1);
 
-    // Status bar
+    // ── Controls panel ────────────────────────────────────────────────────────
+    // This strip sits at Qt-bottom → appears as the RIGHT side panel when the
+    // phone is held in landscape.  Its Qt height is the panel's landscape width;
+    // setMinimumHeight ensures it is wide enough to be a proper side panel.
+    //
+    // Within the QHBoxLayout the Qt x-axis maps to the landscape vertical axis:
+    //   Qt-left  = landscape top    → status overlay
+    //   Qt-centre                   → Capturer button
+    //   Qt-right = landscape bottom → Retour button
+    auto *ctrlPanel = new QWidget(this);
+
+    auto *ctrlLayout = new QHBoxLayout(ctrlPanel);
+    ctrlLayout->setContentsMargins(16, 8, 16, 16);
+    ctrlLayout->setSpacing(0);
+
+    // Status overlay — landscape top (Qt left)
     m_impl->status = new QLabel(
         PlanScanner::isAvailable()
             ? "Pointez l'écran Medtronic et appuyez sur Capturer"
             : "OCR non disponible — saisissez les coordonnées manuellement",
-        this);
+        ctrlPanel);
     m_impl->status->setAlignment(Qt::AlignCenter);
+    m_impl->status->setWordWrap(true);
     m_impl->status->setStyleSheet(
         "color: #75D0C5; background: rgba(117,208,197,50); padding: 6px; font-size: 12pt;");
-    root->addWidget(m_impl->status);
+    ctrlLayout->addWidget(m_impl->status, 1, Qt::AlignVCenter);  // stretch=1, fills top region
 
-    // Buttons row
-    auto *btnRow = new QHBoxLayout;
-    btnRow->setContentsMargins(16, 8, 16, 16);
-    root->addLayout(btnRow);
-
-    auto *btnBack = new QPushButton("← Retour", this);
-    btnBack->setStyleSheet(
-        "QPushButton { background:#75D0C5; color: black; border-radius:8px;"
-        "              padding:12px 24px; font-family:'Arial'; font-size:13pt; font-weight:bold; }"
-        "QPushButton:pressed { background:#5ab8ae; }");
-
+    // Capturer — landscape centre
     auto *btnCapture = new QPushButton(
-        PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement", this);
+        PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement", ctrlPanel);
     btnCapture->setStyleSheet(
         "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
         "              padding:12px 32px; font-family:'Arial'; font-size:14pt; font-weight:bold; }"
         "QPushButton:pressed { background:#a33c3f; }");
+    ctrlLayout->addStretch(1);
+    ctrlLayout->addWidget(btnCapture, 0, Qt::AlignCenter);
+    ctrlLayout->addStretch(1);
 
-    btnRow->addWidget(btnBack);
-    btnRow->addStretch();
-    btnRow->addWidget(btnCapture);
+    // Retour — landscape bottom (Qt right)
+    auto *btnBack = new QPushButton("← Retour", ctrlPanel);
+    btnBack->setStyleSheet(
+        "QPushButton { background:#8A8C8F; color: black; border-radius:8px;"
+        "              padding:12px 24px; font-family:'Arial'; font-size:13pt; font-weight:bold; }"
+        "QPushButton:pressed { background:#6d6f72; }");
+    ctrlLayout->addWidget(btnBack, 1, Qt::AlignVCenter);  // stretch=1, fills bottom region
+
+    root->addWidget(ctrlPanel);
 
     connect(btnBack,    &QPushButton::clicked, this, &ScanScreen::cancelled);
     connect(btnCapture, &QPushButton::clicked, this, &ScanScreen::onCapture);

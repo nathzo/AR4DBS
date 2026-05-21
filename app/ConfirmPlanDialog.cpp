@@ -6,6 +6,7 @@
 #include <QGroupBox>
 #include <QTabWidget>
 #include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QLabel>
@@ -33,7 +34,16 @@ static constexpr float kConfidenceThreshold = 0.99f;
 
 class AutoSelectSpinBox : public QDoubleSpinBox {
 public:
-    using QDoubleSpinBox::QDoubleSpinBox;
+    explicit AutoSelectSpinBox(QWidget *parent = nullptr)
+        : QDoubleSpinBox(parent)
+    {
+        // On iOS the soft keyboard's QInputMethodEvent is delivered directly
+        // to the internal QLineEdit (the actual UIKit first responder), never
+        // reaching QDoubleSpinBox::inputMethodEvent.  Installing an event
+        // filter here lets us intercept and normalise the decimal separator
+        // before the QLineEdit sees the event.
+        lineEdit()->installEventFilter(this);
+    }
 
     // Wire this spinbox into the scan-mode focus chain.
     // next == nullptr marks this as the last field (Return hides the keyboard).
@@ -48,12 +58,43 @@ public:
 protected:
     void focusInEvent(QFocusEvent *e) override {
         QDoubleSpinBox::focusInEvent(e);
-        QMetaObject::invokeMethod(this, &QAbstractSpinBox::selectAll,
+        // Call selectAll() on the inner QLineEdit directly (not on the
+        // QDoubleSpinBox wrapper) so iOS derives the selection-handle
+        // positions from the QLineEdit's own coordinate system, which is
+        // what it uses when positioning the blue pins.
+        QMetaObject::invokeMethod(this, [this]() { lineEdit()->selectAll(); },
                                   Qt::QueuedConnection);
     }
+
+    // eventFilter intercepts events sent to the internal QLineEdit.
+    bool eventFilter(QObject *obj, QEvent *ev) override {
+        if (obj == lineEdit() && ev->type() == QEvent::InputMethod) {
+            auto *ime = static_cast<QInputMethodEvent *>(ev);
+            const QString commit = ime->commitString();
+            if (!commit.isEmpty()) {
+                const QChar dp  = locale().decimalPoint().at(0);
+                const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',')
+                                                           : QLatin1Char('.');
+                if (commit.contains(alt)) {
+                    // Replace the wrong decimal separator, then re-deliver
+                    // the corrected event to the QLineEdit.  Returning true
+                    // discards the original so QAbstractSpinBox never sees it.
+                    QString fixed = commit;
+                    fixed.replace(alt, dp);
+                    QInputMethodEvent mapped(ime->preeditString(), ime->attributes());
+                    mapped.setCommitString(fixed,
+                                          ime->replacementStart(),
+                                          ime->replacementLength());
+                    QCoreApplication::sendEvent(lineEdit(), &mapped);
+                    return true;
+                }
+            }
+        }
+        return QDoubleSpinBox::eventFilter(obj, ev);
+    }
+
     void keyPressEvent(QKeyEvent *e) override {
-        // Normalize both , and . to the locale's decimal-point character.
-        // (Hardware keyboard path — soft-keyboard input arrives via inputMethodEvent.)
+        // Hardware keyboard: normalise , and . to the locale decimal point.
         if (e->key() == Qt::Key_Comma || e->key() == Qt::Key_Period) {
             const QChar dp = locale().decimalPoint().at(0);
             const int key  = (dp == QLatin1Char('.')) ? Qt::Key_Period : Qt::Key_Comma;
@@ -73,27 +114,6 @@ protected:
             return;
         }
         QDoubleSpinBox::keyPressEvent(e);
-    }
-
-    // Soft-keyboard (iOS) input arrives here, not via keyPressEvent.
-    void inputMethodEvent(QInputMethodEvent *e) override {
-        const QString commit = e->commitString();
-        if (!commit.isEmpty()) {
-            const QChar dp  = locale().decimalPoint().at(0);
-            const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',')
-                                                       : QLatin1Char('.');
-            if (commit.contains(alt)) {
-                QString fixed = commit;
-                fixed.replace(alt, dp);
-                QInputMethodEvent mapped(e->preeditString(), e->attributes());
-                mapped.setCommitString(fixed,
-                                       e->replacementStart(),
-                                       e->replacementLength());
-                QDoubleSpinBox::inputMethodEvent(&mapped);
-                return;
-            }
-        }
-        QDoubleSpinBox::inputMethodEvent(e);
     }
 
 private:
