@@ -3,6 +3,7 @@
 #include <QThread>
 #include "core/math/SurgicalPlan.h"
 
+class QLabel;
 class QStackedWidget;
 class QPushButton;
 class GLWidget;
@@ -47,6 +48,12 @@ private:
     QPushButton    *m_btnEditPlan      = nullptr;
     QPushButton    *m_btnBackToMenu    = nullptr;
     SurgicalPlan    m_currentPlan;
+
+#ifdef Q_OS_IOS
+    QLabel *m_calibLabel = nullptr;
+    bool    m_arLocked   = false;
+    void    setArLocked(bool locked);
+#endif
 
 #ifdef Q_OS_IOS
     ARKitSession   *m_arCamera   = nullptr;

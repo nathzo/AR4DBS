@@ -3,6 +3,7 @@
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
+#include <QLabel>
 #include <QMessageBox>
 #include <QCoreApplication>
 #include <QPushButton>
@@ -120,6 +121,9 @@ MainWindow::MainWindow(QWidget *parent)
             m_controller, &AppController::onLidarAvailable);
     connect(m_arCamera, &ARKitSession::lidarDepthReady,
             m_controller, &AppController::onLidarDepth);
+    connect(m_controller, &AppController::lockStateChanged,
+            this, [this](bool locked) { setArLocked(locked); },
+            Qt::QueuedConnection);
     connect(m_arCamera, &ARKitSession::frameReady, this,
             [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera) {
         if (!busy->testAndSetAcquire(0, 1)) return;
@@ -151,6 +155,14 @@ MainWindow::MainWindow(QWidget *parent)
     m_glWidget = new GLWidget(arContainer);
     arLayout->addWidget(m_glWidget, 1);
 
+#ifdef Q_OS_IOS
+    // Calibration status bar — sits between the camera preview and the buttons.
+    m_calibLabel = new QLabel(arContainer);
+    m_calibLabel->setAlignment(Qt::AlignCenter);
+    m_calibLabel->setWordWrap(true);
+    arLayout->addWidget(m_calibLabel);
+#endif
+
     // Button row at the bottom of the AR view — same shape/layout as ScanScreen
     auto *arBtnRow = new QWidget(arContainer);
     arBtnRow->setStyleSheet("background: #000000;");
@@ -176,6 +188,10 @@ MainWindow::MainWindow(QWidget *parent)
     arBtnLayout->addWidget(m_btnEditPlan);
     arLayout->addWidget(arBtnRow);
 
+#ifdef Q_OS_IOS
+    setArLocked(false); // set initial label text and button text
+#endif
+
     connect(m_controller, &AppController::frameReady,
             m_glWidget,   &GLWidget::setFrame);
     connect(m_btnEditPlan, &QPushButton::clicked,
@@ -186,8 +202,16 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
 #ifdef FEATURE_PLAN_SCANNER
-    // ── Back-to-menu button (AR → start screen) ───────────────────────────────
+    // ── Back / Recalibrate button ─────────────────────────────────────────────
     connect(m_btnBackToMenu, &QPushButton::clicked, this, [this]() {
+#ifdef Q_OS_IOS
+        if (m_arLocked) {
+            // Reset the anchor and re-enter the init phase without leaving AR.
+            QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
+                                      Qt::QueuedConnection);
+            return;
+        }
+#endif
         m_arCamera->stop();
         m_btnEditPlan->setVisible(false);
 #ifdef Q_OS_IOS
@@ -280,10 +304,10 @@ void MainWindow::startAR()
 {
     m_stack->setCurrentIndex(2);
 #ifdef Q_OS_IOS
-    // Re-register the surgical frame on each new AR session start so that
-    // returning from the menu and re-entering AR picks up a fresh anchor.
-    // Use QueuedConnection so this runs on the controller thread, not the main
-    // thread — avoids a data race with any onARFrame still draining from the queue.
+    // Reset UI immediately so the label shows "Calibration requise" as soon as
+    // the AR view appears, before the queued resetARRegistration runs on the
+    // controller thread.
+    setArLocked(false);
     QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
                               Qt::QueuedConnection);
 #endif
@@ -325,9 +349,31 @@ void MainWindow::editPlan()
     }
 
 #ifdef Q_OS_IOS
+    setArLocked(false);
     QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
                               Qt::QueuedConnection);
 #endif
     m_arCamera->start();
 }
+
+#ifdef Q_OS_IOS
+void MainWindow::setArLocked(bool locked)
+{
+    m_arLocked = locked;
+    if (locked) {
+        m_calibLabel->setText("Calibration réussie — repères verrouillés");
+        m_calibLabel->setStyleSheet(
+            "color: #75D0C5; background: rgba(117,208,197,50);"
+            "padding: 6px; font-size: 12pt;");
+        m_btnBackToMenu->setText("Recalibrer");
+    } else {
+        m_calibLabel->setText("Calibration requise — placez la caméra face aux repères");
+        m_calibLabel->setStyleSheet(
+            "color: #DE5F5E; background: rgba(222,95,94,50);"
+            "padding: 6px; font-size: 12pt;");
+        m_btnBackToMenu->setText("← Retour");
+    }
+}
+#endif
+
 #endif

@@ -65,6 +65,9 @@ public slots:
 
 signals:
     void frameReady(const cv::Mat &annotated);
+#ifdef Q_OS_IOS
+    void lockStateChanged(bool locked);
+#endif
 
 private:
     cv::Mat                        loadCalibration(const QString &path);
@@ -94,6 +97,14 @@ private:
         double             depthAnchor,
         const IncisionLine &line) const;
 
+#ifdef Q_OS_IOS
+    bool   meetsInitConditions(const std::vector<TagPose> &detections,
+                               const cv::Mat              &T_from_tags) const;
+    double computeReprojError(const std::vector<TagPose>  &detections,
+                              const cv::Mat               &rvec,
+                              const cv::Mat               &tvec) const;
+#endif
+
     cv::Mat m_K;
     cv::Mat m_dist;
     float   m_markerSize = 0.05f; // overwritten from tag_config.json marker_size_m
@@ -113,54 +124,29 @@ private:
     bool m_showDepthOverlay = false;
 
 #ifdef Q_OS_IOS
-    cv::Mat m_T_cam_frame_filt;    // filtered pose state; empty until first tag seen
-    cv::Mat m_world_T_camera_prev; // previous ARKit pose, for computing Δ
+    // ── Anchor-locking state ─────────────────────────────────────────────────
+    // Empty until both tags are seen face-on with low reprojection error.
+    // Once set, the overlay runs purely from ARKit world tracking.
+    // Cleared by resetARRegistration() to re-enter the init phase.
+    cv::Mat m_T_world_leksell;
 
-    // CoreML monocular depth estimator (Neural Engine, no LiDAR).
-    std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
+    // Strict thresholds: both conditions must hold simultaneously for the lock
+    // to be accepted, ensuring the established coordinates are reliable.
+    static constexpr double kMaxInitAngleCos = 0.966; // cos(15°): nearly face-on
+    static constexpr double kMaxInitReprojPx = 0.8;   // RMS reprojection error cap
 
-    // true when the device has a LiDAR scanner and ARKit is providing scene depth.
-    // When true, CoreML inference is skipped and m_depthAnchor is fixed at 1.0.
-    bool m_usingLiDAR = false;
-
-    // Enables CoreML monocular depth on non-LiDAR devices.
-    // Currently false: depth estimation requires LiDAR. Set to true to re-enable
-    // Depth Anything v2 fallback on non-LiDAR iPhones.
-    bool m_mlDepthEnabled = false;
-
-    // Scale anchor: converts the depth map to metric metres.
-    //   LiDAR path:          always 1.0 (LiDAR values are already in metres).
-    //   Depth Anything v2:   tagMetricDepth * relTag (disparity convention), EMA-smoothed.
-    double m_depthAnchor = 0.0;
-
-    // Steady-state tag measurement blend weight.
-    // Small = smooth / slow absolute correction; large = fast / noisy.
-    static constexpr double kAlpha      = 0.07;
-    // Number of frames averaged before the first overlay is shown.
-    // Averaging kInitFrames independent measurements reduces noise by
-    // √kInitFrames ≈ 4× compared to a single cold-start frame, so the
-    // overlay appears for the first time already in a stable position.
-    static constexpr int    kInitFrames = 15;
-    // Depth anchor EMA weight. Slow convergence keeps the incision marker
-    // stable across frames even when per-frame relTag sampling is noisy.
     static constexpr double kAnchorAlpha = 0.05;
 
-    // Accumulates T_cam_frame poses during startup.  Once kInitFrames entries
-    // are collected they are averaged in SO(3)+R³ to form the initial filter
-    // state, then the buffer is cleared and normal blending takes over.
-    std::vector<cv::Mat> m_initPoseBuffer;
+    // ── CoreML / LiDAR depth ─────────────────────────────────────────────────
+    std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
+    bool   m_usingLiDAR     = false;
+    bool   m_mlDepthEnabled = false;
+    double m_depthAnchor    = 0.0;
 
-    // Async depth inference — background thread, never blocks the camera loop.
-    // m_depthInFlight: true while a background estimate() call is running.
-    // m_depthMapReady: last completed depth map (portrait orientation), guarded by mutex.
     std::atomic<bool> m_depthInFlight{false};
     std::mutex        m_depthMutex;
     cv::Mat           m_depthMapReady;
 
-    // Model loading is async (CoreML ANE compilation can take >20 s on first run).
-    // m_depthModelLoading: true while the background load thread is alive.
-    // m_depthModelReady:   set to true (release) once m_iosDepth is safe to use.
-    // Always check m_depthModelReady (acquire) before accessing m_iosDepth on any thread.
     std::atomic<bool> m_depthModelLoading{false};
     std::atomic<bool> m_depthModelReady{false};
 #endif

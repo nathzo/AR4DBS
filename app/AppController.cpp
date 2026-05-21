@@ -450,10 +450,9 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    m_T_cam_frame_filt    = cv::Mat();
-    m_world_T_camera_prev = cv::Mat();
-    m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
-    m_initPoseBuffer.clear();
+    m_T_world_leksell = cv::Mat();
+    m_depthAnchor     = m_usingLiDAR ? 1.0 : 0.0;
+    emit lockStateChanged(false);
 }
 
 void AppController::onLidarAvailable(bool available)
@@ -476,139 +475,63 @@ void AppController::onARFrame(const cv::Mat &frame,
     m_frameTimer.restart();
     const bool anyLine = m_lines[0] || m_lines[1];
 
-    // ── 1. Prediction: propagate last filtered pose using ARKit's Δpose ──────
-    // ARKit gives accurate relative motion between frames even when its absolute
-    // world position drifts. We use it to predict where the frame is now.
-    cv::Mat T_cam_frame;
-    if (!m_T_cam_frame_filt.empty() && !m_world_T_camera_prev.empty()) {
-        // cam_new_T_cam_old in ARKit space, converted to OpenCV camera space.
-        // kARKitFlip is its own inverse (it is a reflection), so:
-        //   T_opencv = kARKitFlip * T_arkit * kARKitFlip
-        const cv::Mat delta_arkit = world_T_camera.inv() * m_world_T_camera_prev;
-        const cv::Mat delta_cam   = kARKitFlip * delta_arkit * kARKitFlip;
-        T_cam_frame = delta_cam * m_T_cam_frame_filt;
-    }
+    // ARKit → OpenCV camera convention: flip Y and Z.
+    const cv::Mat world_T_camera_cv = kARKitFlip * world_T_camera * kARKitFlip;
 
-    // ── 2. Measurement: detect tags and compute absolute pose ────────────────
-    const auto    detections  = m_tracker->detect(frame);
-    const cv::Mat T_from_tags = fusePoses(detections);
+    // ── Tracking ──────────────────────────────────────────────────────────────
+    cv::Mat T_cam_leksell;
 
-    // ── 3. Update: blend prediction with measurement ─────────────────────────
-    if (!T_from_tags.empty()) {
-        if (T_cam_frame.empty()) {
-            // No ARKit prediction yet — accumulate measurements into a buffer
-            // and initialise from their SO(3) average once kInitFrames poses
-            // are collected.  Averaging eliminates the cold-start transient:
-            // the overlay appears for the first time from a pose that is
-            // √kInitFrames ≈ 4× less noisy than any individual IPPE frame,
-            // so it is already stable when it first becomes visible.
-            m_initPoseBuffer.push_back(T_from_tags.clone());
+    if (m_T_world_leksell.empty()) {
+        // Init phase: detect tags and test quality conditions for locking.
+        const auto    detections  = m_tracker->detect(frame);
+        const cv::Mat T_from_tags = fusePoses(detections);
 
-            if (static_cast<int>(m_initPoseBuffer.size()) >= kInitFrames) {
-                // Average the buffered poses in SO(3) + R³.
-                cv::Mat RSum    = cv::Mat::zeros(3, 3, CV_64F);
-                cv::Mat tvecSum = cv::Mat::zeros(3, 1, CV_64F);
-                for (const auto &T : m_initPoseBuffer) {
-                    cv::Mat r, t, R;
-                    PoseUtils::fromTransform(T, r, t);
-                    cv::Rodrigues(r, R);
-                    RSum    += R;
-                    tvecSum += t.reshape(1, 3);
-                }
-                const double n = static_cast<double>(m_initPoseBuffer.size());
-                cv::Mat U, S, Vt;
-                cv::SVD::compute(RSum, S, U, Vt);
-                if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
-                cv::Mat rAvg;
-                cv::Rodrigues(U * Vt, rAvg);
-                T_cam_frame = PoseUtils::toTransform(rAvg, tvecSum / n);
-                m_initPoseBuffer.clear();
+        // Update depth anchor from visible tags (Depth Anything v2 only).
+        if (!m_usingLiDAR && !detections.empty()) {
+            cv::Mat depthForAnchor;
+            {
+                std::lock_guard<std::mutex> lk(m_depthMutex);
+                depthForAnchor = m_depthMapReady;
             }
-            // Buffer not yet full: T_cam_frame stays empty → overlay hidden,
-            // m_world_T_camera_prev is still updated at step 4 below.
-        } else {
-            // Complementary filter — blend in SO(3), not in Rodrigues space.
-            // Linear rvec blending fails when |rvec| ≈ π because the same
-            // rotation has two representations (rvec and -rvec); blending across
-            // that sign boundary produces a nonsense rotation (~180° flip).
-            // Blending rotation matrices and re-orthogonalizing via SVD is safe.
-            cv::Mat r_pred, t_pred, r_meas, t_meas;
-            PoseUtils::fromTransform(T_cam_frame, r_pred, t_pred);
-            PoseUtils::fromTransform(T_from_tags, r_meas, t_meas);
-
-            cv::Mat R_pred, R_meas;
-            cv::Rodrigues(r_pred, R_pred);
-            cv::Rodrigues(r_meas, R_meas);
-            cv::Mat R_raw = (1.0 - kAlpha) * R_pred + kAlpha * R_meas;
-
-            // SVD projects the blended matrix back onto SO(3).
-            // The det check flips a reflection (det=-1) to a proper rotation.
-            cv::Mat U, S, Vt;
-            cv::SVD::compute(R_raw, S, U, Vt);
-            if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
-            cv::Mat r_fused;
-            cv::Rodrigues(U * Vt, r_fused);
-
-            const cv::Mat t_fused = (1.0 - kAlpha) * t_pred + kAlpha * t_meas;
-            T_cam_frame = PoseUtils::toTransform(r_fused, t_fused);
+            if (!depthForAnchor.empty()) {
+                double anchorSum   = 0.0;
+                int    anchorCount = 0;
+                for (const auto &det : detections) {
+                    const double      depth = det.tvec.at<double>(2);
+                    const cv::Point2f px    = PoseUtils::project(
+                        cv::Point3d(0,0,0), m_K, det.rvec, det.tvec, m_dist);
+                    const float rel = sampleDepthAt(depthForAnchor, px);
+                    if (rel > 1e-4f) {
+                        anchorSum += depth / rel;
+                        ++anchorCount;
+                    }
+                }
+                if (anchorCount > 0) {
+                    const double newAnchor = anchorSum / anchorCount;
+                    m_depthAnchor = (m_depthAnchor < 1e-9)
+                        ? newAnchor
+                        : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
+                }
+            }
         }
+
+        if (meetsInitConditions(detections, T_from_tags)) {
+            m_T_world_leksell = world_T_camera_cv.inv() * T_from_tags;
+            emit lockStateChanged(true);
+        }
+        // T_cam_leksell stays empty → overlay hidden until locked.
+    } else {
+        // Locked phase: derive pose purely from ARKit world tracking.
+        T_cam_leksell = world_T_camera_cv.inv() * m_T_world_leksell;
     }
-    // If no prediction and no tags: T_cam_frame stays empty → no overlay.
 
-    // ── 4. Store state for next frame ────────────────────────────────────────
-    m_world_T_camera_prev = world_T_camera.clone();
-    m_T_cam_frame_filt    = T_cam_frame.clone(); // empty clone is still empty
-
-    // ── 5. Depth estimation and anchor update ────────────────────────────────
-    // Inference runs on a background thread so the camera loop is never blocked.
-    // The camera thread always reads the last completed depth map (m_depthMapReady)
-    // and dispatches a new inference only when the previous one has finished.
-    const bool tagsVisible = !detections.empty();
-
-    // Grab the latest completed depth map (non-blocking).
+    // ── Depth map ─────────────────────────────────────────────────────────────
     cv::Mat depthMap;
     {
         std::lock_guard<std::mutex> lk(m_depthMutex);
         depthMap = m_depthMapReady;
     }
 
-    // Update metric anchor from tag geometry — only for Depth Anything v2.
-    // LiDAR values are already in metres; anchor stays fixed at 1.0.
-    // Average over all visible tags so ordering instability and per-tag depth
-    // noise don't bias the anchor toward whichever tag lands first in the array.
-    if (!m_usingLiDAR && !depthMap.empty() && tagsVisible) {
-        double anchorSum   = 0.0;
-        int    anchorCount = 0;
-        for (const auto &det : detections) {
-            // Use the Z-component of tvec (perpendicular depth), not Euclidean
-            // distance. Depth models output Z-depth; expectedDepth is also Z.
-            // Using cv::norm() would inflate the anchor by 1/cos(angle) for
-            // off-axis tags, making every surfaceDepth read too large.
-            const double      depth = det.tvec.at<double>(2);
-            const cv::Point2f px    = PoseUtils::project(
-                cv::Point3d(0,0,0), m_K, det.rvec, det.tvec, m_dist);
-            const float rel = sampleDepthAt(depthMap, px);
-            if (rel > 1e-4f) {
-                // Depth convention (larger = farther): anchor = tagZDepth / relTag.
-                // For a well-calibrated metric model rel ≈ depth so anchor ≈ 1.0;
-                // averaging across all visible tags reduces per-tag sampling noise.
-                anchorSum += depth / rel;
-                ++anchorCount;
-            }
-        }
-        if (anchorCount > 0) {
-            const double newAnchor = anchorSum / anchorCount;
-            m_depthAnchor = (m_depthAnchor < 1e-9)
-                ? newAnchor
-                : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
-        }
-    }
-
-    // Dispatch CoreML inference only when explicitly enabled (m_mlDepthEnabled),
-    // LiDAR is not providing depth, and the model has finished loading.
-    // m_mlDepthEnabled is false by default: on non-LiDAR devices depth estimation
-    // is disabled entirely (no overlay, no occlusion). Set it to true to re-enable
-    // the Depth Anything v2 fallback.
     if (m_mlDepthEnabled && !m_usingLiDAR
             && m_depthModelReady.load(std::memory_order_acquire)
             && !m_depthInFlight.exchange(true)) {
@@ -622,11 +545,8 @@ void AppController::onARFrame(const cv::Mat &frame,
         }).detach();
     }
 
-    // ── 6. Render ─────────────────────────────────────────────────────────────
-    // Fast path: nothing to draw, emit the original frame without cloning.
-    // T_cam_frame is empty until the init buffer (kInitFrames measurements)
-    // has been averaged, so the overlay is naturally hidden until stable.
-    if (!m_showDepthOverlay && (T_cam_frame.empty() || !anyLine)) {
+    // ── Render ─────────────────────────────────────────────────────────────────
+    if (!m_showDepthOverlay && (T_cam_leksell.empty() || !anyLine)) {
         m_lastFrameMs = m_frameTimer.elapsed();
         emit frameReady(frame);
         return;
@@ -655,8 +575,8 @@ void AppController::onARFrame(const cv::Mat &frame,
             : m_depthModelLoading.load() ? "iosDepth model: loading..."
             : "iosDepth model: NULL",
             m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
-        dbg(tagsVisible ? "tags: VISIBLE" : "tags: not visible",
-            tagsVisible);
+        dbg(!m_T_world_leksell.empty() ? "tracking: LOCKED" : "tracking: searching...",
+            !m_T_world_leksell.empty());
         if (!m_usingLiDAR && m_mlDepthEnabled)
             dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
                 !m_depthInFlight.load());
@@ -666,15 +586,9 @@ void AppController::onARFrame(const cv::Mat &frame,
     }
 
     // Depth visualization overlay: red = close, blue = far.
-    // Rendered first so it appears under trajectory lines and frame axes,
-    // and shows even before the surgical frame is registered (no tags yet).
     if (m_showDepthOverlay && !depthMap.empty()) {
-        // Normalize per-frame for visualization only (does not affect computation).
         cv::Mat vizDepth;
         cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
-
-        // Both LiDAR and Depth Anything v2 Metric use depth convention (larger = farther).
-        // Invert so close surfaces map to high values → red in JET.
         cv::Mat invDepth = 1.0f - vizDepth;
         cv::Mat depth8u, colored;
         invDepth.convertTo(depth8u, CV_8U, 255.0);
@@ -682,19 +596,18 @@ void AppController::onARFrame(const cv::Mat &frame,
         cv::addWeighted(out, 0.7, colored, 0.3, 0, out);
     }
 
-    // T_cam_frame is empty while the init buffer is filling — overlay hidden.
-    if (T_cam_frame.empty() || !anyLine) {
+    if (T_cam_leksell.empty() || !anyLine) {
         m_lastFrameMs = m_frameTimer.elapsed();
         emit frameReady(out);
         return;
     }
 
     cv::Mat rvec, tvec;
-    PoseUtils::fromTransform(T_cam_frame, rvec, tvec);
+    PoseUtils::fromTransform(T_cam_leksell, rvec, tvec);
 
     m_renderer->beginFrame(out);
     if (m_showDepthOverlay)
-        cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f); // 5 cm frame origin axes
+        cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f);
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
         renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor);
@@ -706,6 +619,72 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     m_lastFrameMs = m_frameTimer.elapsed();
     emit frameReady(out);
+}
+
+bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
+                                        const cv::Mat              &T_from_tags) const
+{
+    if (T_from_tags.empty() || detections.size() < 2) return false;
+
+    int corners = 0;
+    for (const auto &d : detections)
+        corners += static_cast<int>(d.corners.size());
+    if (corners < 8) return false;
+
+    cv::Mat rvec, tvec;
+    PoseUtils::fromTransform(T_from_tags, rvec, tvec);
+
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+    // -R(2,2) = cosine of angle between tag plane normal and camera Z axis.
+    // Near 1.0 means the camera is nearly perpendicular to the tag plane.
+    if (-R.at<double>(2, 2) < kMaxInitAngleCos) return false;
+
+    return computeReprojError(detections, rvec, tvec) <= kMaxInitReprojPx;
+}
+
+double AppController::computeReprojError(const std::vector<TagPose> &detections,
+                                         const cv::Mat              &rvec,
+                                         const cv::Mat              &tvec) const
+{
+    std::vector<cv::Point3f> objPts;
+    std::vector<cv::Point2f> imgPts;
+
+    for (const auto &det : detections) {
+        const TagConfig *cfg = nullptr;
+        for (const auto &c : m_tagConfigs)
+            if (c.id == det.id) { cfg = &c; break; }
+        if (!cfg || det.corners.size() != 4) continue;
+
+        const float h = m_markerSize / 2.f;
+        const cv::Point3f local[4] = {
+            {-h,  h, 0.f}, { h,  h, 0.f},
+            { h, -h, 0.f}, {-h, -h, 0.f}
+        };
+        for (int c = 0; c < 4; ++c) {
+            const cv::Mat p = (cv::Mat_<double>(3,1)
+                << local[c].x, local[c].y, local[c].z);
+            const cv::Mat pf = cfg->R_frame_tag * p + cfg->t_frame_tag.reshape(1, 3);
+            objPts.emplace_back(
+                static_cast<float>(pf.at<double>(0)),
+                static_cast<float>(pf.at<double>(1)),
+                static_cast<float>(pf.at<double>(2)));
+            imgPts.push_back(det.corners[c]);
+        }
+    }
+
+    if (objPts.empty()) return 1e9;
+
+    std::vector<cv::Point2f> projected;
+    cv::projectPoints(objPts, rvec, tvec, m_K, m_dist, projected);
+
+    double err = 0.0;
+    for (size_t i = 0; i < projected.size(); ++i) {
+        const double dx = projected[i].x - imgPts[i].x;
+        const double dy = projected[i].y - imgPts[i].y;
+        err += dx * dx + dy * dy;
+    }
+    return std::sqrt(err / projected.size());
 }
 
 #endif // Q_OS_IOS
