@@ -16,6 +16,8 @@
 #include <QPaintEvent>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QInputMethod>
+#include <functional>
 
 static constexpr float kConfidenceThreshold = 0.99f;
 
@@ -23,10 +25,25 @@ static constexpr float kConfidenceThreshold = 0.99f;
 // Selects all text on focus so the first keystroke replaces the value.
 // Minimum is always -1.0; setValue(-1) shows the special "—" placeholder,
 // indicating a field that was not detected by OCR.
+//
+// In Scan mode each spinbox is wired into a focus chain via chainTo():
+//   Return/Enter → calls onConfirm callback, then focuses the next field.
+//   On the last field (next == nullptr) → hides the virtual keyboard instead.
 
 class AutoSelectSpinBox : public QDoubleSpinBox {
 public:
     using QDoubleSpinBox::QDoubleSpinBox;
+
+    // Wire this spinbox into the scan-mode focus chain.
+    // next == nullptr marks this as the last field (Return hides the keyboard).
+    // onConfirm is called on every Return press, even when the value hasn't
+    // changed, so pre-filled OCR values get confirmed without retyping.
+    void chainTo(QWidget *next, std::function<void()> onConfirm = {}) {
+        m_nextInChain = next;
+        m_inChain     = true;
+        m_onConfirm   = std::move(onConfirm);
+    }
+
 protected:
     void focusInEvent(QFocusEvent *e) override {
         QDoubleSpinBox::focusInEvent(e);
@@ -34,6 +51,7 @@ protected:
                                   Qt::QueuedConnection);
     }
     void keyPressEvent(QKeyEvent *e) override {
+        // Normalize both , and . to the locale's decimal-point character.
         if (e->key() == Qt::Key_Comma || e->key() == Qt::Key_Period) {
             const QChar dp = locale().decimalPoint().at(0);
             const int key  = (dp == QLatin1Char('.')) ? Qt::Key_Period : Qt::Key_Comma;
@@ -41,8 +59,24 @@ protected:
             QDoubleSpinBox::keyPressEvent(&mapped);
             return;
         }
+        // Scan-mode chain: Return/Enter confirms the field and advances focus.
+        if (m_inChain && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+            if (m_onConfirm) m_onConfirm();
+            if (m_nextInChain) {
+                m_nextInChain->setFocus(Qt::TabFocusReason);
+            } else {
+                clearFocus();
+                if (auto *im = QGuiApplication::inputMethod()) im->hide();
+            }
+            return;
+        }
         QDoubleSpinBox::keyPressEvent(e);
     }
+
+private:
+    bool                  m_inChain     = false;
+    QWidget              *m_nextInChain = nullptr;
+    std::function<void()> m_onConfirm;
 };
 
 // Creates a spinbox with -1 as the "not detected" sentinel (shown as " —").
@@ -125,9 +159,8 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     QObject::connect(w.enabled, &QCheckBox::toggled, this,
                      [this](bool) { updateConfirmButton(); });
 
-    // Flag spinboxes with confidence below threshold (includes undetected: conf = -1).
-    auto maybeFlag = [&](QDoubleSpinBox *sb, float conf) {
-        if (conf >= kConfidenceThreshold) return; // high confidence: no flag
+    // Helper: flag a spinbox red and subscribe to value changes to auto-clear.
+    auto doFlag = [&](QDoubleSpinBox *sb) {
         sb->setProperty("flagged", true);
         sb->setStyleSheet(kFlaggedStyle);
         ++m_flaggedCount;
@@ -135,19 +168,32 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
                          this, [this, sb](double) { clearFlag(sb); });
     };
 
-    maybeFlag(w.x,    t.confidence[0]);
-    maybeFlag(w.y,    t.confidence[1]);
-    maybeFlag(w.z,    t.confidence[2]);
-    maybeFlag(w.ring, t.confidence[3]);
-    maybeFlag(w.arc,  t.confidence[4]);
+    if (m_scanMode) {
+        // Scan mode: every field must be explicitly confirmed regardless of
+        // OCR confidence — flag them all.
+        for (auto *sb : { w.x, w.y, w.z, w.ring, w.arc })
+            doFlag(sb);
+    } else {
+        // Edit mode: only flag fields whose OCR confidence is below threshold.
+        auto maybeFlag = [&](QDoubleSpinBox *sb, float conf) {
+            if (conf >= kConfidenceThreshold) return;
+            doFlag(sb);
+        };
+        maybeFlag(w.x,    t.confidence[0]);
+        maybeFlag(w.y,    t.confidence[1]);
+        maybeFlag(w.z,    t.confidence[2]);
+        maybeFlag(w.ring, t.confidence[3]);
+        maybeFlag(w.arc,  t.confidence[4]);
+    }
 
     return w;
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *parent)
-    : QDialog(parent)
+ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
+                                     QWidget *parent)
+    : QDialog(parent), m_scanMode(mode == Mode::Scan)
 {
     setWindowTitle("Confirmer le plan chirurgical");
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
@@ -197,7 +243,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(14);
 
-    // OCR status banner
+    // ── OCR status banner ──────────────────────────────────────────────────────
     auto *banner = new QLabel(this);
     banner->setWordWrap(true);
     if (initial.hasAny()) {
@@ -207,15 +253,9 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         banner->setText("Coordonnées non détectées. Saisissez les valeurs manuellement.");
         banner->setStyleSheet("background: #3a1e1f; color: #c45255; padding: 8px; border-radius: 4px;");
     }
-    mainLayout->addWidget(banner);
 
-    // Create the confirm button early so buildSide can reference m_confirmBtn
-    // through updateConfirmButton() called from the checkbox toggle connection.
-    auto *buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-
-    m_confirmBtn = buttons->button(QDialogButtonBox::Ok);
-    m_confirmBtn->setText("Confirmer");
+    // ── Confirm button — created before buildSide so updateConfirmButton works ─
+    m_confirmBtn = new QPushButton("Confirmer", this);
     m_confirmBtn->setAutoDefault(false);
     m_confirmBtn->setDefault(false);
     m_confirmBtn->setStyleSheet(
@@ -223,13 +263,26 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
         "  border-radius: 10px; padding: 16px 40px;"
         "  font-family: 'Arial'; font-size: 15pt; font-weight: bold; }"
         "QPushButton:disabled { background: #5a2e2f; color: #888; }");
+    connect(m_confirmBtn, &QPushButton::clicked, this, &QDialog::accept);
 
-    auto *cancelBtn = buttons->button(QDialogButtonBox::Cancel);
-    cancelBtn->setText("Annuler");
-    cancelBtn->setAutoDefault(false);
-    cancelBtn->setDefault(false);
+    // ── Scan mode: Annuler top-left so it stays reachable above the keyboard ──
+    if (m_scanMode) {
+        auto *cancelBtn = new QPushButton("Annuler", this);
+        cancelBtn->setAutoDefault(false);
+        cancelBtn->setDefault(false);
+        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
-    // Build tabs (buildSide may increment m_flaggedCount and connect valueChanged)
+        auto *topRow = new QHBoxLayout();
+        topRow->setSpacing(12);
+        topRow->addWidget(cancelBtn);
+        topRow->addWidget(banner, 1);
+        mainLayout->addLayout(topRow);
+    } else {
+        mainLayout->addWidget(banner);
+    }
+
+    // ── Tabs ───────────────────────────────────────────────────────────────────
+    // (buildSide may increment m_flaggedCount and connect valueChanged)
     auto *tabs = new QTabWidget(this);
 
     auto *leftPage = new QWidget(tabs);
@@ -251,10 +304,56 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, QWidget *paren
     tabs->addTab(rightPage, "Droite (D)");
 
     mainLayout->addWidget(tabs);
-    mainLayout->addWidget(buttons);
 
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // ── Bottom buttons ─────────────────────────────────────────────────────────
+    if (m_scanMode) {
+        // Annuler is already at the top; only Confirmer goes here.
+        auto *bottomRow = new QHBoxLayout();
+        bottomRow->addStretch();
+        bottomRow->addWidget(m_confirmBtn);
+        mainLayout->addLayout(bottomRow);
+
+        // ── Scan-mode focus chain: x → y → z → ring → arc → hide keyboard ──
+        // Pressing Return on each field clears its flag (even without retyping)
+        // and moves focus to the next one; the last field hides the keyboard.
+        auto chainSide = [this](TargetWidgets &w) {
+            auto *x    = static_cast<AutoSelectSpinBox *>(w.x);
+            auto *y    = static_cast<AutoSelectSpinBox *>(w.y);
+            auto *z    = static_cast<AutoSelectSpinBox *>(w.z);
+            auto *ring = static_cast<AutoSelectSpinBox *>(w.ring);
+            auto *arc  = static_cast<AutoSelectSpinBox *>(w.arc);
+            x->chainTo(y,       [this, sb = w.x]()    { clearFlag(sb); });
+            y->chainTo(z,       [this, sb = w.y]()    { clearFlag(sb); });
+            z->chainTo(ring,    [this, sb = w.z]()    { clearFlag(sb); });
+            ring->chainTo(arc,  [this, sb = w.ring]() { clearFlag(sb); });
+            arc->chainTo(nullptr, [this, sb = w.arc](){ clearFlag(sb); }); // last
+        };
+        chainSide(m_left);
+        chainSide(m_right);
+
+        // Auto-focus the x field whenever the user switches tabs.
+        connect(tabs, &QTabWidget::currentChanged, this, [this](int idx) {
+            QMetaObject::invokeMethod(this, [this, idx]() {
+                ((idx == 0) ? m_left.x : m_right.x)->setFocus();
+            }, Qt::QueuedConnection);
+        });
+
+        // Auto-focus left.x when the dialog first appears.
+        QMetaObject::invokeMethod(this, [this]() { m_left.x->setFocus(); },
+                                  Qt::QueuedConnection);
+    } else {
+        // Edit mode: Annuler and Confirmer side-by-side at the bottom.
+        auto *cancelBtn = new QPushButton("Annuler", this);
+        cancelBtn->setAutoDefault(false);
+        cancelBtn->setDefault(false);
+        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+
+        auto *bottomRow = new QHBoxLayout();
+        bottomRow->addWidget(cancelBtn);
+        bottomRow->addStretch();
+        bottomRow->addWidget(m_confirmBtn);
+        mainLayout->addLayout(bottomRow);
+    }
 
     // Set initial Confirmer state based on flagged count.
     updateConfirmButton();
@@ -294,11 +393,13 @@ LeksellTarget ConfirmPlanDialog::readWidgets(const TargetWidgets &w)
     LeksellTarget t;
     t.valid = w.enabled->isChecked();
     // Fields left at the sentinel (-1) were never filled; leave them at 0 default.
-    if (w.x->value()    >= 0) t.x_mm     = w.x->value();
-    if (w.y->value()    >= 0) t.y_mm     = w.y->value();
-    if (w.z->value()    >= 0) t.z_mm     = w.z->value();
-    if (w.ring->value() >= 0) t.ring_deg = w.ring->value();
-    if (w.arc->value()  >= 0) t.arc_deg  = w.arc->value();
+    // Mark every confirmed field with confidence 1.0 so that re-opening the dialog
+    // (e.g. "Modifier le plan") pre-fills the previously confirmed values.
+    if (w.x->value()    >= 0) { t.x_mm     = w.x->value();    t.confidence[0] = 1.f; }
+    if (w.y->value()    >= 0) { t.y_mm     = w.y->value();    t.confidence[1] = 1.f; }
+    if (w.z->value()    >= 0) { t.z_mm     = w.z->value();    t.confidence[2] = 1.f; }
+    if (w.ring->value() >= 0) { t.ring_deg = w.ring->value(); t.confidence[3] = 1.f; }
+    if (w.arc->value()  >= 0) { t.arc_deg  = w.arc->value();  t.confidence[4] = 1.f; }
     return t;
 }
 

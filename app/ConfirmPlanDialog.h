@@ -10,13 +10,21 @@ class QShowEvent;
 class QPaintEvent;
 
 // Shows the surgical plan detected by OCR (or empty fields for manual entry).
-// Fields with OCR confidence < 70 % are highlighted in red and block confirmation
-// until the user explicitly replaces the value.
+//
+// Mode::Scan  – used right after OCR: ALL fields are flagged red and the user
+//               must confirm each one in sequence (Return advances focus; last
+//               field hides the keyboard).  "Annuler" sits at the top-left so
+//               it stays reachable while the virtual keyboard is visible.
+// Mode::Edit  – used from "Modifier le plan": pre-filled with previously
+//               confirmed values; only low-confidence fields are flagged.
 class ConfirmPlanDialog : public QDialog
 {
     Q_OBJECT
 public:
+    enum class Mode { Scan, Edit };
+
     explicit ConfirmPlanDialog(const SurgicalPlan &initial,
+                               Mode                mode,
                                QWidget            *parent = nullptr);
 
     SurgicalPlan plan() const;
@@ -34,6 +42,7 @@ private:
     TargetWidgets  m_left, m_right;
     QPushButton   *m_confirmBtn   = nullptr;
     int            m_flaggedCount = 0;
+    bool           m_scanMode     = false;
 
     TargetWidgets buildSide(const QString       &title,
                             const LeksellTarget &initial,

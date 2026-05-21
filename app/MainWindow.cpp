@@ -24,6 +24,7 @@ static SurgicalPlan defaultTestPlan()
     p.left.arc_deg  =  71.0;
     p.left.ring_deg =  74.2;
     p.left.valid    = true;
+    for (float &c : p.left.confidence)  c = 1.f;
 
     p.right.x_mm     =  66.2;
     p.right.y_mm     = 118.2;
@@ -31,6 +32,7 @@ static SurgicalPlan defaultTestPlan()
     p.right.arc_deg  = 111.1;
     p.right.ring_deg =  66.8;
     p.right.valid    = true;
+    for (float &c : p.right.confidence) c = 1.f;
 
     return p;
 }
@@ -326,7 +328,7 @@ void MainWindow::onPlanDetected(const SurgicalPlan &detected)
 {
     m_scanScreen->stopCamera();
 
-    ConfirmPlanDialog dlg(detected, this);
+    ConfirmPlanDialog dlg(detected, ConfirmPlanDialog::Mode::Scan, this);
     if (dlg.exec() != QDialog::Accepted) {
         // User cancelled — go back to scan screen
         m_stack->setCurrentIndex(1);
@@ -347,7 +349,7 @@ void MainWindow::editPlan()
 {
     m_arCamera->stop();
 
-    ConfirmPlanDialog dlg(m_currentPlan, this);
+    ConfirmPlanDialog dlg(m_currentPlan, ConfirmPlanDialog::Mode::Edit, this);
     if (dlg.exec() == QDialog::Accepted) {
         m_currentPlan = dlg.plan();
         const SurgicalPlan plan = m_currentPlan;
