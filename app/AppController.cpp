@@ -595,8 +595,9 @@ void AppController::onARFrame(const cv::Mat &frame,
         T_cam_leksell = world_T_camera_cv.inv() * m_T_world_leksell;
 
         // Re-calibrate if features stay low while the camera is actively moving.
-        // Low count at rest is normal (IMU takes over); only flag it during motion.
-        if (!m_prevWorldTCamera.empty()) {
+        // Disabled on LiDAR devices: ARKit uses scene geometry instead of visual
+        // features, so rawFeaturePoints.count is naturally low even during healthy tracking.
+        if (!m_usingLiDAR && !m_prevWorldTCamera.empty()) {
             const cv::Mat t_now  = world_T_camera_cv.col(3).rowRange(0, 3);
             const cv::Mat t_prev = m_prevWorldTCamera.col(3).rowRange(0, 3);
             const double transDelta = cv::norm(t_now - t_prev);

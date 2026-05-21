@@ -151,7 +151,7 @@ private:
     // Face-on reads as ~180° in our convention (R(2,2) ≈ +1 → cosA = -R(2,2) ≈ -1).
     // Valid range: [175°, 180°], so cosA ≤ -cos(5°) ≈ -0.9962.
     static constexpr double kMaxInitAngleCos = 0.9962; // cos(5°) tolerance around 180°
-    static constexpr double kMaxInitReprojPx = 0.8;   // RMS reprojection error cap
+    static constexpr double kMaxInitReprojPx = 1;   // RMS reprojection error cap
 
     static constexpr double kAnchorAlpha = 0.05;
 
