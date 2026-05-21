@@ -571,10 +571,11 @@ void AppController::onARFrame(const cv::Mat &frame,
                 cv::SVD::compute(RSum, S, U, Vt);
                 if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
 
+                const cv::Mat R_avg = U * Vt;
+                const cv::Mat t_avg = tSum / static_cast<double>(m_streakPoses.size());
                 m_T_world_leksell = cv::Mat::eye(4, 4, CV_64F);
-                (U * Vt).copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
-                (tSum / static_cast<double>(m_streakPoses.size()))
-                    .copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
+                R_avg.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
+                t_avg.copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
 
                 m_anchorTrackingState = m_trackingState;
                 m_streakPoses.clear();
