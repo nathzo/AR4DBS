@@ -248,7 +248,8 @@ bool AppController::checkIncisionQuality(const cv::Point3d &pt,
     cv::Mat R;
     cv::Rodrigues(rvec, R);
     const cv::Mat v = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
-    const double expectedDepth = (R * v + tvec.reshape(1, 3)).at<double>(2);
+    const cv::Mat ptCam = R * v + tvec.reshape(1, 3);
+    const double expectedDepth = ptCam.at<double>(2);
     if (expectedDepth <= 0) return false;
 
     const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
