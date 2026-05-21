@@ -124,6 +124,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_controller, &AppController::lockStateChanged,
             this, [this](bool locked) { setArLocked(locked); },
             Qt::QueuedConnection);
+    connect(m_controller, &AppController::calibrationProgressChanged,
+            this, [this](bool inProgress) { setArCalibrating(inProgress); },
+            Qt::QueuedConnection);
     // ARTrackingState: 0 = not available, 1 = limited, 2 = normal.
     // AppController::onTrackingQualityChanged handles both the debug overlay update
     // and the re-calibration trigger (quality drop below anchor-time level).
@@ -366,18 +369,32 @@ void MainWindow::setArLocked(bool locked)
 {
     m_arLocked = locked;
     if (locked) {
+        m_arCalibrating = false;
         m_calibLabel->setText("Calibration réussie, repères verrouillés");
         m_calibLabel->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText("Recalibrer");
     } else {
+        m_arCalibrating = false;
         m_calibLabel->setText("Calibration requise : placez la caméra face aux repères");
         m_calibLabel->setStyleSheet(
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText("← Retour");
     }
+}
+
+void MainWindow::setArCalibrating(bool calibrating)
+{
+    if (m_arLocked) return; // locked state takes priority
+    m_arCalibrating = calibrating;
+    m_calibLabel->setText(calibrating
+        ? "Calibration en cours..."
+        : "Calibration requise : placez la caméra face aux repères");
+    m_calibLabel->setStyleSheet(
+        "color: #DE5F5E; background: rgba(222,95,94,50);"
+        "padding: 6px; font-size: 12pt;");
 }
 #endif
 

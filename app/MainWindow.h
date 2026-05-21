@@ -50,9 +50,11 @@ private:
     SurgicalPlan    m_currentPlan;
 
 #ifdef Q_OS_IOS
-    QLabel *m_calibLabel = nullptr;
-    bool    m_arLocked   = false;
+    QLabel *m_calibLabel    = nullptr;
+    bool    m_arLocked      = false;
+    bool    m_arCalibrating = false;
     void    setArLocked(bool locked);
+    void    setArCalibrating(bool calibrating);
 #endif
 
 #ifdef Q_OS_IOS

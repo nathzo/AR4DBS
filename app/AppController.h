@@ -70,6 +70,7 @@ signals:
     void frameReady(const cv::Mat &annotated);
 #ifdef Q_OS_IOS
     void lockStateChanged(bool locked);
+    void calibrationProgressChanged(bool inProgress); // true while streak is active (0 < n < 10)
 #endif
 
 private:
@@ -136,6 +137,8 @@ private:
 
     cv::Mat m_prevWorldTCamera;   // previous frame's world_T_camera_cv for motion detection
     int     m_lowFeatFrames = 0;  // consecutive frames: moving + low feature count
+
+    std::vector<cv::Mat> m_streakPoses; // world_T_leksell candidates accumulated during streak
 
     // ── Anchor-locking state ─────────────────────────────────────────────────
     // Empty until both tags are seen face-on with low reprojection error.

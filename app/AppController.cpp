@@ -457,6 +457,10 @@ void AppController::resetARRegistration()
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
     m_prevWorldTCamera    = cv::Mat();
     m_lowFeatFrames       = 0;
+    if (!m_streakPoses.empty()) {
+        m_streakPoses.clear();
+        emit calibrationProgressChanged(false);
+    }
     emit lockStateChanged(false);
 }
 
@@ -550,9 +554,39 @@ void AppController::onARFrame(const cv::Mat &frame,
         }
 
         if (meetsInitConditions(detections, T_from_tags)) {
-            m_T_world_leksell     = world_T_camera_cv * T_from_tags; // world_T_leksell
-            m_anchorTrackingState = m_trackingState; // record quality at lock time
-            emit lockStateChanged(true);
+            // Accumulate qualifying frames; lock only after 10 consecutive successes.
+            if (m_streakPoses.empty())
+                emit calibrationProgressChanged(true); // streak just started
+            m_streakPoses.push_back(world_T_camera_cv * T_from_tags);
+
+            if (static_cast<int>(m_streakPoses.size()) >= 10) {
+                // SO(3)-average the 10 world_T_leksell candidates.
+                cv::Mat RSum = cv::Mat::zeros(3, 3, CV_64F);
+                cv::Mat tSum = cv::Mat::zeros(3, 1, CV_64F);
+                for (const auto &T : m_streakPoses) {
+                    RSum += T.rowRange(0, 3).colRange(0, 3);
+                    tSum += T.rowRange(0, 3).col(3);
+                }
+                cv::Mat U, S, Vt;
+                cv::SVD::compute(RSum, S, U, Vt);
+                if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+
+                m_T_world_leksell = cv::Mat::eye(4, 4, CV_64F);
+                (U * Vt).copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
+                (tSum / static_cast<double>(m_streakPoses.size()))
+                    .copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
+
+                m_anchorTrackingState = m_trackingState;
+                m_streakPoses.clear();
+                emit calibrationProgressChanged(false);
+                emit lockStateChanged(true);
+            }
+        } else {
+            // Streak broken — reset accumulator.
+            if (!m_streakPoses.empty()) {
+                m_streakPoses.clear();
+                emit calibrationProgressChanged(false);
+            }
         }
         // T_cam_leksell stays empty → overlay hidden until locked.
     } else {
@@ -635,8 +669,18 @@ void AppController::onARFrame(const cv::Mat &frame,
             : m_depthModelLoading.load() ? "iosDepth model: loading..."
             : "iosDepth model: NULL",
             m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
-        dbg(!m_T_world_leksell.empty() ? "anchor: ESTABLISHED" : "anchor: calibrating...",
-            !m_T_world_leksell.empty());
+        {
+            char buf[64];
+            if (!m_T_world_leksell.empty()) {
+                dbg("anchor: ESTABLISHED", true);
+            } else if (!m_streakPoses.empty()) {
+                std::snprintf(buf, sizeof(buf), "anchor: streak %d / 10",
+                              static_cast<int>(m_streakPoses.size()));
+                dbg(buf, false);
+            } else {
+                dbg("anchor: calibrating...", false);
+            }
+        }
         dbg(m_trackingState == 2 ? "ARKit: normal"
             : m_trackingState == 1 ? "ARKit: LIMITED"
             : "ARKit: UNAVAILABLE",
