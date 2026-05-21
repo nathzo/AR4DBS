@@ -602,8 +602,8 @@ void AppController::onARFrame(const cv::Mat &frame,
                 std::snprintf(buf, sizeof(buf), "corners: %d / 8", dbgCorners);
                 dbg(buf, dbgCorners >= 8);
                 if (dbgAngleDeg >= 0.0) {
-                    std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need <=15)", dbgAngleDeg);
-                    dbg(buf, dbgAngleDeg <= 15.0);
+                    std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
+                    dbg(buf, dbgAngleDeg >= 175.0);
                     std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=0.8)", dbgReprojPx);
                     dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= kMaxInitReprojPx);
                 } else {
@@ -671,9 +671,9 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
 
     cv::Mat R;
     cv::Rodrigues(rvec, R);
-    // -R(2,2) = cosine of angle between tag plane normal and camera Z axis.
-    // Near 1.0 means the camera is nearly perpendicular to the tag plane.
-    if (-R.at<double>(2, 2) < kMaxInitAngleCos) return false;
+    // cosA = -R(2,2). Face-on gives cosA ≈ -1 (angle ≈ 180°).
+    // Valid when angle ≥ 175°, i.e. cosA ≤ -kMaxInitAngleCos ≈ -0.9962.
+    if (-R.at<double>(2, 2) > -kMaxInitAngleCos) return false;
 
     return computeReprojError(detections, rvec, tvec) <= kMaxInitReprojPx;
 }
