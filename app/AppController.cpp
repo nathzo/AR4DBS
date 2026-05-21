@@ -535,7 +535,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         }
 
         if (meetsInitConditions(detections, T_from_tags)) {
-            m_T_world_leksell = world_T_camera_cv.inv() * T_from_tags;
+            m_T_world_leksell = world_T_camera_cv * T_from_tags; // world_T_leksell
             emit lockStateChanged(true);
         }
         // T_cam_leksell stays empty → overlay hidden until locked.

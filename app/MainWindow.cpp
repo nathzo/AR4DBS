@@ -361,7 +361,7 @@ void MainWindow::setArLocked(bool locked)
 {
     m_arLocked = locked;
     if (locked) {
-        m_calibLabel->setText("Calibration réussie — repères verrouillés");
+        m_calibLabel->setText("Calibration réussie, repères verrouillés");
         m_calibLabel->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
