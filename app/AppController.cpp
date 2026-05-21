@@ -452,8 +452,9 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    m_T_world_leksell = cv::Mat();
-    m_depthAnchor     = m_usingLiDAR ? 1.0 : 0.0;
+    m_T_world_leksell     = cv::Mat();
+    m_anchorTrackingState = 2; // reset baseline; next lock will record fresh quality
+    m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
     emit lockStateChanged(false);
 }
 
@@ -468,6 +469,11 @@ void AppController::onLidarAvailable(bool available)
 void AppController::onTrackingQualityChanged(int state)
 {
     m_trackingState = state;
+    // Trigger re-calibration only once locked, and only when quality drops below
+    // the level recorded at anchor time (so a lock done at "limited" quality won't
+    // immediately reset on the next frame).
+    if (!m_T_world_leksell.empty() && state < m_anchorTrackingState)
+        resetARRegistration();
 }
 
 void AppController::onLidarDepth(const cv::Mat &depthMetric)
@@ -540,7 +546,8 @@ void AppController::onARFrame(const cv::Mat &frame,
         }
 
         if (meetsInitConditions(detections, T_from_tags)) {
-            m_T_world_leksell = world_T_camera_cv * T_from_tags; // world_T_leksell
+            m_T_world_leksell     = world_T_camera_cv * T_from_tags; // world_T_leksell
+            m_anchorTrackingState = m_trackingState; // record quality at lock time
             emit lockStateChanged(true);
         }
         // T_cam_leksell stays empty → overlay hidden until locked.
@@ -601,10 +608,10 @@ void AppController::onARFrame(const cv::Mat &frame,
             m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
         dbg(!m_T_world_leksell.empty() ? "anchor: ESTABLISHED" : "anchor: calibrating...",
             !m_T_world_leksell.empty());
-        dbg(m_trackingState == 0 ? "ARKit: normal"
+        dbg(m_trackingState == 2 ? "ARKit: normal"
             : m_trackingState == 1 ? "ARKit: LIMITED"
             : "ARKit: UNAVAILABLE",
-            m_trackingState == 0);
+            m_trackingState == 2);
         {
             char buf[64];
             if (m_T_world_leksell.empty()) {

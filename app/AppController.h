@@ -128,8 +128,10 @@ private:
 
 #ifdef Q_OS_IOS
     // ── ARKit tracking quality ───────────────────────────────────────────────
-    // 0 = normal, 1 = limited, 2 = not available. Updated via onTrackingQualityChanged.
-    int m_trackingState = 0;
+    // ARTrackingState enum: 0 = not available, 1 = limited, 2 = normal.
+    int m_trackingState       = 2; // assume normal until first signal
+    int m_anchorTrackingState = 2; // quality recorded at lock time; re-lock triggers
+                                   // when current quality drops below this value
 
     // ── Anchor-locking state ─────────────────────────────────────────────────
     // Empty until both tags are seen face-on with low reprojection error.

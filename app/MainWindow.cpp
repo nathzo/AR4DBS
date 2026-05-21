@@ -124,18 +124,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_controller, &AppController::lockStateChanged,
             this, [this](bool locked) { setArLocked(locked); },
             Qt::QueuedConnection);
-    // ARTrackingState: 0 = normal, 1 = limited, 2 = not available.
-    // Forward quality changes to the controller (updates debug overlay).
-    // Also trigger re-calibration if tracking degrades while locked, so the
-    // overlay is never silently wrong due to a lost or drifted ARKit world frame.
+    // ARTrackingState: 0 = not available, 1 = limited, 2 = normal.
+    // AppController::onTrackingQualityChanged handles both the debug overlay update
+    // and the re-calibration trigger (quality drop below anchor-time level).
     connect(m_arCamera, &ARKitSession::trackingQualityChanged,
             m_controller, &AppController::onTrackingQualityChanged);
-    connect(m_arCamera, &ARKitSession::trackingQualityChanged,
-            this, [this](int state) {
-        if (state != 0 && m_arLocked)
-            QMetaObject::invokeMethod(m_controller, &AppController::resetARRegistration,
-                                      Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
     connect(m_arCamera, &ARKitSession::frameReady, this,
             [this, busy](const cv::Mat &frame, const cv::Mat &world_T_camera) {
         if (!busy->testAndSetAcquire(0, 1)) return;
