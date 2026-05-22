@@ -167,15 +167,18 @@ static const char *kFlaggedStyle =
     "  background: rgba(196,82,85,0.18);"
     "  border: 1px solid #c45255;"
     "  border-radius: 4px;"
-    "  padding: 10px 12px;"        // same as the dialog-level default — keeps QLineEdit geometry stable
+    // Vertical padding must be 0: Qt reports the selection rect in the spinbox's
+    // coordinate space, so any top padding shifts the UITextField down by that
+    // amount while the selection handles are drawn at the spinbox origin —
+    // causing handles to appear above the text by exactly padding-top pixels.
+    "  padding: 0 12px;"
     "  color: #e0e0e0;"
     "  selection-color: #e0e0e0;"
     "  selection-background-color: #7a2e30;"
     "}"
-    // Without these rules the widget-level stylesheet overrides the dialog-level
-    // stylesheet entirely, restoring the default (non-zero) button size and
-    // shifting the internal QLineEdit — which displaces the UITextField frame
-    // and misaligns the iOS selection handles with the visible text.
+    // A widget-level stylesheet overrides the parent stylesheet entirely, so the
+    // up/down button rules must be repeated here or the buttons revert to their
+    // default size and shift the internal QLineEdit's geometry.
     "QDoubleSpinBox::up-button {"
     "  subcontrol-origin: border; subcontrol-position: top right;"
     "  width: 0; height: 0; border: none; margin: 0;"
@@ -307,7 +310,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         "QTabBar::tab:selected { background: #75D0C5; color: black; font-family: 'Arial'; font-weight: bold; }"
         "QDoubleSpinBox {"
         "  background: #2a2b2d; color: #e0e0e0;"
-        "  border: 1px solid #444; border-radius: 6px; padding: 10px 12px;"
+        "  border: 1px solid #444; border-radius: 6px; padding: 0 12px;"
         "  selection-color: #e0e0e0; selection-background-color: #2d5f7a;"
         "}"
         "QDoubleSpinBox::up-button {"
