@@ -167,10 +167,22 @@ static const char *kFlaggedStyle =
     "  background: rgba(196,82,85,0.18);"
     "  border: 1px solid #c45255;"
     "  border-radius: 4px;"
-    "  padding: 3px 6px;"
+    "  padding: 10px 12px;"        // same as the dialog-level default — keeps QLineEdit geometry stable
     "  color: #e0e0e0;"
     "  selection-color: #e0e0e0;"
     "  selection-background-color: #7a2e30;"
+    "}"
+    // Without these rules the widget-level stylesheet overrides the dialog-level
+    // stylesheet entirely, restoring the default (non-zero) button size and
+    // shifting the internal QLineEdit — which displaces the UITextField frame
+    // and misaligns the iOS selection handles with the visible text.
+    "QDoubleSpinBox::up-button {"
+    "  subcontrol-origin: border; subcontrol-position: top right;"
+    "  width: 0; height: 0; border: none; margin: 0;"
+    "}"
+    "QDoubleSpinBox::down-button {"
+    "  subcontrol-origin: border; subcontrol-position: bottom right;"
+    "  width: 0; height: 0; border: none; margin: 0;"
     "}";
 
 // ── buildSide ─────────────────────────────────────────────────────────────────

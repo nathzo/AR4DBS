@@ -69,8 +69,8 @@ public:
         captureBtn = new QPushButton(m_inner);
         captureBtn->setStyleSheet(
             "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-            "              padding:8px 28px; font-family:'Arial';"
-            "              font-size:14pt; font-weight:bold; }"
+            "              padding:12px 28px; font-family:'Arial';"
+            "              font-size:16pt; font-weight:bold; }"
             "QPushButton:pressed { background:#a33c3f; }");
         lay->addWidget(captureBtn, 0, Qt::AlignHCenter);
         lay->addStretch(3);             // ¾ gap toward other edge
