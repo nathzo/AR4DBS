@@ -93,6 +93,19 @@ protected:
         return QDoubleSpinBox::eventFilter(obj, ev);
     }
 
+    // Normalise the decimal separator at validation time — catches any path
+    // (paste, hardware keyboard, programmatic setText) that slips past the
+    // event filter or keyPressEvent.
+    QValidator::State validate(QString &input, int &pos) const override {
+        normalise(input);
+        return QDoubleSpinBox::validate(input, pos);
+    }
+    double valueFromText(const QString &text) const override {
+        QString t = text;
+        normalise(t);
+        return QDoubleSpinBox::valueFromText(t);
+    }
+
     void keyPressEvent(QKeyEvent *e) override {
         // Hardware keyboard: normalise , and . to the locale decimal point.
         if (e->key() == Qt::Key_Comma || e->key() == Qt::Key_Period) {
@@ -117,6 +130,15 @@ protected:
     }
 
 private:
+    // Replace the "wrong" decimal separator with the locale's one.
+    // Called from validate() and valueFromText() so every input path
+    // (paste, drag-drop, programmatic setText) is covered.
+    void normalise(QString &s) const {
+        const QChar dp  = locale().decimalPoint().at(0);
+        const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',') : QLatin1Char('.');
+        s.replace(alt, dp);
+    }
+
     bool                  m_inChain     = false;
     QWidget              *m_nextInChain = nullptr;
     std::function<void()> m_onConfirm;
