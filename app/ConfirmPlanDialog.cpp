@@ -58,12 +58,19 @@ public:
 protected:
     void focusInEvent(QFocusEvent *e) override {
         QDoubleSpinBox::focusInEvent(e);
-        // Call selectAll() on the inner QLineEdit directly (not on the
-        // QDoubleSpinBox wrapper) so iOS derives the selection-handle
-        // positions from the QLineEdit's own coordinate system, which is
-        // what it uses when positioning the blue pins.
         QMetaObject::invokeMethod(this, [this]() { lineEdit()->selectAll(); },
                                   Qt::QueuedConnection);
+    }
+
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override {
+        QVariant v = QDoubleSpinBox::inputMethodQuery(query);
+        if (query == Qt::ImCursorRectangle  ||
+            query == Qt::ImAnchorRectangle  ||
+            query == Qt::ImInputItemClipRectangle) {
+            if (v.canConvert<QRect>())
+                return v.toRect().translated(lineEdit()->pos());
+        }
+        return v;
     }
 
     // eventFilter intercepts events sent to the internal QLineEdit.
