@@ -56,6 +56,9 @@ public:
         m_status = new QLabel(m_inner);
         m_status->setAlignment(Qt::AlignCenter);
         m_status->setWordWrap(true);
+        // Fixed height so that changing the text never shifts the buttons.
+        // Sized for the longest possible message at 12pt with word-wrap.
+        m_status->setFixedHeight(80);
         m_status->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
