@@ -57,25 +57,27 @@ public:
         m_status->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
+        lay->addStretch(1);             // ¼ gap from edge
         lay->addWidget(m_status);
-        lay->addStretch(1);
+        lay->addStretch(3);             // ¾ gap toward centre
 
         captureBtn = new QPushButton(m_inner);
         captureBtn->setStyleSheet(
             "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-            "              padding:12px 32px; font-family:'Arial';"
+            "              padding:8px 28px; font-family:'Arial';"
             "              font-size:14pt; font-weight:bold; }"
             "QPushButton:pressed { background:#a33c3f; }");
         lay->addWidget(captureBtn, 0, Qt::AlignHCenter);
-        lay->addStretch(1);
+        lay->addStretch(3);             // ¾ gap toward other edge
 
         backBtn = new QPushButton("← Retour", m_inner);
         backBtn->setStyleSheet(
             "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
-            "              padding:12px 24px; font-family:'Arial';"
+            "              padding:8px 20px; font-family:'Arial';"
             "              font-size:13pt; font-weight:bold; }"
             "QPushButton:pressed { background:#6d6f72; }");
         lay->addWidget(backBtn, 0, Qt::AlignHCenter);
+        lay->addStretch(1);             // ¼ gap from edge
     }
 
     ~RotatedStrip() override { delete m_inner; }
@@ -173,7 +175,7 @@ ScanScreen::ScanScreen(QWidget *parent)
     root->addWidget(m_impl->preview, 1);
 
     // ── Control strip ─────────────────────────────────────────────────────────
-    m_impl->strip = new RotatedStrip(160, this);
+    m_impl->strip = new RotatedStrip(120, this);
     m_impl->strip->captureBtn->setText(
         PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement");
     m_impl->strip->setStatusText(
