@@ -11,6 +11,9 @@
 #include <QWidget>
 #include <QCloseEvent>
 #include <QAtomicInt>
+#include <QPainter>
+#include <QMouseEvent>
+#include <QResizeEvent>
 #include <cmath>
 
 // Default DBS targets in Leksell frame coordinates (mm / degrees).
@@ -49,6 +52,116 @@ static SurgicalPlan defaultTestPlan()
 #  include "app/ScanScreen.h"
 #  include "app/ConfirmPlanDialog.h"
 #endif
+
+// ── ARRotatedStrip ────────────────────────────────────────────────────────────
+// Same rotation mechanics as RotatedStrip in ScanScreen.cpp.
+// Inner widget is rendered rotated 90° CW so controls read correctly when the
+// phone is held in landscape.
+class ARRotatedStrip : public QWidget
+{
+public:
+    QLabel      *statusLabel = nullptr;
+    QPushButton *btnMenu     = nullptr;
+    QPushButton *btnEdit     = nullptr;
+
+    explicit ARRotatedStrip(int stripH, QWidget *parent = nullptr)
+        : QWidget(parent), m_stripH(stripH)
+    {
+        setFixedHeight(stripH);
+
+        m_inner = new QWidget;
+        m_inner->setStyleSheet("background: black;");
+
+        auto *lay = new QVBoxLayout(m_inner);
+        lay->setContentsMargins(8, 8, 8, 8);
+        lay->setSpacing(8);
+
+        // Status label — holds calibration state on iOS; transparent on desktop.
+        statusLabel = new QLabel(m_inner);
+        statusLabel->setAlignment(Qt::AlignCenter);
+        statusLabel->setWordWrap(true);
+        statusLabel->setFixedHeight(60);
+        statusLabel->setStyleSheet(
+            "color: transparent; background: transparent;"
+            "padding: 6px; font-size: 12pt;");
+        lay->addStretch(1);
+        lay->addWidget(statusLabel);
+        lay->addStretch(3);
+
+        btnMenu = new QPushButton("← Menu", m_inner);
+        btnMenu->setStyleSheet(
+            "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
+            "              padding:8px 20px; font-family:'Arial';"
+            "              font-size:13pt; font-weight:bold; }"
+            "QPushButton:pressed { background:#6d6f72; }");
+        lay->addWidget(btnMenu, 0, Qt::AlignHCenter);
+        lay->addStretch(3);
+
+        btnEdit = new QPushButton(m_inner);
+        btnEdit->setText("Modifier\nle plan");
+        btnEdit->setStyleSheet(
+            "QPushButton { background:#75D0C5; color:black; border-radius:8px;"
+            "              padding:6px 16px; font-family:'Arial';"
+            "              font-size:13pt; font-weight:bold; }"
+            "QPushButton:pressed { background:#5ab8ae; }");
+        btnEdit->setVisible(false);
+        lay->addWidget(btnEdit, 0, Qt::AlignHCenter);
+        lay->addStretch(1);
+    }
+
+    ~ARRotatedStrip() override { delete m_inner; }
+
+protected:
+    void resizeEvent(QResizeEvent *) override { syncInner(); }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        syncInner();
+        QPainter p(this);
+        p.translate(width(), 0);
+        p.rotate(90);
+        m_inner->render(&p);
+    }
+
+    void mousePressEvent(QMouseEvent *e) override
+    {
+        m_pressedBtn = findBtn(toInner(e->pos()));
+    }
+
+    void mouseReleaseEvent(QMouseEvent *e) override
+    {
+        QPushButton *released = findBtn(toInner(e->pos()));
+        if (m_pressedBtn && m_pressedBtn == released)
+            m_pressedBtn->click();
+        m_pressedBtn = nullptr;
+    }
+
+private:
+    void syncInner()
+    {
+        m_inner->resize(m_stripH, width());
+        if (auto *l = m_inner->layout()) l->activate();
+        m_inner->ensurePolished();
+    }
+
+    QPoint toInner(QPoint s) const { return { s.y(), width() - s.x() }; }
+
+    QPushButton *findBtn(QPoint innerPt) const
+    {
+        QWidget *w = m_inner->childAt(innerPt);
+        while (w && w != m_inner) {
+            if (auto *b = qobject_cast<QPushButton *>(w)) return b;
+            w = w->parentWidget();
+        }
+        return nullptr;
+    }
+
+    QWidget     *m_inner      = nullptr;
+    QPushButton *m_pressedBtn = nullptr;
+    int          m_stripH     = 0;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -164,39 +277,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_glWidget = new GLWidget(arContainer);
     arLayout->addWidget(m_glWidget, 1);
+    arLayout->addSpacing(8);
 
+    // ── Rotated control strip ─────────────────────────────────────────────────
+    m_arStrip = new ARRotatedStrip(150, arContainer);
+    m_btnBackToMenu = m_arStrip->btnMenu;
+    m_btnEditPlan   = m_arStrip->btnEdit;
 #ifdef Q_OS_IOS
-    // Calibration status bar — sits between the camera preview and the buttons.
-    m_calibLabel = new QLabel(arContainer);
-    m_calibLabel->setAlignment(Qt::AlignCenter);
-    m_calibLabel->setWordWrap(true);
-    arLayout->addWidget(m_calibLabel);
+    m_calibLabel    = m_arStrip->statusLabel;
 #endif
-
-    // Button row at the bottom of the AR view — same shape/layout as ScanScreen
-    auto *arBtnRow = new QWidget(arContainer);
-    arBtnRow->setStyleSheet("background: #000000;");
-    auto *arBtnLayout = new QHBoxLayout(arBtnRow);
-    arBtnLayout->setContentsMargins(16, 8, 16, 16);
-    arBtnLayout->setSpacing(0);
-
-    m_btnBackToMenu = new QPushButton("← Menu", arBtnRow);
-    m_btnBackToMenu->setStyleSheet(
-        "QPushButton { background:#8A8C8F; color: black; border-radius:8px;"
-        "              padding:12px 24px; font-size:13pt; font-weight:bold; }"
-        "QPushButton:pressed { background:#6d6f72; }");
-
-    m_btnEditPlan = new QPushButton("Modifier le plan", arBtnRow);
-    m_btnEditPlan->setStyleSheet(
-        "QPushButton { background:#75D0C5; color: black; border-radius:8px;"
-        "              padding:12px 32px; font-size:14pt; font-weight:bold; }"
-        "QPushButton:pressed { background:#5ab8ae; }");
-    m_btnEditPlan->setVisible(false);
-
-    arBtnLayout->addWidget(m_btnBackToMenu);
-    arBtnLayout->addStretch(1);
-    arBtnLayout->addWidget(m_btnEditPlan);
-    arLayout->addWidget(arBtnRow);
+    arLayout->addWidget(m_arStrip);
+    arLayout->addSpacing(8);
 
 #ifdef Q_OS_IOS
     setArLocked(false); // set initial label text and button text
@@ -385,6 +476,7 @@ void MainWindow::setArLocked(bool locked)
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText("← Retour");
     }
+    if (m_arStrip) m_arStrip->update();
 }
 
 void MainWindow::setArCalibrating(bool calibrating)
@@ -397,6 +489,7 @@ void MainWindow::setArCalibrating(bool calibrating)
     m_calibLabel->setStyleSheet(
         "color: #DE5F5E; background: rgba(222,95,94,50);"
         "padding: 6px; font-size: 12pt;");
+    if (m_arStrip) m_arStrip->update();
 }
 #endif
 

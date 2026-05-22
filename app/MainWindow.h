@@ -21,6 +21,8 @@ class ScanScreen;
 class ConfirmPlanDialog;
 #endif
 
+class ARRotatedStrip;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -42,12 +44,13 @@ private:
     QStackedWidget *m_stack        = nullptr;
 #endif
 
-    GLWidget       *m_glWidget         = nullptr;
-    AppController  *m_controller       = nullptr;
-    QThread        *m_controllerThread = nullptr;
-    QPushButton    *m_btnEditPlan      = nullptr;
-    QPushButton    *m_btnBackToMenu    = nullptr;
-    SurgicalPlan    m_currentPlan;
+    GLWidget        *m_glWidget         = nullptr;
+    AppController   *m_controller       = nullptr;
+    QThread         *m_controllerThread = nullptr;
+    QPushButton     *m_btnEditPlan      = nullptr;
+    QPushButton     *m_btnBackToMenu    = nullptr;
+    ARRotatedStrip  *m_arStrip          = nullptr;
+    SurgicalPlan     m_currentPlan;
 
 #ifdef Q_OS_IOS
     QLabel *m_calibLabel    = nullptr;
