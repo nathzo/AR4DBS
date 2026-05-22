@@ -75,7 +75,7 @@ public:
         lay->addWidget(captureBtn, 0, Qt::AlignHCenter);
         lay->addStretch(3);             // ¾ gap toward other edge
 
-        backBtn = new QPushButton("← Retour", m_inner);
+        backBtn = new QPushButton("← Menu", m_inner);
         backBtn->setStyleSheet(
             "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
             "              padding:8px 20px; font-family:'Arial';"

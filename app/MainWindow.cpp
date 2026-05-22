@@ -90,15 +90,6 @@ public:
         lay->addWidget(statusLabel);
         lay->addStretch(3);
 
-        btnMenu = new QPushButton("← Menu", m_inner);
-        btnMenu->setStyleSheet(
-            "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial';"
-            "              font-size:13pt; font-weight:bold; }"
-            "QPushButton:pressed { background:#6d6f72; }");
-        lay->addWidget(btnMenu, 0, Qt::AlignHCenter);
-        lay->addStretch(3);
-
         btnEdit = new QPushButton(m_inner);
         btnEdit->setText("Modifier\nle plan");
         btnEdit->setStyleSheet(
@@ -108,6 +99,15 @@ public:
             "QPushButton:pressed { background:#5ab8ae; }");
         btnEdit->setVisible(false);
         lay->addWidget(btnEdit, 0, Qt::AlignHCenter);
+        lay->addStretch(3);
+
+        btnMenu = new QPushButton("← Menu", m_inner);
+        btnMenu->setStyleSheet(
+            "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
+            "              padding:8px 20px; font-family:'Arial';"
+            "              font-size:13pt; font-weight:bold; }"
+            "QPushButton:pressed { background:#6d6f72; }");
+        lay->addWidget(btnMenu, 0, Qt::AlignHCenter);
         lay->addStretch(1);
     }
 
@@ -479,7 +479,7 @@ void MainWindow::setArLocked(bool locked)
         m_calibLabel->setStyleSheet(
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");
-        m_btnBackToMenu->setText("← Retour");
+        m_btnBackToMenu->setText("← Menu");
     }
     if (m_arStrip) m_arStrip->update();
 }
