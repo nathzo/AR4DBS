@@ -182,13 +182,10 @@ MainWindow::MainWindow(QWidget *parent)
             m_controller,       &QObject::deleteLater);
     m_controllerThread->start();
 
-#ifdef Q_OS_IOS
-    // Compiled CoreML model: Xcode places it in the bundle root or Resources/ depending on build settings.
-    QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.mlmodelc";
-    if (!QFile::exists(depthModel))
-        depthModel = QCoreApplication::applicationDirPath() + "/Resources/model-small.mlmodelc";
-#else
+#ifndef Q_OS_IOS
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
+#else
+    const QString depthModel; // LiDAR provides depth natively on iOS
 #endif
 
 #ifdef FEATURE_PLAN_SCANNER

@@ -4,11 +4,6 @@
 #include "core/math/PoseUtils.h"
 #include "core/rendering/OverlayRenderer.h"
 #include "core/depth/DepthEstimator.h"
-#ifdef Q_OS_IOS
-#include "platform/ios/CoreMLDepthEstimator.h"
-#endif
-
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -28,14 +23,7 @@ static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
 
 AppController::AppController(QObject *parent) : QObject(parent) {}
-AppController::~AppController()
-{
-#ifdef Q_OS_IOS
-    // Wait for the model-load thread and any in-flight inference before destroying members.
-    while (m_depthModelLoading.load() || m_depthInFlight.load())
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-#endif
-}
+AppController::~AppController() = default;
 
 bool AppController::init(const QString &calibPath,
                          const QString &tagConfigPath,
@@ -59,27 +47,6 @@ bool AppController::init(const QString &calibPath,
     m_renderer->setDistortion(m_dist);
 
     if (!depthModelPath.isEmpty()) {
-#ifdef Q_OS_IOS
-        // CoreML model loading triggers ANE compilation on first run, which can block
-        // for >20 s and trips the iOS scene-create watchdog (0x8BADF00D).
-        // Load on a background thread so the UI appears immediately.
-        // All accesses to m_iosDepth on the camera thread are gated on
-        // m_depthModelReady (acquire), which is set here with release ordering
-        // only after m_iosDepth is fully constructed and safe to use.
-        m_depthModelLoading.store(true);
-        std::string modelPath = depthModelPath.toStdString();
-        std::thread([this, modelPath]() {
-            auto est = std::make_unique<CoreMLDepthEstimator>(modelPath);
-            if (est->isLoaded()) {
-                m_iosDepth = std::move(est);
-                m_depthModelReady.store(true, std::memory_order_release);
-                qDebug() << "AppController: iOS CoreML depth estimation enabled";
-            } else {
-                qWarning() << "AppController: CoreML depth model failed to load";
-            }
-            m_depthModelLoading.store(false);
-        }).detach();
-#else
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
         if (!m_depth->isLoaded()) {
             qWarning() << "AppController: depth model not loaded from" << depthModelPath;
@@ -87,7 +54,6 @@ bool AppController::init(const QString &calibPath,
         } else {
             qDebug() << "AppController: depth estimation enabled";
         }
-#endif
     }
 
     return true;
@@ -217,7 +183,7 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 #ifdef Q_OS_IOS
         // Threshold crossing: first ray point where the measured surface is
         // closer than the trajectory point — the surface now blocks the path.
-        // Depth convention (LiDAR and Depth Anything v2 Metric): larger = farther.
+        // Depth convention (LiDAR metric): larger = farther.
         const double estimatedDepth = relPt * depthAnchor;
         if (estimatedDepth < expectedDepth)
             return pt;
@@ -235,7 +201,7 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
 #ifdef Q_OS_IOS
 // Returns true when:
 //   1. The measured depth at the candidate pixel agrees with the expected camera-space
-//      Z within kDepthMatchTol (rules out bad LiDAR pixels and Depth Anything artefacts).
+//      Z within kDepthMatchTol (rules out bad LiDAR pixels and depth holes).
 //   2. On LiDAR: the ARConfidenceLevel at that pixel is kMinLidarConf (= High).
 //      This specifically rejects hair pixels, which produce low-confidence readings.
 bool AppController::checkIncisionQuality(const cv::Point3d &pt,
@@ -418,10 +384,8 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     cv::Rodrigues(rvec, R);
 
     // Returns the estimated metric surface depth at the pixel corresponding to pt.
-    // iOS (LiDAR and Depth Anything v2 Metric): depth convention — larger = farther.
-    //   surfaceDepth = rel * anchor  (anchor ≈ 1.0 for metric model, = 1.0 for LiDAR)
-    // Desktop MiDaS (normalised disparity — larger = closer):
-    //   surfaceDepth = anchor / rel
+    // iOS: LiDAR metric depth convention — larger = farther; surfaceDepth = rel * anchor (= 1.0).
+    // Desktop MiDaS: normalised disparity — larger = closer; surfaceDepth = anchor / rel.
     auto surfaceDepth = [&](const cv::Point3d &pt) -> double {
         const cv::Point2f px = PoseUtils::project(pt, m_K, rvec, tvec, m_dist);
         const float rel = sampleDepthAt(depthMap, px);
@@ -563,7 +527,7 @@ void AppController::onLidarAvailable(bool available)
     m_usingLiDAR  = available;
     m_depthAnchor = available ? 1.0 : 0.0;
     qDebug() << "AppController: depth source ="
-             << (available ? "LiDAR" : "Depth Anything v2 Metric");
+             << (available ? "LiDAR" : "none (no LiDAR)");
 }
 
 void AppController::onTrackingQualityChanged(int state)
@@ -617,35 +581,6 @@ void AppController::onARFrame(const cv::Mat &frame,
             const double cosA = std::max(-1.0, std::min(1.0, -R.at<double>(2, 2)));
             dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
             dbgReprojPx = computeReprojError(detections, rvec, tvec);
-        }
-
-        // Update depth anchor from visible tags (Depth Anything v2 only).
-        if (!m_usingLiDAR && !detections.empty()) {
-            cv::Mat depthForAnchor;
-            {
-                std::lock_guard<std::mutex> lk(m_depthMutex);
-                depthForAnchor = m_depthMapReady;
-            }
-            if (!depthForAnchor.empty()) {
-                double anchorSum   = 0.0;
-                int    anchorCount = 0;
-                for (const auto &det : detections) {
-                    const double      depth = det.tvec.at<double>(2);
-                    const cv::Point2f px    = PoseUtils::project(
-                        cv::Point3d(0,0,0), m_K, det.rvec, det.tvec, m_dist);
-                    const float rel = sampleDepthAt(depthForAnchor, px);
-                    if (rel > 1e-4f) {
-                        anchorSum += depth / rel;
-                        ++anchorCount;
-                    }
-                }
-                if (anchorCount > 0) {
-                    const double newAnchor = anchorSum / anchorCount;
-                    m_depthAnchor = (m_depthAnchor < 1e-9)
-                        ? newAnchor
-                        : (1.0 - kAnchorAlpha) * m_depthAnchor + kAnchorAlpha * newAnchor;
-                }
-            }
         }
 
         if (meetsInitConditions(detections, T_from_tags)) {
@@ -724,19 +659,6 @@ void AppController::onARFrame(const cv::Mat &frame,
         confidenceMap = m_confidenceMap;
     }
 
-    if (m_mlDepthEnabled && !m_usingLiDAR
-            && m_depthModelReady.load(std::memory_order_acquire)
-            && !m_depthInFlight.exchange(true)) {
-        std::thread([this, frame]() mutable {
-            cv::Mat depth = m_iosDepth->estimate(frame);
-            {
-                std::lock_guard<std::mutex> lk(m_depthMutex);
-                m_depthMapReady = depth;
-            }
-            m_depthInFlight.store(false);
-        }).detach();
-    }
-
     // ── Render ─────────────────────────────────────────────────────────────────
     if (!m_showDepthOverlay && (T_cam_leksell.empty() || !anyLine)) {
         m_lastFrameMs = m_frameTimer.elapsed();
@@ -759,14 +681,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
             m_showDepthOverlay);
-        dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: DA v2 Metric",
-            true);
-        dbg(m_usingLiDAR ? "iosDepth model: N/A (LiDAR)"
-            : !m_mlDepthEnabled ? "iosDepth model: disabled"
-            : m_depthModelReady.load() ? "iosDepth model: LOADED"
-            : m_depthModelLoading.load() ? "iosDepth model: loading..."
-            : "iosDepth model: NULL",
-            m_usingLiDAR || !m_mlDepthEnabled || m_depthModelReady.load());
+        dbg("depth source: LiDAR", m_usingLiDAR);
         {
             char buf[64];
             if (!m_T_world_leksell.empty()) {
@@ -828,9 +743,6 @@ void AppController::onARFrame(const cv::Mat &frame,
                 }
             }
         }
-        if (!m_usingLiDAR && m_mlDepthEnabled)
-            dbg(m_depthInFlight.load() ? "depth: IN FLIGHT" : "depth: idle",
-                !m_depthInFlight.load());
         dbg(depthMap.empty() ? "depthMap: EMPTY" :
             "depthMap: " + std::to_string(depthMap.cols) + "x" + std::to_string(depthMap.rows),
             !depthMap.empty());

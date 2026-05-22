@@ -16,7 +16,13 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\" -Recurse -File)",
       "Bash(Select-Object -Property FullName, Extension)",
       "Bash(Sort-Object Extension)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(dir -R)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\platform\\\\ios\\\\CoreMLDepthEstimator.h\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\platform\\\\ios\\\\CoreMLDepthEstimator.mm\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\scripts\\\\convert_depth_metric.py\" -Force)",
+      "Bash(Write-Host \"Deleted files\")",
+      "PowerShell(\"Deleted files\")"
     ]
   }
 }

@@ -205,8 +205,6 @@ if(IOS)
         platform/ios/CameraIntrinsics.mm      # Objective-C++ — reads AVFoundation FOV (kept for reference)
         platform/ios/IOSCamera.h
         platform/ios/IOSCamera.mm
-        platform/ios/CoreMLDepthEstimator.h
-        platform/ios/CoreMLDepthEstimator.mm  # Objective-C++ — Neural Engine monocular depth (no LiDAR)
     )
 else()
     set(PLATFORM_SOURCES
@@ -310,15 +308,6 @@ if(IOS)
     endif()
 endif()
 
-# CoreML depth model for iOS monocular depth (CoreMLDepthEstimator).
-# Bundling is handled entirely by the CI workflow (ios-build.yml):
-#   1. xcrun coremlcompiler compiles model-small.mlpackage → model-small.mlmodelc
-#   2. cp -r copies model-small.mlmodelc into the built DBSAR.app after xcodebuild
-# No CMake action is needed or taken here.
-if(IOS)
-    message(STATUS "CoreML depth model: bundled by CI post-build step in ios-build.yml")
-endif()
-
 # ─── Include paths ────────────────────────────────────────────────────────────
 target_include_directories(DBSAR PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -353,14 +342,12 @@ if(IOS)
     find_library(FW_UIKIT        UIKit        REQUIRED)
     find_library(FW_ARKIT        ARKit        REQUIRED)
     find_library(FW_COREVIDEO    CoreVideo    REQUIRED)
-    find_library(FW_COREML       CoreML       REQUIRED)  # always needed: CoreMLDepthEstimator
     target_link_libraries(DBSAR PRIVATE
         ${FW_FOUNDATION}
         ${FW_AVFOUNDATION}
         ${FW_UIKIT}
         ${FW_ARKIT}
         ${FW_COREVIDEO}
-        ${FW_COREML}
         $<$<BOOL:${FW_VISION}>:${FW_VISION}>
     )
 endif()

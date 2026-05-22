@@ -2,11 +2,9 @@
 #include <QObject>
 #include <QElapsedTimer>
 #include <opencv2/core.hpp>
-#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <vector>
 
 #include "core/math/SurgicalPlan.h"
@@ -20,10 +18,6 @@ class IncisionLine;
 class OverlayRenderer;
 class DepthEstimator;
 struct TagPose;
-
-#ifdef Q_OS_IOS
-class CoreMLDepthEstimator;
-#endif
 
 struct TagConfig {
     int     id;
@@ -167,8 +161,6 @@ private:
     static constexpr double kMaxInitAngleCos = 0.9962; // cos(5°) tolerance around 180°
     static constexpr double kMaxInitReprojPx = 1;   // RMS reprojection error cap
 
-    static constexpr double kAnchorAlpha = 0.05;
-
     // ── Incision marker locking ──────────────────────────────────────────────
     // Once N consecutive depth-consistent, high-confidence frames agree on the
     // same 3-D point, it is stored in Leksell space and projected each frame
@@ -186,18 +178,12 @@ private:
     static constexpr double kDepthMatchTol      = 0.05;  // 5% depth agreement required
     static constexpr int    kMinLidarConf       = 2;     // ARConfidenceLevelHigh
 
-    // ── CoreML / LiDAR depth ─────────────────────────────────────────────────
-    std::unique_ptr<CoreMLDepthEstimator> m_iosDepth;
-    bool   m_usingLiDAR     = false;
-    bool   m_mlDepthEnabled = false;
-    double m_depthAnchor    = 0.0;
+    // ── LiDAR depth ──────────────────────────────────────────────────────────
+    bool   m_usingLiDAR  = false;
+    double m_depthAnchor = 0.0;
 
-    std::atomic<bool> m_depthInFlight{false};
-    std::mutex        m_depthMutex;
-    cv::Mat           m_depthMapReady;
-    cv::Mat           m_confidenceMap; // ARConfidenceLevel map, guarded by m_depthMutex
-
-    std::atomic<bool> m_depthModelLoading{false};
-    std::atomic<bool> m_depthModelReady{false};
+    std::mutex m_depthMutex;
+    cv::Mat    m_depthMapReady;
+    cv::Mat    m_confidenceMap; // ARConfidenceLevel map, guarded by m_depthMutex
 #endif
 };
