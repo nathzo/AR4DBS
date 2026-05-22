@@ -6,6 +6,8 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QCoreApplication>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -275,8 +277,11 @@ MainWindow::MainWindow(QWidget *parent)
     arLayout->setContentsMargins(0, 0, 0, 0);
     arLayout->setSpacing(0);
 
+    const int arW = QGuiApplication::primaryScreen()->availableGeometry().width();
     m_glWidget = new GLWidget(arContainer);
-    arLayout->addWidget(m_glWidget, 1);
+    m_glWidget->setFixedHeight(arW * 640 / 480);
+    arLayout->addStretch(1);
+    arLayout->addWidget(m_glWidget);
     arLayout->addSpacing(8);
 
     // ── Rotated control strip ─────────────────────────────────────────────────
