@@ -48,8 +48,8 @@ public:
         m_inner->setStyleSheet("background: black;");
 
         auto *lay = new QVBoxLayout(m_inner);
-        lay->setContentsMargins(16, 16, 16, 16);
-        lay->setSpacing(12);
+        lay->setContentsMargins(8, 8, 8, 8);
+        lay->setSpacing(8);
 
         m_status = new QLabel(m_inner);
         m_status->setAlignment(Qt::AlignCenter);
@@ -93,11 +93,11 @@ protected:
     {
         syncInner();
         QPainter p(this);
-        // translate(0, stripH) + rotate(−90°):
-        //   painter's +x → screen upward  (landscape: rightward)
-        //   painter's +y → screen rightward (landscape: downward)
-        p.translate(0, m_stripH);
-        p.rotate(-90);
+        // translate(width(), 0) + rotate(+90°):
+        //   painter's +x → screen downward  (landscape CCW: rightward)
+        //   painter's +y → screen leftward  (landscape CCW: downward)
+        p.translate(width(), 0);
+        p.rotate(90);
         m_inner->render(&p);
     }
 
@@ -125,8 +125,8 @@ private:
     }
 
     // Map a screen coordinate (in this widget) to inner-widget coordinates.
-    // Inverse of inner(x,y) → screen(y, stripH−x):  inner = (stripH−sy, sx)
-    QPoint toInner(QPoint s) const { return { m_stripH - s.y(), s.x() }; }
+    // Inverse of inner(x,y) → screen(W−y, x):  inner = (sy, W−sx)
+    QPoint toInner(QPoint s) const { return { s.y(), width() - s.x() }; }
 
     QPushButton *findBtn(QPoint innerPt) const
     {
@@ -173,7 +173,7 @@ ScanScreen::ScanScreen(QWidget *parent)
     root->addWidget(m_impl->preview, 1);
 
     // ── Control strip ─────────────────────────────────────────────────────────
-    m_impl->strip = new RotatedStrip(200, this);
+    m_impl->strip = new RotatedStrip(160, this);
     m_impl->strip->captureBtn->setText(
         PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement");
     m_impl->strip->setStatusText(
