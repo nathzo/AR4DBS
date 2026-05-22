@@ -187,7 +187,7 @@ ScanScreen::ScanScreen(QWidget *parent)
     root->addSpacing(8);
 
     // ── Control strip ─────────────────────────────────────────────────────────
-    m_impl->strip = new RotatedStrip(120, this);
+    m_impl->strip = new RotatedStrip(150, this);
     m_impl->strip->captureBtn->setText(
         PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement");
     m_impl->strip->setStatusText(
@@ -195,6 +195,7 @@ ScanScreen::ScanScreen(QWidget *parent)
             ? "Pointez l'écran Medtronic et appuyez sur Capturer"
             : "OCR non disponible — saisissez les coordonnées manuellement");
     root->addWidget(m_impl->strip);
+    root->addSpacing(8);
 
     connect(m_impl->strip->backBtn,    &QPushButton::clicked,
             this, &ScanScreen::cancelled);
