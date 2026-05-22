@@ -3,6 +3,8 @@
 #include "core/rendering/GLWidget.h"
 
 #include <QCoreApplication>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QLabel>
@@ -164,6 +166,8 @@ ScanScreen::ScanScreen(QWidget *parent)
     , m_impl(new Impl)
 {
     setStyleSheet("background-color: black;");
+
+    const int W = QGuiApplication::primaryScreen()->availableGeometry().width();
 
     // Root layout: camera fills the top; rotated control strip at the bottom.
     auto *root = new QVBoxLayout(this);
