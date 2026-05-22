@@ -41,7 +41,7 @@ void GLWidget::paintEvent(QPaintEvent *event)
         ? QSize(m_image.height(), m_image.width())  // swapped after 90° rotation
         : m_image.size();
 
-    QSize scaled = frameSize.scaled(rect().size(), Qt::KeepAspectRatioByExpanding);
+    QSize scaled = frameSize.scaled(rect().size(), Qt::KeepAspectRatio);
     QRect target(
         (rect().width()  - scaled.width())  / 2,
         (rect().height() - scaled.height()) / 2,

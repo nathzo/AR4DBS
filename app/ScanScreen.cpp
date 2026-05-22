@@ -171,8 +171,16 @@ ScanScreen::ScanScreen(QWidget *parent)
     root->setSpacing(0);
 
     // ── Camera preview ────────────────────────────────────────────────────────
+    // The camera delivers 640×480 landscape frames; GLWidget rotates them 90° so
+    // the displayed height = W × (640/480).  Fixing the widget to exactly that
+    // height leaves no room for black bars inside it.  A stretch above absorbs
+    // the leftover screen height — in landscape that black space lands at the far
+    // edge, not between the camera and the control panel.
     m_impl->preview = new GLWidget(this);
-    root->addWidget(m_impl->preview, 1);
+    m_impl->preview->setFixedHeight(W * 640 / 480);
+    root->addStretch(1);
+    root->addWidget(m_impl->preview);
+    root->addSpacing(8);
 
     // ── Control strip ─────────────────────────────────────────────────────────
     m_impl->strip = new RotatedStrip(120, this);
