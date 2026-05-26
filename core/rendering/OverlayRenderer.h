@@ -27,6 +27,7 @@ public:
     explicit OverlayRenderer(const Style &style);
     ~OverlayRenderer();
 
+    void setStyle(const Style &style) { m_style = style; }
     void setDistortion(const cv::Mat &dist);
 
     // Full draw (no occlusion).

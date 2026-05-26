@@ -2,12 +2,15 @@
 #include <QMainWindow>
 #include <QThread>
 #include "core/math/SurgicalPlan.h"
+#include "core/rendering/OverlayRenderer.h"
+#include "app/SettingsDialog.h"
 
 class QLabel;
 class QStackedWidget;
 class QPushButton;
 class GLWidget;
 class AppController;
+class SettingsDialog;
 
 #ifdef Q_OS_IOS
 class ARKitSession;
@@ -49,8 +52,16 @@ private:
     QThread         *m_controllerThread = nullptr;
     QPushButton     *m_btnEditPlan      = nullptr;
     QPushButton     *m_btnBackToMenu    = nullptr;
+    QPushButton     *m_btnSettings      = nullptr;
     ARRotatedStrip  *m_arStrip          = nullptr;
     SurgicalPlan     m_currentPlan;
+
+    // Local copies of current settings — passed to SettingsDialog on open
+    OverlayRenderer::Style m_renderStyle;
+    double                 m_reprojThreshold = 1.0;
+    TagPositions           m_tagPositions;
+
+    void openSettings();
 
 #ifdef Q_OS_IOS
     QLabel *m_calibLabel    = nullptr;

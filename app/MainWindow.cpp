@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AppController.h"
+#include "SettingsDialog.h"
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
@@ -65,6 +66,7 @@ public:
     QLabel      *statusLabel = nullptr;
     QPushButton *btnMenu     = nullptr;
     QPushButton *btnEdit     = nullptr;
+    QPushButton *btnSettings = nullptr;
 
     explicit ARRotatedStrip(int stripH, QWidget *parent = nullptr)
         : QWidget(parent), m_stripH(stripH)
@@ -77,6 +79,16 @@ public:
         auto *lay = new QVBoxLayout(m_inner);
         lay->setContentsMargins(8, 8, 8, 8);
         lay->setSpacing(8);
+
+        // Gear button: first item in inner layout → appears on the RIGHT side of
+        // the strip in screen portrait coordinates; AlignRight → bottom of strip.
+        btnSettings = new QPushButton("⚙", m_inner);
+        btnSettings->setFixedSize(44, 44);
+        btnSettings->setStyleSheet(
+            "QPushButton { background:#2a2b2d; color:#e0e0e0; border-radius:8px;"
+            "              font-size:18pt; border:1px solid #444; }"
+            "QPushButton:pressed { background:#3a3b3d; }");
+        lay->addWidget(btnSettings, 0, Qt::AlignRight);
 
         // Status label — holds calibration state on iOS; transparent on desktop.
         statusLabel = new QLabel(m_inner);
@@ -285,11 +297,14 @@ MainWindow::MainWindow(QWidget *parent)
     m_arStrip = new ARRotatedStrip(150, arContainer);
     m_btnBackToMenu = m_arStrip->btnMenu;
     m_btnEditPlan   = m_arStrip->btnEdit;
+    m_btnSettings   = m_arStrip->btnSettings;
 #ifdef Q_OS_IOS
     m_calibLabel    = m_arStrip->statusLabel;
 #endif
     arLayout->addWidget(m_arStrip);
     arLayout->addSpacing(8);
+
+    connect(m_btnSettings, &QPushButton::clicked, this, &MainWindow::openSettings);
 
 #ifdef Q_OS_IOS
     setArLocked(false); // set initial label text and button text
@@ -496,3 +511,41 @@ void MainWindow::setArCalibrating(bool calibrating)
 #endif
 
 #endif
+
+void MainWindow::openSettings()
+{
+    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_tagPositions, this);
+
+    connect(&dlg, &SettingsDialog::styleChanged, this,
+            [this](OverlayRenderer::Style style) {
+        m_renderStyle = style;
+        QMetaObject::invokeMethod(m_controller,
+            [this, style]() { m_controller->setRenderStyle(style); },
+            Qt::QueuedConnection);
+    });
+
+    connect(&dlg, &SettingsDialog::reprojThresholdChanged, this,
+            [this](double px) {
+        m_reprojThreshold = px;
+        QMetaObject::invokeMethod(m_controller,
+            [this, px]() { m_controller->setReprojThreshold(px); },
+            Qt::QueuedConnection);
+    });
+
+    connect(&dlg, &SettingsDialog::tagPositionChanged, this,
+            [this](int tagId, double tx, double ty, double tz) {
+        m_tagPositions.tx_m[tagId] = tx;
+        m_tagPositions.ty_m[tagId] = ty;
+        m_tagPositions.tz_m[tagId] = tz;
+        QMetaObject::invokeMethod(m_controller,
+            [this, tagId, tx, ty, tz]() {
+                m_controller->setTagPosition(tagId, tx, ty, tz);
+#ifdef Q_OS_IOS
+                m_controller->resetARRegistration();
+#endif
+            },
+            Qt::QueuedConnection);
+    });
+
+    dlg.exec();
+}

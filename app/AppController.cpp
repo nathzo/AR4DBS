@@ -69,6 +69,30 @@ void AppController::setCalibration(const cv::Mat &K)
 
 void AppController::setShowDepthOverlay(bool show) { m_showDepthOverlay = show; }
 
+void AppController::setRenderStyle(OverlayRenderer::Style style)
+{
+    if (m_renderer) m_renderer->setStyle(style);
+}
+
+void AppController::setReprojThreshold(double px)
+{
+    m_maxInitReprojPx = px;
+}
+
+void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double tz_m)
+{
+    for (auto &cfg : m_tagConfigs) {
+        if (cfg.id != tagId) continue;
+        cfg.t_frame_tag.at<double>(0) = tx_m;
+        cfg.t_frame_tag.at<double>(1) = ty_m;
+        cfg.t_frame_tag.at<double>(2) = tz_m;
+        cfg.T_frame_tag.at<double>(0, 3) = tx_m;
+        cfg.T_frame_tag.at<double>(1, 3) = ty_m;
+        cfg.T_frame_tag.at<double>(2, 3) = tz_m;
+        break;
+    }
+}
+
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
     m_lines[0] = plan.hasLeft()
@@ -736,7 +760,7 @@ void AppController::onARFrame(const cv::Mat &frame,
                     std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
                     dbg(buf, dbgAngleDeg >= 175.0);
                     std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=0.8)", dbgReprojPx);
-                    dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= kMaxInitReprojPx);
+                    dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= m_maxInitReprojPx);
                 } else {
                     dbg("angle:  -- (no pose)", false);
                     dbg("reproj: -- (no pose)", false);
@@ -808,7 +832,7 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     // Valid when angle ≥ 175°, i.e. cosA ≤ -kMaxInitAngleCos ≈ -0.9962.
     if (-R.at<double>(2, 2) > -kMaxInitAngleCos) return false;
 
-    return computeReprojError(detections, rvec, tvec) <= kMaxInitReprojPx;
+    return computeReprojError(detections, rvec, tvec) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,

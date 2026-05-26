@@ -176,6 +176,8 @@ set(APP_SOURCES
     app/AppController.cpp
     app/MainWindow.h
     app/MainWindow.cpp
+    app/SettingsDialog.h
+    app/SettingsDialog.cpp
 )
 
 set(CORE_SOURCES

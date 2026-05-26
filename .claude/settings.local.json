@@ -22,7 +22,15 @@
       "Bash(Remove-Item \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\platform\\\\ios\\\\CoreMLDepthEstimator.mm\" -Force)",
       "Bash(Remove-Item \"C:\\\\Users\\\\natha\\\\Desktop\\\\EPFL\\\\NeuroRestore\\\\Stereotax\\\\AR4DBS\\\\scripts\\\\convert_depth_metric.py\" -Force)",
       "Bash(Write-Host \"Deleted files\")",
-      "PowerShell(\"Deleted files\")"
+      "PowerShell(\"Deleted files\")",
+      "Bash(cmake --build .qtcreator/build --target DBSAR -- -j4)",
+      "Bash(cmake --build . --target DBSAR -- /m:4)",
+      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:$PATH\")",
+      "Bash(cmake --build . --target DBSAR)",
+      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:$PATH\")",
+      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Qt/Tools/QtCreator/bin:$PATH\")",
+      "Bash(jom --version)",
+      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Qt/Tools/QtCreator/bin/jom:$PATH\")"
     ]
   }
 }

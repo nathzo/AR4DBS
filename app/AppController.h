@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/math/SurgicalPlan.h"
+#include "core/rendering/OverlayRenderer.h"
 
 // Register cv::Mat with Qt's meta-type system so it can be passed through
 // queued (cross-thread) signal/slot connections.
@@ -45,6 +46,9 @@ public slots:
     void setCalibration(const cv::Mat &K);
     void setSurgicalPlan(const SurgicalPlan &plan);
     void setShowDepthOverlay(bool show);
+    void setRenderStyle(OverlayRenderer::Style style);
+    void setReprojThreshold(double px);
+    void setTagPosition(int tagId, double tx_m, double ty_m, double tz_m);
 
 #ifdef Q_OS_IOS
     // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
@@ -133,7 +137,8 @@ private:
     QElapsedTimer m_frameTimer;
     qint64        m_lastFrameMs = 0;
 
-    bool m_showDepthOverlay = false;
+    bool   m_showDepthOverlay = false;
+    double m_maxInitReprojPx  = 1.0; // RMS reprojection error cap (px); used by iOS init
 
 #ifdef Q_OS_IOS
     // ── ARKit tracking quality ───────────────────────────────────────────────
@@ -159,7 +164,6 @@ private:
     // Face-on reads as ~180° in our convention (R(2,2) ≈ +1 → cosA = -R(2,2) ≈ -1).
     // Valid range: [175°, 180°], so cosA ≤ -cos(5°) ≈ -0.9962.
     static constexpr double kMaxInitAngleCos = 0.9962; // cos(5°) tolerance around 180°
-    static constexpr double kMaxInitReprojPx = 1;   // RMS reprojection error cap
 
     // ── Incision marker locking ──────────────────────────────────────────────
     // Once N consecutive depth-consistent, high-confidence frames agree on the
