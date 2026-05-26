@@ -382,6 +382,7 @@ public:
         reprojForm->setContentsMargins(16, 20, 16, 16);
         reprojForm->setVerticalSpacing(8);
         reprojForm->setHorizontalSpacing(16);
+        reprojForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
         m_reprojSB = new CalibSpinBox(reprojBox);
         m_reprojSB->setRange(0.1, 10.0);
@@ -400,6 +401,7 @@ public:
             form->setContentsMargins(16, 20, 16, 16);
             form->setVerticalSpacing(8);
             form->setHorizontalSpacing(16);
+            form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
             for (int ax = 0; ax < 3; ++ax) {
                 m_tagSB[t][ax] = new CalibSpinBox(box);
@@ -489,6 +491,9 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
                                const TagPositions           &currentTagPositions,
                                QWidget                      *parent)
     : QDialog(parent)
+    , m_style(currentStyle)
+    , m_reprojThreshold(currentReprojThreshold)
+    , m_tagPositions(currentTagPositions)
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -601,22 +606,31 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     connect(btnClose, &QPushButton::clicked, this, &QDialog::accept);
 
     // ── Open sub-dialogs ──────────────────────────────────────────────────────
-    connect(btnGraphics, &QPushButton::clicked, this, [this, currentStyle]() {
-        auto *dlg = new GraphicsSettingsDialog(currentStyle, this);
-        connect(dlg, &GraphicsSettingsDialog::styleApplied,
-                this, &SettingsDialog::styleChanged);
+    connect(btnGraphics, &QPushButton::clicked, this, [this]() {
+        auto *dlg = new GraphicsSettingsDialog(m_style, this);
+        connect(dlg, &GraphicsSettingsDialog::styleApplied, this,
+                [this](OverlayRenderer::Style s) {
+            m_style = s;
+            emit styleChanged(s);
+        });
         dlg->exec();
         dlg->deleteLater();
     });
 
-    connect(btnCalib, &QPushButton::clicked, this,
-            [this, currentReprojThreshold, currentTagPositions]() {
-        auto *dlg = new CalibrationSettingsDialog(
-            currentReprojThreshold, currentTagPositions, this);
-        connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied,
-                this, &SettingsDialog::reprojThresholdChanged);
-        connect(dlg, &CalibrationSettingsDialog::tagPositionApplied,
-                this, &SettingsDialog::tagPositionChanged);
+    connect(btnCalib, &QPushButton::clicked, this, [this]() {
+        auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_tagPositions, this);
+        connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
+                [this](double px) {
+            m_reprojThreshold = px;
+            emit reprojThresholdChanged(px);
+        });
+        connect(dlg, &CalibrationSettingsDialog::tagPositionApplied, this,
+                [this](int tagId, double tx, double ty, double tz) {
+            m_tagPositions.tx_m[tagId] = tx;
+            m_tagPositions.ty_m[tagId] = ty;
+            m_tagPositions.tz_m[tagId] = tz;
+            emit tagPositionChanged(tagId, tx, ty, tz);
+        });
         dlg->exec();
         dlg->deleteLater();
     });

@@ -24,4 +24,9 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+
+private:
+    OverlayRenderer::Style m_style;
+    double                 m_reprojThreshold = 1.0;
+    TagPositions           m_tagPositions;
 };

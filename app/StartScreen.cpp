@@ -74,8 +74,8 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     topRow->addStretch(1);
     auto *gearBtn = new QPushButton(this);
     gearBtn->setFixedSize(44, 44);
-    gearBtn->setIcon(QIcon(makeGearPixmap(28, QColor(0x8A, 0x8C, 0x8F))));
-    gearBtn->setIconSize(QSize(28, 28));
+    gearBtn->setIcon(QIcon(makeGearPixmap(256, QColor(0x8A, 0x8C, 0x8F))));
+    gearBtn->setIconSize(QSize(30, 30));
     gearBtn->setStyleSheet(
         "QPushButton { background: transparent; border: none; }"
         "QPushButton:pressed { background: rgba(255,255,255,20); border-radius:8px; }");
