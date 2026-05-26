@@ -30,7 +30,8 @@
       "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:$PATH\")",
       "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Qt/Tools/QtCreator/bin:$PATH\")",
       "Bash(jom --version)",
-      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Qt/Tools/QtCreator/bin/jom:$PATH\")"
+      "Bash(export PATH=\"/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Qt/Tools/QtCreator/bin/jom:$PATH\")",
+      "Bash(cmd /c \"\\\\\"C:\\\\Program Files \\(x86\\)\\\\Microsoft Visual Studio\\\\2022\\\\BuildTools\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\\\\\" > nul && C:\\\\Qt\\\\Tools\\\\CMake_64\\\\bin\\\\cmake.exe --build . --target AR4DBS 2>&1 | tail -40\")"
     ]
   }
 }

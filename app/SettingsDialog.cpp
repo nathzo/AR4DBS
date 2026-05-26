@@ -57,7 +57,7 @@ static const char *kBaseSS =
     "QDoubleSpinBox {"
     "  background: #2a2b2d; border: 1px solid #444; border-radius: 6px;"
     "  color: #e0e0e0; font-family: 'Arial'; font-size: 13pt;"
-    "  padding: 10px 12px; min-height: 44px;"
+    "  padding: 6px 10px; min-height: 36px;"
     "  selection-color: #e0e0e0; selection-background-color: #2d5f7a;"
     "}"
     "QDoubleSpinBox::up-button {"
@@ -278,6 +278,13 @@ public:
     }
 
 protected:
+    void focusInEvent(QFocusEvent *e) override
+    {
+        QDoubleSpinBox::focusInEvent(e);
+        QMetaObject::invokeMethod(this, [this]() { lineEdit()->selectAll(); },
+                                  Qt::QueuedConnection);
+    }
+
     void keyPressEvent(QKeyEvent *e) override
     {
         if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
@@ -373,7 +380,7 @@ public:
         auto *reprojBox = new QGroupBox("Seuil d'erreur de reprojection", root);
         auto *reprojForm = new QFormLayout(reprojBox);
         reprojForm->setContentsMargins(16, 20, 16, 16);
-        reprojForm->setVerticalSpacing(12);
+        reprojForm->setVerticalSpacing(8);
         reprojForm->setHorizontalSpacing(16);
 
         m_reprojSB = new CalibSpinBox(reprojBox);
@@ -391,7 +398,7 @@ public:
             auto *box  = new QGroupBox(tagLabels[t], root);
             auto *form = new QFormLayout(box);
             form->setContentsMargins(16, 20, 16, 16);
-            form->setVerticalSpacing(12);
+            form->setVerticalSpacing(8);
             form->setHorizontalSpacing(16);
 
             for (int ax = 0; ax < 3; ++ax) {

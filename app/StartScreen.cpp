@@ -1,16 +1,65 @@
 #include "StartScreen.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
 #include <QFont>
 #include <QFontDatabase>
 #include <QPixmap>
+#include <QPainter>
+#include <QPainterPath>
 #include <QGuiApplication>
 #include <QScreen>
+#include <cmath>
 
 static constexpr auto DARK_BG      = "#1a1b1d";
 static constexpr auto IMPULSE_RED  = "#DE5F5E";
 static constexpr auto ARC_BLUE     = "#75D0C5";
+
+static QPixmap makeGearPixmap(int size, const QColor &color)
+{
+    QPixmap pm(size, size);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    const double cx      = size * 0.5;
+    const double cy      = size * 0.5;
+    const int    nTeeth  = 8;
+    const double outerR  = size * 0.46;
+    const double innerR  = size * 0.33;
+    const double toothA  = M_PI / nTeeth * 0.55;
+    const double holeR   = size * 0.13;
+
+    QPainterPath gear;
+    for (int i = 0; i < nTeeth; ++i) {
+        const double mid = 2.0 * M_PI * i / nTeeth;
+        const double a0  = mid - M_PI / nTeeth;
+        const double a1  = mid - toothA;
+        const double a2  = mid + toothA;
+        const double a3  = mid + M_PI / nTeeth;
+
+        auto pt = [&](double r, double a) {
+            return QPointF(cx + r * std::cos(a), cy + r * std::sin(a));
+        };
+
+        if (i == 0) gear.moveTo(pt(innerR, a0));
+        else        gear.lineTo(pt(innerR, a0));
+        gear.lineTo(pt(outerR, a1));
+        gear.lineTo(pt(outerR, a2));
+        gear.lineTo(pt(innerR, a3));
+    }
+    gear.closeSubpath();
+
+    QPainterPath hole;
+    hole.addEllipse(QPointF(cx, cy), holeR, holeR);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(color);
+    p.drawPath(gear.subtracted(hole));
+
+    return pm;
+}
 
 StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 {
@@ -23,12 +72,13 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     auto *topRow = new QHBoxLayout;
     topRow->setContentsMargins(0, 0, 0, 0);
     topRow->addStretch(1);
-    auto *gearBtn = new QPushButton("⚙", this);
+    auto *gearBtn = new QPushButton(this);
     gearBtn->setFixedSize(44, 44);
+    gearBtn->setIcon(QIcon(makeGearPixmap(28, QColor(0x8A, 0x8C, 0x8F))));
+    gearBtn->setIconSize(QSize(28, 28));
     gearBtn->setStyleSheet(
-        "QPushButton { background:#2a2b2d; color:#e0e0e0; border-radius:8px;"
-        "              font-size:18pt; border:1px solid #444; }"
-        "QPushButton:pressed { background:#3a3b3d; }");
+        "QPushButton { background: transparent; border: none; }"
+        "QPushButton:pressed { background: rgba(255,255,255,20); border-radius:8px; }");
     topRow->addWidget(gearBtn);
     layout->addLayout(topRow);
     connect(gearBtn, &QPushButton::clicked, this, &StartScreen::settingsRequested);
