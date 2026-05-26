@@ -52,7 +52,6 @@ private:
     QThread         *m_controllerThread = nullptr;
     QPushButton     *m_btnEditPlan      = nullptr;
     QPushButton     *m_btnBackToMenu    = nullptr;
-    QPushButton     *m_btnSettings      = nullptr;
     ARRotatedStrip  *m_arStrip          = nullptr;
     SurgicalPlan     m_currentPlan;
 

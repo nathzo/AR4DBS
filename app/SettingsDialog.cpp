@@ -9,11 +9,16 @@
 #include <QPushButton>
 #include <QButtonGroup>
 #include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QFrame>
 #include <QScrollArea>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QGuiApplication>
+#include <QInputMethod>
+#include <QInputMethodEvent>
+#include <QKeyEvent>
+#include <QCoreApplication>
 #include <QScreen>
 
 // ── Shared palette ────────────────────────────────────────────────────────────
@@ -50,12 +55,19 @@ static const char *kBaseSS =
     "}"
     "QGroupBox::title { subcontrol-origin: margin; left: 12px; }"
     "QDoubleSpinBox {"
-    "  background: #222; border: 1px solid #555; border-radius: 6px;"
+    "  background: #2a2b2d; border: 1px solid #444; border-radius: 6px;"
     "  color: #e0e0e0; font-family: 'Arial'; font-size: 13pt;"
-    "  padding: 4px 8px; min-height: 44px;"
+    "  padding: 10px 12px; min-height: 44px;"
+    "  selection-color: #e0e0e0; selection-background-color: #2d5f7a;"
     "}"
-    "QDoubleSpinBox::up-button   { width: 28px; }"
-    "QDoubleSpinBox::down-button { width: 28px; }";
+    "QDoubleSpinBox::up-button {"
+    "  subcontrol-origin: border; subcontrol-position: top right;"
+    "  width: 0; height: 0; border: none; margin: 0;"
+    "}"
+    "QDoubleSpinBox::down-button {"
+    "  subcontrol-origin: border; subcontrol-position: bottom right;"
+    "  width: 0; height: 0; border: none; margin: 0;"
+    "}";
 
 static QPushButton *makePrimaryBtn(const QString &text, QWidget *parent)
 {
@@ -236,6 +248,93 @@ private:
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CalibSpinBox — QDoubleSpinBox with:
+//   • inputMethodQuery fix so iOS selection handles appear at the correct position
+//   • Enter/Return closes the keyboard (never advances focus)
+//   • decimal-separator normalisation (like AutoSelectSpinBox in ConfirmPlanDialog)
+//   • NO auto-select-all on focus
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CalibSpinBox : public QDoubleSpinBox
+{
+public:
+    explicit CalibSpinBox(QWidget *parent = nullptr) : QDoubleSpinBox(parent)
+    {
+        lineEdit()->installEventFilter(this);
+    }
+
+    // Translate cursor/anchor rectangles so iOS selection handles appear inside
+    // the visible text area rather than at the QDoubleSpinBox origin.
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override
+    {
+        QVariant v = QDoubleSpinBox::inputMethodQuery(query);
+        if (query == Qt::ImCursorRectangle    ||
+            query == Qt::ImAnchorRectangle    ||
+            query == Qt::ImInputItemClipRectangle) {
+            if (v.canConvert<QRect>())
+                return v.toRect().translated(lineEdit()->pos());
+        }
+        return v;
+    }
+
+protected:
+    void keyPressEvent(QKeyEvent *e) override
+    {
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+            clearFocus();
+            if (auto *im = QGuiApplication::inputMethod()) im->hide();
+            return;
+        }
+        QDoubleSpinBox::keyPressEvent(e);
+    }
+
+    bool eventFilter(QObject *obj, QEvent *ev) override
+    {
+        if (obj == lineEdit() && ev->type() == QEvent::InputMethod) {
+            auto *ime = static_cast<QInputMethodEvent *>(ev);
+            const QString commit = ime->commitString();
+            if (!commit.isEmpty()) {
+                const QChar dp  = locale().decimalPoint().at(0);
+                const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',')
+                                                           : QLatin1Char('.');
+                if (commit.contains(alt)) {
+                    QString fixed = commit;
+                    fixed.replace(alt, dp);
+                    QInputMethodEvent mapped(ime->preeditString(), ime->attributes());
+                    mapped.setCommitString(fixed,
+                                          ime->replacementStart(),
+                                          ime->replacementLength());
+                    QCoreApplication::sendEvent(lineEdit(), &mapped);
+                    return true;
+                }
+            }
+        }
+        return QDoubleSpinBox::eventFilter(obj, ev);
+    }
+
+    QValidator::State validate(QString &input, int &pos) const override
+    {
+        normalise(input);
+        return QDoubleSpinBox::validate(input, pos);
+    }
+
+    double valueFromText(const QString &text) const override
+    {
+        QString t = text;
+        normalise(t);
+        return QDoubleSpinBox::valueFromText(t);
+    }
+
+private:
+    void normalise(QString &s) const
+    {
+        const QChar dp  = locale().decimalPoint().at(0);
+        const QChar alt = (dp == QLatin1Char('.')) ? QLatin1Char(',') : QLatin1Char('.');
+        s.replace(alt, dp);
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CalibrationSettingsDialog
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -277,7 +376,7 @@ public:
         reprojForm->setVerticalSpacing(12);
         reprojForm->setHorizontalSpacing(16);
 
-        m_reprojSB = new QDoubleSpinBox(reprojBox);
+        m_reprojSB = new CalibSpinBox(reprojBox);
         m_reprojSB->setRange(0.1, 10.0);
         m_reprojSB->setDecimals(2);
         m_reprojSB->setSingleStep(0.1);
@@ -296,7 +395,7 @@ public:
             form->setHorizontalSpacing(16);
 
             for (int ax = 0; ax < 3; ++ax) {
-                m_tagSB[t][ax] = new QDoubleSpinBox(box);
+                m_tagSB[t][ax] = new CalibSpinBox(box);
                 m_tagSB[t][ax]->setRange(-500.0, 500.0);
                 m_tagSB[t][ax]->setDecimals(1);
                 m_tagSB[t][ax]->setSingleStep(1.0);
@@ -322,6 +421,10 @@ public:
         btnRow->setSpacing(16);
         auto *btnCancel = makeSecondaryBtn("Annuler", root);
         auto *btnApply  = makePrimaryBtn("Appliquer", root);
+        btnCancel->setAutoDefault(false);
+        btnCancel->setDefault(false);
+        btnApply->setAutoDefault(false);
+        btnApply->setDefault(false);
         btnRow->addWidget(btnCancel);
         btnRow->addWidget(btnApply);
         vbox->addLayout(btnRow);
@@ -337,6 +440,9 @@ public:
             }
             accept();
         });
+
+        // Prevent auto-focus of first spinbox on open
+        btnCancel->setFocus();
     }
 
 signals:
@@ -346,9 +452,25 @@ signals:
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }
 
+    void showEvent(QShowEvent *e) override
+    {
+        QDialog::showEvent(e);
+        const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
+        move(ag.topLeft());
+        // Clear any auto-focus that Qt may have assigned to the first spinbox.
+        if (auto *im = QGuiApplication::inputMethod()) im->hide();
+    }
+
+    void keyPressEvent(QKeyEvent *e) override
+    {
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)
+            return; // handled per-spinbox; dialog-level Enter does nothing
+        QDialog::keyPressEvent(e);
+    }
+
 private:
-    QDoubleSpinBox *m_reprojSB       = nullptr;
-    QDoubleSpinBox *m_tagSB[2][3]   = {};
+    CalibSpinBox *m_reprojSB     = nullptr;
+    CalibSpinBox *m_tagSB[2][3] = {};
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,6 +550,11 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
             "              border:1px solid #333; }");
     }
+    // Medtronic is the default selection — highlight it like the active choice
+    btnMdt->setStyleSheet(
+        "QPushButton { background:#1a3030; color:#3a6060; border-radius:8px;"
+        "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+        "              border:1px solid #2a5050; }");
     refRow->addWidget(refLbl);
     refRow->addStretch(1);
     refRow->addWidget(btnMdt);

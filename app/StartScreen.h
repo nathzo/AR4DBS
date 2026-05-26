@@ -13,4 +13,5 @@ public:
 signals:
     void newSurgeryRequested();
     void directARRequested();
+    void settingsRequested();
 };

@@ -66,8 +66,6 @@ public:
     QLabel      *statusLabel = nullptr;
     QPushButton *btnMenu     = nullptr;
     QPushButton *btnEdit     = nullptr;
-    QPushButton *btnSettings = nullptr;
-
     explicit ARRotatedStrip(int stripH, QWidget *parent = nullptr)
         : QWidget(parent), m_stripH(stripH)
     {
@@ -79,16 +77,6 @@ public:
         auto *lay = new QVBoxLayout(m_inner);
         lay->setContentsMargins(8, 8, 8, 8);
         lay->setSpacing(8);
-
-        // Gear button: first item in inner layout → appears on the RIGHT side of
-        // the strip in screen portrait coordinates; AlignRight → bottom of strip.
-        btnSettings = new QPushButton("⚙", m_inner);
-        btnSettings->setFixedSize(44, 44);
-        btnSettings->setStyleSheet(
-            "QPushButton { background:#2a2b2d; color:#e0e0e0; border-radius:8px;"
-            "              font-size:18pt; border:1px solid #444; }"
-            "QPushButton:pressed { background:#3a3b3d; }");
-        lay->addWidget(btnSettings, 0, Qt::AlignRight);
 
         // Status label — holds calibration state on iOS; transparent on desktop.
         statusLabel = new QLabel(m_inner);
@@ -297,14 +285,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_arStrip = new ARRotatedStrip(150, arContainer);
     m_btnBackToMenu = m_arStrip->btnMenu;
     m_btnEditPlan   = m_arStrip->btnEdit;
-    m_btnSettings   = m_arStrip->btnSettings;
 #ifdef Q_OS_IOS
     m_calibLabel    = m_arStrip->statusLabel;
 #endif
     arLayout->addWidget(m_arStrip);
     arLayout->addSpacing(8);
-
-    connect(m_btnSettings, &QPushButton::clicked, this, &MainWindow::openSettings);
 
 #ifdef Q_OS_IOS
     setArLocked(false); // set initial label text and button text
@@ -350,6 +335,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_stack->addWidget(arContainer);    // index 2
     m_stack->setCurrentIndex(0);
     setCentralWidget(m_stack);
+
+    // Start screen → settings
+    connect(m_startScreen, &StartScreen::settingsRequested,
+            this, &MainWindow::openSettings);
 
     // Start screen → scan
     connect(m_startScreen, &StartScreen::newSurgeryRequested, this, [this]() {
