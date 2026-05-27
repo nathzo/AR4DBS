@@ -19,8 +19,7 @@
     <message>
         <source>Modifier
 le plan</source>
-        <translation>Edit
-plan</translation>
+        <translation>Edit plan</translation>
     </message>
 </context>
 

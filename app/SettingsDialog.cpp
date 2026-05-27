@@ -608,8 +608,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             "  font-size: 12pt;"
             "  font-weight: bold;"
             "  border-radius: 8px;"
-            "  padding: 10px 24px;"
-            "  min-width: 120px;"
+            "  padding: 10px 14px;"
             "}"
         );
 
@@ -617,14 +616,14 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         if (auto *yes = qobject_cast<QPushButton*>(box.button(QMessageBox::Yes))) {
             yes->setStyleSheet(
                 "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-                "              padding:10px 24px; font-family:Arial;"
+                "              padding:10px 14px; font-family:Arial;"
                 "              font-size:12pt; font-weight:bold; }"
                 "QPushButton:pressed { background:#a33c3f; }");
         }
         if (auto *no = qobject_cast<QPushButton*>(box.button(QMessageBox::No))) {
             no->setStyleSheet(
                 "QPushButton { background:#2a2b2d; color:#c0c0c0; border-radius:8px;"
-                "              padding:10px 24px; font-family:Arial;"
+                "              padding:10px 14px; font-family:Arial;"
                 "              font-size:12pt; font-weight:bold; }"
                 "QPushButton:pressed { background:#3a3b3d; }");
         }
