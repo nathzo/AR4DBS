@@ -616,10 +616,10 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         // Style individual buttons after the dialog builds its layout
         if (auto *yes = qobject_cast<QPushButton*>(box.button(QMessageBox::Yes))) {
             yes->setStyleSheet(
-                "QPushButton { background:#75D0C5; color:#0d1a1a; border-radius:8px;"
+                "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
                 "              padding:10px 24px; font-family:Arial;"
                 "              font-size:12pt; font-weight:bold; }"
-                "QPushButton:pressed { background:#55b0a5; }");
+                "QPushButton:pressed { background:#a33c3f; }");
         }
         if (auto *no = qobject_cast<QPushButton*>(box.button(QMessageBox::No))) {
             no->setStyleSheet(

@@ -106,6 +106,7 @@ static SurgicalPlan defaultTestPlan()
 // phone is held in landscape.
 class ARRotatedStrip : public QWidget
 {
+    Q_OBJECT
 public:
     QLabel      *statusLabel = nullptr;
     QPushButton *btnMenu     = nullptr;
@@ -595,3 +596,5 @@ void MainWindow::openSettings()
 
     dlg.exec();
 }
+
+#include "MainWindow.moc"
