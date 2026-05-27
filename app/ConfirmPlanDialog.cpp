@@ -189,14 +189,14 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
 
     auto *box = new QGroupBox(title, parent);
     box->setCheckable(false);
-    box->setObjectName(title);
+    box->setObjectName("side_group");
     auto *form = new QFormLayout(box);
     form->setLabelAlignment(Qt::AlignRight);
     form->setVerticalSpacing(14);
     form->setHorizontalSpacing(16);
     form->setContentsMargins(16, 16, 16, 16);
 
-    w.enabled = new QCheckBox("Activer", parent);
+    w.enabled = new QCheckBox(tr("Activer"), parent);
     w.enabled->setChecked(true);
 
     // confidence[] < 0 → field not detected; 0–1 → Vision confidence
@@ -216,8 +216,8 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     form->addRow("X (mm) :",        w.x);
     form->addRow("Y (mm) :",        w.y);
     form->addRow("Z (mm) :",        w.z);
-    form->addRow("Ring (degrés) :", w.ring);
-    form->addRow("Arc  (degrés) :", w.arc);
+    form->addRow(tr("Ring (degrés) :"), w.ring);
+    form->addRow(tr("Arc  (degrés) :"), w.arc);
 
     // Disable spinboxes when side is unchecked
     auto updateEnabled = [w](bool on) {
@@ -269,7 +269,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
                                      QWidget *parent)
     : QDialog(parent), m_scanMode(mode == Mode::Scan)
 {
-    setWindowTitle("Confirmer le plan chirurgical");
+    setWindowTitle(tr("Confirmer le plan chirurgical"));
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     {
@@ -318,7 +318,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         "  border-radius: 10px; padding: 16px 40px;"
         "  font-family: 'Arial'; font-size: 15pt; font-weight: bold;"
         "}"
-        "QPushButton[text='Annuler'] { background: #8A8C8F; color: black; }"
+        "QPushButton#cancelBtn { background: #8A8C8F; color: black; }"
     );
 
     auto *mainLayout = new QVBoxLayout(this);
@@ -329,15 +329,15 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
     auto *banner = new QLabel(this);
     banner->setWordWrap(true);
     if (initial.hasAny()) {
-        banner->setText("✓ Coordonnées détectées. Vérifiez avant de confirmer.");
+        banner->setText(tr("✓ Coordonnées détectées. Vérifiez avant de confirmer."));
         banner->setStyleSheet("background: #1e3a3a; color: #75D0C5; padding: 8px; border-radius: 4px;");
     } else {
-        banner->setText("Coordonnées non détectées. Saisissez les valeurs manuellement.");
+        banner->setText(tr("Coordonnées non détectées. Saisissez les valeurs manuellement."));
         banner->setStyleSheet("background: #3a1e1f; color: #c45255; padding: 8px; border-radius: 4px;");
     }
 
     // ── Confirm button — created before buildSide so updateConfirmButton works ─
-    m_confirmBtn = new QPushButton("Confirmer", this);
+    m_confirmBtn = new QPushButton(tr("Confirmer"), this);
     m_confirmBtn->setAutoDefault(false);
     m_confirmBtn->setDefault(false);
     m_confirmBtn->setStyleSheet(
@@ -349,7 +349,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
     // ── Scan mode: Annuler top-left so it stays reachable above the keyboard ──
     if (m_scanMode) {
-        auto *cancelBtn = new QPushButton("Annuler", this);
+        auto *cancelBtn = new QPushButton(tr("Annuler"), this);
+        cancelBtn->setObjectName("cancelBtn");
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
         connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
@@ -371,19 +372,19 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
     auto *leftLayout = new QVBoxLayout(leftPage);
     leftLayout->setContentsMargins(16, 16, 16, 16);
     leftLayout->setSpacing(12);
-    m_left = buildSide("Gauche (G)", initial.left, leftPage);
-    leftLayout->addWidget(leftPage->findChild<QGroupBox *>("Gauche (G)"));
+    m_left = buildSide(tr("Gauche (G)"), initial.left, leftPage);
+    leftLayout->addWidget(leftPage->findChild<QGroupBox *>("side_group"));
     leftLayout->addStretch();
-    tabs->addTab(leftPage, "Gauche (G)");
+    tabs->addTab(leftPage, tr("Gauche (G)"));
 
     auto *rightPage = new QWidget(tabs);
     auto *rightLayout = new QVBoxLayout(rightPage);
     rightLayout->setContentsMargins(16, 16, 16, 16);
     rightLayout->setSpacing(12);
-    m_right = buildSide("Droite (D)", initial.right, rightPage);
-    rightLayout->addWidget(rightPage->findChild<QGroupBox *>("Droite (D)"));
+    m_right = buildSide(tr("Droite (D)"), initial.right, rightPage);
+    rightLayout->addWidget(rightPage->findChild<QGroupBox *>("side_group"));
     rightLayout->addStretch();
-    tabs->addTab(rightPage, "Droite (D)");
+    tabs->addTab(rightPage, tr("Droite (D)"));
 
     mainLayout->addWidget(tabs);
 
@@ -425,7 +426,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
                                   Qt::QueuedConnection);
     } else {
         // Edit mode: Annuler and Confirmer side-by-side at the bottom.
-        auto *cancelBtn = new QPushButton("Annuler", this);
+        auto *cancelBtn = new QPushButton(tr("Annuler"), this);
+        cancelBtn->setObjectName("cancelBtn");
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
         connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);

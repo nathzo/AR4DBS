@@ -4,6 +4,7 @@
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
+#include <QSettings>
 #include <QLabel>
 #include <QMessageBox>
 #include <QCoreApplication>
@@ -18,6 +19,49 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <cmath>
+
+// ── Persistent settings helpers ───────────────────────────────────────────────
+
+static void loadPersistedSettings(OverlayRenderer::Style &style,
+                                   double                 &reprojThreshold,
+                                   TagPositions           &tags)
+{
+    QSettings s;
+    style.lineColor     = QColor(s.value("style/lineColor",
+                                         style.lineColor.name()).toString());
+    style.incisionColor = QColor(s.value("style/incisionColor",
+                                         style.incisionColor.name()).toString());
+    style.targetColor   = QColor(s.value("style/targetColor",
+                                         style.targetColor.name()).toString());
+    reprojThreshold = s.value("calib/reprojThreshold", reprojThreshold).toDouble();
+    for (int t = 0; t < 2; ++t) {
+        tags.tx_m[t] = s.value(QString("tags/%1/tx").arg(t), tags.tx_m[t]).toDouble();
+        tags.ty_m[t] = s.value(QString("tags/%1/ty").arg(t), tags.ty_m[t]).toDouble();
+        tags.tz_m[t] = s.value(QString("tags/%1/tz").arg(t), tags.tz_m[t]).toDouble();
+    }
+}
+
+static void saveStyle(const OverlayRenderer::Style &style)
+{
+    QSettings s;
+    s.setValue("style/lineColor",     style.lineColor.name());
+    s.setValue("style/incisionColor", style.incisionColor.name());
+    s.setValue("style/targetColor",   style.targetColor.name());
+}
+
+static void saveReprojThreshold(double px)
+{
+    QSettings s;
+    s.setValue("calib/reprojThreshold", px);
+}
+
+static void saveTagPosition(int id, double tx, double ty, double tz)
+{
+    QSettings s;
+    s.setValue(QString("tags/%1/tx").arg(id), tx);
+    s.setValue(QString("tags/%1/ty").arg(id), ty);
+    s.setValue(QString("tags/%1/tz").arg(id), tz);
+}
 
 // Default DBS targets in Leksell frame coordinates (mm / degrees).
 static SurgicalPlan defaultTestPlan()
@@ -91,7 +135,7 @@ public:
         lay->addStretch(3);
 
         btnEdit = new QPushButton(m_inner);
-        btnEdit->setText("Modifier\nle plan");
+        btnEdit->setText(tr("Modifier\nle plan"));
         btnEdit->setStyleSheet(
             "QPushButton { background:#75D0C5; color:black; border-radius:8px;"
             "              padding:6px 16px; font-family:'Arial';"
@@ -101,7 +145,7 @@ public:
         lay->addWidget(btnEdit, 0, Qt::AlignHCenter);
         lay->addStretch(3);
 
-        btnMenu = new QPushButton("← Menu", m_inner);
+        btnMenu = new QPushButton(tr("← Menu"), m_inner);
         btnMenu->setStyleSheet(
             "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
             "              padding:8px 20px; font-family:'Arial';"
@@ -188,6 +232,8 @@ MainWindow::MainWindow(QWidget *parent)
     const QString depthModel; // LiDAR provides depth natively on iOS
 #endif
 
+    loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_tagPositions);
+
 #ifdef FEATURE_PLAN_SCANNER
     // With the scanner: init without a plan path (plan comes from the wizard)
     if (!m_controller->init(":/resources/calibration.json",
@@ -209,6 +255,14 @@ MainWindow::MainWindow(QWidget *parent)
         return;
     }
 #endif
+
+    // Push persisted values over the JSON defaults that init() loaded
+    m_controller->setRenderStyle(m_renderStyle);
+    m_controller->setReprojThreshold(m_reprojThreshold);
+    for (int t = 0; t < 2; ++t)
+        m_controller->setTagPosition(t, m_tagPositions.tx_m[t],
+                                        m_tagPositions.ty_m[t],
+                                        m_tagPositions.tz_m[t]);
 
     // ── AR camera (used in the AR phase) ─────────────────────────────────────
     //
@@ -469,18 +523,18 @@ void MainWindow::setArLocked(bool locked)
     m_arLocked = locked;
     if (locked) {
         m_arCalibrating = false;
-        m_calibLabel->setText("Calibration réussie, repères verrouillés");
+        m_calibLabel->setText(tr("Calibration réussie, repères verrouillés"));
         m_calibLabel->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
-        m_btnBackToMenu->setText("Recalibrer");
+        m_btnBackToMenu->setText(tr("Recalibrer"));
     } else {
         m_arCalibrating = false;
-        m_calibLabel->setText("Calibration requise : placez la caméra face aux repères");
+        m_calibLabel->setText(tr("Calibration requise : placez la caméra face aux repères"));
         m_calibLabel->setStyleSheet(
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");
-        m_btnBackToMenu->setText("← Menu");
+        m_btnBackToMenu->setText(tr("← Menu"));
     }
     if (m_arStrip) m_arStrip->update();
 }
@@ -490,8 +544,8 @@ void MainWindow::setArCalibrating(bool calibrating)
     if (m_arLocked) return; // locked state takes priority
     m_arCalibrating = calibrating;
     m_calibLabel->setText(calibrating
-        ? "Calibration en cours..."
-        : "Calibration requise : placez la caméra face aux repères");
+        ? tr("Calibration en cours...")
+        : tr("Calibration requise : placez la caméra face aux repères"));
     m_calibLabel->setStyleSheet(
         "color: #DE5F5E; background: rgba(222,95,94,50);"
         "padding: 6px; font-size: 12pt;");
@@ -508,6 +562,7 @@ void MainWindow::openSettings()
     connect(&dlg, &SettingsDialog::styleChanged, this,
             [this](OverlayRenderer::Style style) {
         m_renderStyle = style;
+        saveStyle(style);
         QMetaObject::invokeMethod(m_controller,
             [this, style]() { m_controller->setRenderStyle(style); },
             Qt::QueuedConnection);
@@ -516,6 +571,7 @@ void MainWindow::openSettings()
     connect(&dlg, &SettingsDialog::reprojThresholdChanged, this,
             [this](double px) {
         m_reprojThreshold = px;
+        saveReprojThreshold(px);
         QMetaObject::invokeMethod(m_controller,
             [this, px]() { m_controller->setReprojThreshold(px); },
             Qt::QueuedConnection);
@@ -526,6 +582,7 @@ void MainWindow::openSettings()
         m_tagPositions.tx_m[tagId] = tx;
         m_tagPositions.ty_m[tagId] = ty;
         m_tagPositions.tz_m[tagId] = tz;
+        saveTagPosition(tagId, tx, ty, tz);
         QMetaObject::invokeMethod(m_controller,
             [this, tagId, tx, ty, tz]() {
                 m_controller->setTagPosition(tagId, tx, ty, tz);

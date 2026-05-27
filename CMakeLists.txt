@@ -169,6 +169,19 @@ else()
     list(APPEND SCANNER_SOURCES core/math/SurgicalPlan.h)
 endif()
 
+# ─── Translations ─────────────────────────────────────────────────────────────
+find_package(Qt6 COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(DBSAR
+        TS_FILES resources/translations/ar4dbs_en.ts
+        RESOURCE_PREFIX "/translations"
+        LUPDATE_OPTIONS -no-obsolete
+    )
+    message(STATUS "Translations: enabled (ar4dbs_en.ts)")
+else()
+    message(STATUS "Translations: Qt6::LinguistTools not found — UI will be French only")
+endif()
+
 # ─── Sources ──────────────────────────────────────────────────────────────────
 set(APP_SOURCES
     app/main.cpp

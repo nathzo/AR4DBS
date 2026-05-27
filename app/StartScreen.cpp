@@ -116,9 +116,9 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
                    ).arg(bg, fg);
     };
 
-    auto *btnNew = new QPushButton("Nouvelle chirurgie", this);
+    auto *btnNew = new QPushButton(tr("Nouvelle chirurgie"), this);
     btnNew->setStyleSheet(btnStyle(IMPULSE_RED));
-    auto *btnTest = new QPushButton("Mode test AR", this);
+    auto *btnTest = new QPushButton(tr("Mode test AR"), this);
     btnTest->setStyleSheet(btnStyle(ARC_BLUE, "#000000"));
 
     layout->addStretch(1);

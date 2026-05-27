@@ -192,11 +192,11 @@ ScanScreen::ScanScreen(QWidget *parent)
     // ── Control strip ─────────────────────────────────────────────────────────
     m_impl->strip = new RotatedStrip(150, this);
     m_impl->strip->captureBtn->setText(
-        PlanScanner::isAvailable() ? "Capturer" : "Saisir manuellement");
+        PlanScanner::isAvailable() ? tr("Capturer") : tr("Saisir manuellement"));
     m_impl->strip->setStatusText(
         PlanScanner::isAvailable()
-            ? "Pointez l'écran Medtronic et appuyez sur Capturer"
-            : "OCR non disponible — saisissez les coordonnées manuellement");
+            ? tr("Pointez l'écran Medtronic et appuyez sur Capturer")
+            : tr("OCR non disponible — saisissez les coordonnées manuellement"));
     root->addWidget(m_impl->strip);
     root->addSpacing(8);
 
@@ -235,8 +235,8 @@ void ScanScreen::startCamera()
     // e.g. after the user cancels the confirmation dialog.
     m_impl->strip->setStatusText(
         PlanScanner::isAvailable()
-            ? "Pointez l'écran Medtronic et appuyez sur Capturer"
-            : "OCR non disponible — saisissez les coordonnées manuellement");
+            ? tr("Pointez l'écran Medtronic et appuyez sur Capturer")
+            : tr("OCR non disponible — saisissez les coordonnées manuellement"));
     m_impl->camera->start();
 }
 
@@ -249,7 +249,7 @@ void ScanScreen::onCapture()
         return;
     }
 
-    m_impl->strip->setStatusText("Analyse en cours…");
+    m_impl->strip->setStatusText(tr("Analyse en cours…"));
     QCoreApplication::processEvents();   // let the label repaint before OCR blocks
 
     SurgicalPlan plan = PlanScanner::scan(m_impl->lastFrame);

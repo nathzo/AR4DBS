@@ -3,6 +3,8 @@
 #include <QtGlobal>
 #include <QMetaType>
 #include <QFont>
+#include <QTranslator>
+#include <QSettings>
 #include "MainWindow.h"
 #include "AppController.h" // pulls in Q_DECLARE_METATYPE(cv::Mat)
 
@@ -54,6 +56,18 @@ int main(int argc, char *argv[])
     app.setApplicationName("AR4DBS");
     app.setOrganizationName("NeuroRestore");
     app.setFont(QFont("Arial", 12));
+
+    // Load language preference before any UI is created so all tr() calls
+    // in constructors pick up the right language immediately.
+    {
+        QSettings s;
+        const QString lang = s.value("language", "fr").toString();
+        if (lang != "fr") {
+            auto *translator = new QTranslator(&app);
+            if (translator->load(":/translations/ar4dbs_" + lang))
+                app.installTranslator(translator);
+        }
+    }
 
     MainWindow window;
     window.setWindowTitle("AR4DBS");

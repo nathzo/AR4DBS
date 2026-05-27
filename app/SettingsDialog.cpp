@@ -16,6 +16,7 @@
 #include <QPaintEvent>
 #include <QGuiApplication>
 #include <QInputMethod>
+#include <QSettings>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QCoreApplication>
@@ -136,7 +137,7 @@ public:
         vbox->setContentsMargins(20, 60, 20, 30);
         vbox->setSpacing(16);
 
-        auto *title = new QLabel("Paramètres graphiques", root);
+        auto *title = new QLabel(tr("Paramètres graphiques"), root);
         title->setAlignment(Qt::AlignCenter);
         title->setStyleSheet(
             "color:white; font-family:'Arial'; font-size:18pt; font-weight:bold;");
@@ -164,19 +165,19 @@ public:
         }
 
         // Row data: label and initial selection index
-        struct RowDef { const char *label; int *idx; };
+        struct RowDef { QString label; int *idx; };
         m_lineIdx     = colorIndex(style.lineColor);
         m_incisionIdx = colorIndex(style.incisionColor);
         m_targetIdx   = colorIndex(style.targetColor);
 
         RowDef rows[] = {
-            { "Trajectoire",           &m_lineIdx     },
-            { "Marqueur d'incision",   &m_incisionIdx },
-            { "Cible",                 &m_targetIdx   },
+            { tr("Trajectoire"),           &m_lineIdx     },
+            { tr("Marqueur d'incision"),   &m_incisionIdx },
+            { tr("Cible"),                 &m_targetIdx   },
         };
 
         for (int r = 0; r < 3; ++r) {
-            auto *lbl = new QLabel(rows[r].label, root);
+            auto *lbl = new QLabel(rows[r].label, root);  // label is already tr()'d above
             lbl->setStyleSheet(
                 "color:#e0e0e0; font-family:'Arial'; font-size:13pt;");
             grid->addWidget(lbl, r + 1, 0, Qt::AlignVCenter | Qt::AlignLeft);
@@ -217,8 +218,8 @@ public:
         // ── Buttons ───────────────────────────────────────────────────────────
         auto *btnRow = new QHBoxLayout;
         btnRow->setSpacing(16);
-        auto *btnCancel = makeSecondaryBtn("Annuler", root);
-        auto *btnApply  = makePrimaryBtn("Appliquer", root);
+        auto *btnCancel = makeSecondaryBtn(tr("Annuler"), root);
+        auto *btnApply  = makePrimaryBtn(tr("Appliquer"), root);
         btnRow->addWidget(btnCancel);
         btnRow->addWidget(btnApply);
         vbox->addLayout(btnRow);
@@ -368,7 +369,7 @@ public:
         vbox->setContentsMargins(20, 60, 20, 30);
         vbox->setSpacing(16);
 
-        auto *title = new QLabel("Paramètres de calibration", root);
+        auto *title = new QLabel(tr("Paramètres de calibration"), root);
         title->setAlignment(Qt::AlignCenter);
         title->setStyleSheet(
             "color:white; font-family:'Arial'; font-size:18pt; font-weight:bold;");
@@ -377,7 +378,7 @@ public:
         vbox->addSpacing(8);
 
         // ── Reprojection threshold ─────────────────────────────────────────────
-        auto *reprojBox = new QGroupBox("Seuil d'erreur de reprojection", root);
+        auto *reprojBox = new QGroupBox(tr("Seuil d'erreur de reprojection"), root);
         auto *reprojForm = new QFormLayout(reprojBox);
         reprojForm->setContentsMargins(16, 20, 16, 16);
         reprojForm->setVerticalSpacing(8);
@@ -390,11 +391,11 @@ public:
         m_reprojSB->setSingleStep(0.1);
         m_reprojSB->setSuffix(" px");
         m_reprojSB->setValue(reprojThresh);
-        reprojForm->addRow("Seuil (px) :", m_reprojSB);
+        reprojForm->addRow(tr("Seuil (px) :"), m_reprojSB);
         vbox->addWidget(reprojBox);
 
         // ── Tag positions ──────────────────────────────────────────────────────
-        const char *tagLabels[] = { "Tag 0 — gauche", "Tag 1 — droit" };
+        const QString tagLabels[] = { tr("Tag 0 — gauche"), tr("Tag 1 — droit") };
         for (int t = 0; t < 2; ++t) {
             auto *box  = new QGroupBox(tagLabels[t], root);
             auto *form = new QFormLayout(box);
@@ -415,9 +416,9 @@ public:
             m_tagSB[t][1]->setValue(tagPos.ty_m[t] * 1000.0);
             m_tagSB[t][2]->setValue(tagPos.tz_m[t] * 1000.0);
 
-            form->addRow("tx (mm) :", m_tagSB[t][0]);
-            form->addRow("ty (mm) :", m_tagSB[t][1]);
-            form->addRow("tz (mm) :", m_tagSB[t][2]);
+            form->addRow(tr("tx (mm) :"), m_tagSB[t][0]);
+            form->addRow(tr("ty (mm) :"), m_tagSB[t][1]);
+            form->addRow(tr("tz (mm) :"), m_tagSB[t][2]);
             vbox->addWidget(box);
         }
 
@@ -428,8 +429,8 @@ public:
         // ── Buttons ───────────────────────────────────────────────────────────
         auto *btnRow = new QHBoxLayout;
         btnRow->setSpacing(16);
-        auto *btnCancel = makeSecondaryBtn("Annuler", root);
-        auto *btnApply  = makePrimaryBtn("Appliquer", root);
+        auto *btnCancel = makeSecondaryBtn(tr("Annuler"), root);
+        auto *btnApply  = makePrimaryBtn(tr("Appliquer"), root);
         btnCancel->setAutoDefault(false);
         btnCancel->setDefault(false);
         btnApply->setAutoDefault(false);
@@ -510,7 +511,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     vbox->setSpacing(0);
 
     // ── Title ─────────────────────────────────────────────────────────────────
-    auto *title = new QLabel("Paramètres", root);
+    auto *title = new QLabel(tr("Paramètres"), root);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(
         "color:white; font-family:'Arial'; font-size:20pt; font-weight:bold;");
@@ -519,37 +520,65 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     vbox->addWidget(makeSeparator(root));
     vbox->addSpacing(20);
 
-    // ── Language selector (disabled) ──────────────────────────────────────────
+    // ── Language selector ─────────────────────────────────────────────────────
     auto *langRow = new QHBoxLayout;
     langRow->setSpacing(12);
-    auto *langLbl = new QLabel("Langue :", root);
+    auto *langLbl = new QLabel(tr("Langue :"), root);
     langLbl->setStyleSheet(
-        "color:#666; font-family:'Arial'; font-size:13pt;");
+        "color:#e0e0e0; font-family:'Arial'; font-size:13pt;");
     auto *btnFr = new QPushButton("Français", root);
     auto *btnEn = new QPushButton("English",  root);
-    for (auto *b : {btnFr, btnEn}) {
-        b->setFixedHeight(44);
-        b->setEnabled(false);
-        b->setStyleSheet(
-            "QPushButton { background:#1a1a1a; color:#444; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
-            "              border:1px solid #333; }");
-    }
-    btnFr->setStyleSheet(  // mark Français as the active choice (greyed-out)
-        "QPushButton { background:#1a3030; color:#3a6060; border-radius:8px;"
+
+    const QString activeLangStyle =
+        "QPushButton { background:#1a3030; color:#75D0C5; border-radius:8px;"
         "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
-        "              border:1px solid #2a5050; }");
+        "              border:1px solid #2a7a70; }"
+        "QPushButton:pressed { background:#153030; }";
+    const QString inactiveLangStyle =
+        "QPushButton { background:#1a1a1a; color:#888; border-radius:8px;"
+        "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+        "              border:1px solid #333; }"
+        "QPushButton:pressed { background:#222; }";
+
+    {
+        const QString cur = QSettings().value("language", "fr").toString();
+        btnFr->setStyleSheet(cur == "fr" ? activeLangStyle : inactiveLangStyle);
+        btnEn->setStyleSheet(cur == "en" ? activeLangStyle : inactiveLangStyle);
+    }
+    for (auto *b : {btnFr, btnEn})
+        b->setFixedHeight(44);
+
     langRow->addWidget(langLbl);
     langRow->addStretch(1);
     langRow->addWidget(btnFr);
     langRow->addWidget(btnEn);
     vbox->addLayout(langRow);
+
+    auto *langNotice = new QLabel(tr("Redémarrez l'application pour appliquer la langue."), root);
+    langNotice->setAlignment(Qt::AlignRight);
+    langNotice->setStyleSheet(
+        "color:#888; font-family:'Arial'; font-size:10pt; background:transparent;");
+    langNotice->setVisible(false);
+    vbox->addWidget(langNotice);
     vbox->addSpacing(16);
+
+    connect(btnFr, &QPushButton::clicked, this, [=]() {
+        QSettings().setValue("language", "fr");
+        btnFr->setStyleSheet(activeLangStyle);
+        btnEn->setStyleSheet(inactiveLangStyle);
+        langNotice->setVisible(true);
+    });
+    connect(btnEn, &QPushButton::clicked, this, [=]() {
+        QSettings().setValue("language", "en");
+        btnEn->setStyleSheet(activeLangStyle);
+        btnFr->setStyleSheet(inactiveLangStyle);
+        langNotice->setVisible(true);
+    });
 
     // ── Coordinates reference selector (disabled) ─────────────────────────────
     auto *refRow = new QHBoxLayout;
     refRow->setSpacing(12);
-    auto *refLbl   = new QLabel("Référentiel :", root);
+    auto *refLbl   = new QLabel(tr("Référentiel :"), root);
     refLbl->setStyleSheet(
         "color:#666; font-family:'Arial'; font-size:13pt;");
     auto *btnMdt = new QPushButton("Medtronic", root);
@@ -590,8 +619,8 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         return b;
     };
 
-    auto *btnGraphics = makeNavBtn("  Paramètres graphiques   ›");
-    auto *btnCalib    = makeNavBtn("  Paramètres de calibration   ›");
+    auto *btnGraphics = makeNavBtn("  " + tr("Paramètres graphiques") + "   ›");
+    auto *btnCalib    = makeNavBtn("  " + tr("Paramètres de calibration") + "   ›");
     vbox->addWidget(btnGraphics);
     vbox->addSpacing(12);
     vbox->addWidget(btnCalib);
@@ -600,7 +629,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     vbox->addSpacing(16);
 
     // ── Close button ──────────────────────────────────────────────────────────
-    auto *btnClose = makePrimaryBtn("Fermer", root);
+    auto *btnClose = makePrimaryBtn(tr("Fermer"), root);
     vbox->addWidget(btnClose, 0, Qt::AlignHCenter);
 
     connect(btnClose, &QPushButton::clicked, this, &QDialog::accept);
