@@ -17,8 +17,10 @@
 <context>
     <name>ARRotatedStrip</name>
     <message>
-        <source>Modifier\nle plan</source>
-        <translation>Edit\nplan</translation>
+        <source>Modifier
+le plan</source>
+        <translation>Edit
+plan</translation>
     </message>
 </context>
 
@@ -185,20 +187,16 @@
         <translation>Reference :</translation>
     </message>
     <message>
-        <source>  Paramètres graphiques   ›</source>
-        <translation>  Graphics settings   ›</translation>
+        <source>Paramètres graphiques</source>
+        <translation>Graphics settings</translation>
     </message>
     <message>
-        <source>  Paramètres de calibration   ›</source>
-        <translation>  Calibration settings   ›</translation>
+        <source>Paramètres de calibration</source>
+        <translation>Calibration settings</translation>
     </message>
     <message>
         <source>Fermer</source>
         <translation>Close</translation>
-    </message>
-    <message>
-        <source>Redémarrez l'application pour appliquer la langue.</source>
-        <translation>Restart the app to apply the new language.</translation>
     </message>
 </context>
 

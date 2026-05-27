@@ -17,6 +17,7 @@
 #include <QGuiApplication>
 #include <QInputMethod>
 #include <QSettings>
+#include <QMessageBox>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QCoreApplication>
@@ -554,26 +555,42 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     langRow->addWidget(btnEn);
     vbox->addLayout(langRow);
 
-    auto *langNotice = new QLabel(tr("Redémarrez l'application pour appliquer la langue."), root);
-    langNotice->setAlignment(Qt::AlignRight);
-    langNotice->setStyleSheet(
-        "color:#888; font-family:'Arial'; font-size:10pt; background:transparent;");
-    langNotice->setVisible(false);
-    vbox->addWidget(langNotice);
     vbox->addSpacing(16);
 
-    connect(btnFr, &QPushButton::clicked, this, [=]() {
-        QSettings().setValue("language", "fr");
-        btnFr->setStyleSheet(activeLangStyle);
-        btnEn->setStyleSheet(inactiveLangStyle);
-        langNotice->setVisible(true);
-    });
-    connect(btnEn, &QPushButton::clicked, this, [=]() {
-        QSettings().setValue("language", "en");
-        btnEn->setStyleSheet(activeLangStyle);
-        btnFr->setStyleSheet(inactiveLangStyle);
-        langNotice->setVisible(true);
-    });
+    // Show a native alert in the TARGET language, save + quit on confirm.
+    // Strings are hardcoded per language so the user reads the message in
+    // the language they are about to switch to.
+    auto applyLang = [this](const QString &lang) {
+        if (QSettings().value("language", "fr").toString() == lang) return;
+
+        QString title, message, yesText, noText;
+        if (lang == "en") {
+            title   = "Apply language?";
+            message = "The app will close to apply English.\nReopen it to continue.";
+            yesText = "Close now";
+            noText  = "Cancel";
+        } else {
+            title   = "Appliquer la langue ?";
+            message = "L'application va se fermer pour appliquer le français.\n"
+                      "Rouvrez-la pour continuer.";
+            yesText = "Fermer maintenant";
+            noText  = "Annuler";
+        }
+
+        QMessageBox box(QMessageBox::Question, title, message,
+                        QMessageBox::Yes | QMessageBox::No, this);
+        box.setButtonText(QMessageBox::Yes, yesText);
+        box.setButtonText(QMessageBox::No,  noText);
+        box.setDefaultButton(QMessageBox::No);
+
+        if (box.exec() == QMessageBox::Yes) {
+            QSettings().setValue("language", lang);
+            QCoreApplication::quit();
+        }
+    };
+
+    connect(btnFr, &QPushButton::clicked, this, [=]() { applyLang("fr"); });
+    connect(btnEn, &QPushButton::clicked, this, [=]() { applyLang("en"); });
 
     // ── Coordinates reference selector (disabled) ─────────────────────────────
     auto *refRow = new QHBoxLayout;
