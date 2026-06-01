@@ -413,10 +413,13 @@ MainWindow::MainWindow(QWidget *parent)
             Qt::QueuedConnection);
         m_btnEditPlan->setVisible(true);
 #ifdef Q_OS_IOS
+        QMetaObject::invokeMethod(m_controller,
+            [this]() { m_controller->setShowDepthOverlay(true); },
+            Qt::QueuedConnection);
         {
             const bool show = m_arTestDepthOverlay;
             QMetaObject::invokeMethod(m_controller,
-                [this, show]() { m_controller->setShowDepthOverlay(show); },
+                [this, show]() { m_controller->setShowDepthVisualization(show); },
                 Qt::QueuedConnection);
         }
 #endif
@@ -590,6 +593,9 @@ void MainWindow::openSettings()
             [this](bool enabled) {
         m_arTestDepthOverlay = enabled;
         QSettings().setValue("arTestDepthOverlay", enabled);
+        QMetaObject::invokeMethod(m_controller,
+            [this, enabled]() { m_controller->setShowDepthVisualization(enabled); },
+            Qt::QueuedConnection);
     });
 
     connect(&dlg, &SettingsDialog::tagPositionChanged, this,

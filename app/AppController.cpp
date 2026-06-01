@@ -68,6 +68,7 @@ void AppController::setCalibration(const cv::Mat &K)
 }
 
 void AppController::setShowDepthOverlay(bool show) { m_showDepthOverlay = show; }
+void AppController::setShowDepthVisualization(bool show) { m_showDepthVisualization = show; }
 
 void AppController::setRenderStyle(OverlayRenderer::Style style)
 {
@@ -778,7 +779,7 @@ void AppController::onARFrame(const cv::Mat &frame,
     }
 
     // Depth visualization overlay: red = close, blue = far.
-    if (m_showDepthOverlay && !depthMap.empty()) {
+    if (m_showDepthOverlay && m_showDepthVisualization && !depthMap.empty()) {
         cv::Mat vizDepth;
         cv::normalize(depthMap, vizDepth, 0.0, 1.0, cv::NORM_MINMAX);
         cv::Mat invDepth = 1.0f - vizDepth;
