@@ -80,6 +80,12 @@ void AppController::setReprojThreshold(double px)
     m_maxInitReprojPx = px;
 }
 
+void AppController::setMovementThresholds(double transMm, double rotDeg)
+{
+    m_moveTransThresh = transMm / 1000.0;
+    m_moveRotThresh   = rotDeg;
+}
+
 void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double tz_m)
 {
     for (auto &cfg : m_tagConfigs) {
@@ -664,7 +670,7 @@ void AppController::onARFrame(const cv::Mat &frame,
                                   + R_delta.at<double>(2,2);
             const double rotDelta = std::acos(std::max(-1.0, std::min(1.0, (tr - 1.0) / 2.0)));
 
-            const bool moving = transDelta > 0.003 || rotDelta > (0.3 * M_PI / 180.0);
+            const bool moving = transDelta > m_moveTransThresh || rotDelta > (m_moveRotThresh * M_PI / 180.0);
             if (moving && featurePoints < 30)
                 ++m_lowFeatFrames;
             else
@@ -706,7 +712,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
             m_showDepthOverlay);
-        dbg("depth source: LiDAR", m_usingLiDAR);
+        dbg(m_usingLiDAR ? "depth source: LiDAR" : "depth source: None", m_usingLiDAR);
         {
             char buf[64];
             if (!m_T_world_leksell.empty()) {
@@ -733,7 +739,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             std::snprintf(buf, sizeof(buf), "drift guard: %d / 10", m_lowFeatFrames);
             dbg(buf, m_lowFeatFrames == 0);
         }
-        if (!m_T_world_leksell.empty()) {
+        if (m_usingLiDAR && !m_T_world_leksell.empty()) {
             const char *const sides[2] = {"L", "R"};
             for (int i = 0; i < 2; ++i) {
                 if (!m_lines[i]) continue;

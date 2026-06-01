@@ -24,6 +24,8 @@
 
 static void loadPersistedSettings(OverlayRenderer::Style &style,
                                    double                 &reprojThreshold,
+                                   double                 &moveTransMm,
+                                   double                 &moveRotDeg,
                                    TagPositions           &tags)
 {
     QSettings s;
@@ -34,6 +36,8 @@ static void loadPersistedSettings(OverlayRenderer::Style &style,
     style.targetColor   = QColor(s.value("style/targetColor",
                                          style.targetColor.name()).toString());
     reprojThreshold = s.value("calib/reprojThreshold", reprojThreshold).toDouble();
+    moveTransMm     = s.value("calib/moveTransMm",     moveTransMm).toDouble();
+    moveRotDeg      = s.value("calib/moveRotDeg",      moveRotDeg).toDouble();
     for (int t = 0; t < 2; ++t) {
         tags.tx_m[t] = s.value(QString("tags/%1/tx").arg(t), tags.tx_m[t]).toDouble();
         tags.ty_m[t] = s.value(QString("tags/%1/ty").arg(t), tags.ty_m[t]).toDouble();
@@ -53,6 +57,13 @@ static void saveReprojThreshold(double px)
 {
     QSettings s;
     s.setValue("calib/reprojThreshold", px);
+}
+
+static void saveMovementThresholds(double transMm, double rotDeg)
+{
+    QSettings s;
+    s.setValue("calib/moveTransMm", transMm);
+    s.setValue("calib/moveRotDeg",  rotDeg);
 }
 
 static void saveTagPosition(int id, double tx, double ty, double tz)
@@ -233,7 +244,7 @@ MainWindow::MainWindow(QWidget *parent)
     const QString depthModel; // LiDAR provides depth natively on iOS
 #endif
 
-    loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_tagPositions);
+    loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg, m_tagPositions);
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
 
 #ifdef FEATURE_PLAN_SCANNER
@@ -261,6 +272,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Push persisted values over the JSON defaults that init() loaded
     m_controller->setRenderStyle(m_renderStyle);
     m_controller->setReprojThreshold(m_reprojThreshold);
+    m_controller->setMovementThresholds(m_moveTransMm, m_moveRotDeg);
     for (int t = 0; t < 2; ++t)
         m_controller->setTagPosition(t, m_tagPositions.tx_m[t],
                                         m_tagPositions.ty_m[t],
@@ -568,8 +580,8 @@ void MainWindow::setArCalibrating(bool calibrating)
 void MainWindow::openSettings()
 {
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
-    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_tagPositions,
-                       m_hasLidar, m_arTestDepthOverlay, this);
+    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
+                       m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
 
     connect(&dlg, &SettingsDialog::styleChanged, this,
             [this](OverlayRenderer::Style style) {
@@ -586,6 +598,16 @@ void MainWindow::openSettings()
         saveReprojThreshold(px);
         QMetaObject::invokeMethod(m_controller,
             [this, px]() { m_controller->setReprojThreshold(px); },
+            Qt::QueuedConnection);
+    });
+
+    connect(&dlg, &SettingsDialog::movementThresholdsChanged, this,
+            [this](double transMm, double rotDeg) {
+        m_moveTransMm = transMm;
+        m_moveRotDeg  = rotDeg;
+        saveMovementThresholds(transMm, rotDeg);
+        QMetaObject::invokeMethod(m_controller,
+            [this, transMm, rotDeg]() { m_controller->setMovementThresholds(transMm, rotDeg); },
             Qt::QueuedConnection);
     });
 

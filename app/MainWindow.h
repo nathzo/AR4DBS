@@ -58,6 +58,8 @@ private:
     // Local copies of current settings — passed to SettingsDialog on open
     OverlayRenderer::Style m_renderStyle;
     double                 m_reprojThreshold    = 1.0;
+    double                 m_moveTransMm        = 10.0; // mm
+    double                 m_moveRotDeg         = 1.0;  // degrees
     TagPositions           m_tagPositions;
     bool                   m_hasLidar           = false;
     bool                   m_arTestDepthOverlay = true;

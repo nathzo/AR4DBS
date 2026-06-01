@@ -462,6 +462,8 @@ class CalibrationSettingsDialog : public QDialog
     Q_OBJECT
 public:
     explicit CalibrationSettingsDialog(double             reprojThresh,
+                                       double             moveTransMm,
+                                       double             moveRotDeg,
                                        const TagPositions &tagPos,
                                        QWidget            *parent = nullptr)
         : QDialog(parent)
@@ -504,6 +506,32 @@ public:
         m_reprojSB->setValue(reprojThresh);
         reprojForm->addRow(tr("Seuil (px) :"), m_reprojSB);
         vbox->addWidget(reprojBox);
+
+        // ── Movement thresholds (non-LiDAR recalibration trigger) ─────────────
+        auto *moveBox  = new QGroupBox(tr("Seuils de mouvement (recalibration)"), root);
+        auto *moveForm = new QFormLayout(moveBox);
+        moveForm->setContentsMargins(16, 20, 16, 16);
+        moveForm->setVerticalSpacing(8);
+        moveForm->setHorizontalSpacing(16);
+        moveForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+        m_moveTransSB = new CalibSpinBox(moveBox);
+        m_moveTransSB->setRange(0.1, 100.0);
+        m_moveTransSB->setDecimals(1);
+        m_moveTransSB->setSingleStep(0.5);
+        m_moveTransSB->setSuffix(" mm");
+        m_moveTransSB->setValue(moveTransMm);
+        moveForm->addRow(tr("Translation (mm) :"), m_moveTransSB);
+
+        m_moveRotSB = new CalibSpinBox(moveBox);
+        m_moveRotSB->setRange(0.1, 30.0);
+        m_moveRotSB->setDecimals(1);
+        m_moveRotSB->setSingleStep(0.1);
+        m_moveRotSB->setSuffix(" °");
+        m_moveRotSB->setValue(moveRotDeg);
+        moveForm->addRow(tr("Rotation (°) :"), m_moveRotSB);
+
+        vbox->addWidget(moveBox);
 
         // ── Tag positions ──────────────────────────────────────────────────────
         const QString tagLabels[] = { tr("Tag 0 — gauche"), tr("Tag 1 — droit") };
@@ -553,6 +581,7 @@ public:
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         connect(btnApply,  &QPushButton::clicked, this, [this]() {
             emit reprojThresholdApplied(m_reprojSB->value());
+            emit movementThresholdsApplied(m_moveTransSB->value(), m_moveRotSB->value());
             for (int t = 0; t < 2; ++t) {
                 emit tagPositionApplied(t,
                     m_tagSB[t][0]->value() / 1000.0,
@@ -568,6 +597,7 @@ public:
 
 signals:
     void reprojThresholdApplied(double px);
+    void movementThresholdsApplied(double transMm, double rotDeg);
     void tagPositionApplied(int tagId, double tx_m, double ty_m, double tz_m);
 
 protected:
@@ -591,6 +621,8 @@ protected:
 
 private:
     CalibSpinBox *m_reprojSB     = nullptr;
+    CalibSpinBox *m_moveTransSB  = nullptr;
+    CalibSpinBox *m_moveRotSB    = nullptr;
     CalibSpinBox *m_tagSB[2][3] = {};
 };
 
@@ -600,6 +632,8 @@ private:
 
 SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
                                double                        currentReprojThreshold,
+                               double                        currentMoveTransMm,
+                               double                        currentMoveRotDeg,
                                const TagPositions           &currentTagPositions,
                                bool                          hasLidar,
                                bool                          arTestDepthOverlay,
@@ -607,6 +641,8 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     : QDialog(parent)
     , m_style(currentStyle)
     , m_reprojThreshold(currentReprojThreshold)
+    , m_moveTransMm(currentMoveTransMm)
+    , m_moveRotDeg(currentMoveRotDeg)
     , m_tagPositions(currentTagPositions)
     , m_hasLidar(hasLidar)
     , m_arTestDepthOverlay(arTestDepthOverlay)
@@ -828,11 +864,18 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     });
 
     connect(btnCalib, &QPushButton::clicked, this, [this]() {
-        auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_tagPositions, this);
+        auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
+                                                  m_tagPositions, this);
         connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
                 [this](double px) {
             m_reprojThreshold = px;
             emit reprojThresholdChanged(px);
+        });
+        connect(dlg, &CalibrationSettingsDialog::movementThresholdsApplied, this,
+                [this](double transMm, double rotDeg) {
+            m_moveTransMm = transMm;
+            m_moveRotDeg  = rotDeg;
+            emit movementThresholdsChanged(transMm, rotDeg);
         });
         connect(dlg, &CalibrationSettingsDialog::tagPositionApplied, this,
                 [this](int tagId, double tx, double ty, double tz) {

@@ -49,6 +49,7 @@ public slots:
     void setShowDepthVisualization(bool show);
     void setRenderStyle(OverlayRenderer::Style style);
     void setReprojThreshold(double px);
+    void setMovementThresholds(double transMm, double rotDeg);
     void setTagPosition(int tagId, double tx_m, double ty_m, double tz_m);
 
 #ifdef Q_OS_IOS
@@ -141,6 +142,8 @@ private:
     bool   m_showDepthOverlay       = false;
     bool   m_showDepthVisualization = true;
     double m_maxInitReprojPx  = 1.0; // RMS reprojection error cap (px); used by iOS init
+    double m_moveTransThresh  = 0.003; // translation delta (m) that counts as camera movement
+    double m_moveRotThresh    = 0.3;   // rotation delta (°) that counts as camera movement
 
 #ifdef Q_OS_IOS
     // ── ARKit tracking quality ───────────────────────────────────────────────
