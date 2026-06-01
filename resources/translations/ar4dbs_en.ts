@@ -134,14 +134,6 @@ le plan</source>
         <translation>AR test depth overlay</translation>
     </message>
     <message>
-        <source>ON</source>
-        <translation>ON</translation>
-    </message>
-    <message>
-        <source>OFF</source>
-        <translation>OFF</translation>
-    </message>
-    <message>
         <source>(LiDAR requis)</source>
         <translation>(LiDAR required)</translation>
     </message>

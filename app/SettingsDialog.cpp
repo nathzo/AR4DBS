@@ -113,6 +113,80 @@ static void paintBlack(QWidget *w, QPaintEvent *)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ToggleSwitch — iOS-style pill toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ToggleSwitch : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(bool checked READ isChecked WRITE setChecked NOTIFY toggled)
+public:
+    explicit ToggleSwitch(bool initialState = true, QWidget *parent = nullptr)
+        : QWidget(parent), m_checked(initialState)
+    {
+        setFixedSize(58, 30);
+        setCursor(Qt::PointingHandCursor);
+    }
+
+    bool isChecked() const { return m_checked; }
+
+    void setChecked(bool on)
+    {
+        if (m_checked == on) return;
+        m_checked = on;
+        update();
+        emit toggled(on);
+    }
+
+    void setEnabled(bool enabled)
+    {
+        QWidget::setEnabled(enabled);
+        update();
+    }
+
+signals:
+    void toggled(bool checked);
+
+protected:
+    void mousePressEvent(QMouseEvent *) override
+    {
+        if (isEnabled()) setChecked(!m_checked);
+    }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+
+        const QRectF track(0, 3, width(), height() - 6);
+        const qreal  radius = track.height() / 2.0;
+
+        if (!isEnabled()) {
+            p.setBrush(QColor(0x2a, 0x2a, 0x2a));
+        } else if (m_checked) {
+            p.setBrush(QColor(0x75, 0xD0, 0xC5));
+        } else {
+            p.setBrush(QColor(0x3a, 0x3a, 0x3c));
+        }
+        p.setPen(Qt::NoPen);
+        p.drawRoundedRect(track, radius, radius);
+
+        const qreal  knobD   = track.height() - 4;
+        const qreal  knobY   = track.top() + 2;
+        const qreal  knobX   = m_checked
+                                ? track.right() - knobD - 2
+                                : track.left()  + 2;
+        const QColor knobCol = isEnabled() ? QColor(0xff, 0xff, 0xff)
+                                           : QColor(0x55, 0x55, 0x55);
+        p.setBrush(knobCol);
+        p.drawEllipse(QRectF(knobX, knobY, knobD, knobD));
+    }
+
+private:
+    bool m_checked;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GraphicsSettingsDialog
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -229,54 +303,20 @@ public:
             : "color:#555;    font-family:'Arial'; font-size:13pt;");
         overlayRow->addWidget(overlayLbl, 1);
 
-        const QString activeToggleStyle =
-            "QPushButton { background:#1a3030; color:#75D0C5; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
-            "              border:1px solid #2a7a70; }"
-            "QPushButton:pressed { background:#153030; }";
-        const QString inactiveToggleStyle =
-            "QPushButton { background:#1a1a1a; color:#888; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
-            "              border:1px solid #333; }"
-            "QPushButton:pressed { background:#222; }";
-        const QString disabledToggleStyle =
-            "QPushButton { background:#141414; color:#444; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
-            "              border:1px solid #2a2a2a; }";
-
-        auto *btnOn  = new QPushButton(tr("ON"),  root);
-        auto *btnOff = new QPushButton(tr("OFF"), root);
-        btnOn ->setFixedHeight(44);
-        btnOff->setFixedHeight(44);
-
         if (!hasLidar) {
-            btnOn ->setEnabled(false);
-            btnOff->setEnabled(false);
-            btnOn ->setStyleSheet(disabledToggleStyle);
-            btnOff->setStyleSheet(disabledToggleStyle);
             m_arTestDepthOverlay = false;
-
             auto *noLidarLbl = new QLabel(tr("(LiDAR requis)"), root);
             noLidarLbl->setStyleSheet(
                 "color:#555; font-family:'Arial'; font-size:10pt; font-style:italic;");
             overlayRow->addWidget(noLidarLbl);
-        } else {
-            const bool on = m_arTestDepthOverlay;
-            btnOn ->setStyleSheet(on  ? activeToggleStyle : inactiveToggleStyle);
-            btnOff->setStyleSheet(!on ? activeToggleStyle : inactiveToggleStyle);
-
-            auto updateToggle = [this, btnOn, btnOff,
-                                  activeToggleStyle, inactiveToggleStyle](bool nowOn) {
-                m_arTestDepthOverlay = nowOn;
-                btnOn ->setStyleSheet(nowOn  ? activeToggleStyle : inactiveToggleStyle);
-                btnOff->setStyleSheet(!nowOn ? activeToggleStyle : inactiveToggleStyle);
-            };
-            connect(btnOn,  &QPushButton::clicked, root, [updateToggle]() { updateToggle(true);  });
-            connect(btnOff, &QPushButton::clicked, root, [updateToggle]() { updateToggle(false); });
         }
 
-        overlayRow->addWidget(btnOn);
-        overlayRow->addWidget(btnOff);
+        auto *toggle = new ToggleSwitch(m_arTestDepthOverlay, root);
+        toggle->setEnabled(hasLidar);
+        connect(toggle, &ToggleSwitch::toggled, root, [this](bool on) {
+            m_arTestDepthOverlay = on;
+        });
+        overlayRow->addWidget(toggle);
         vbox->addLayout(overlayRow);
 
         vbox->addStretch(1);
