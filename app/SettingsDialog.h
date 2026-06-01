@@ -15,12 +15,15 @@ public:
     explicit SettingsDialog(const OverlayRenderer::Style &currentStyle,
                             double                        currentReprojThreshold,
                             const TagPositions           &currentTagPositions,
+                            bool                          hasLidar,
+                            bool                          arTestDepthOverlay,
                             QWidget                      *parent = nullptr);
 
 signals:
     void styleChanged(OverlayRenderer::Style style);
     void reprojThresholdChanged(double px);
     void tagPositionChanged(int tagId, double tx_m, double ty_m, double tz_m);
+    void arTestDepthOverlayChanged(bool enabled);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -29,4 +32,6 @@ private:
     OverlayRenderer::Style m_style;
     double                 m_reprojThreshold = 1.0;
     TagPositions           m_tagPositions;
+    bool                   m_hasLidar             = false;
+    bool                   m_arTestDepthOverlay   = true;
 };

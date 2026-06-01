@@ -121,8 +121,11 @@ class GraphicsSettingsDialog : public QDialog
     Q_OBJECT
 public:
     explicit GraphicsSettingsDialog(const OverlayRenderer::Style &style,
+                                    bool     hasLidar,
+                                    bool     arTestDepthOverlay,
                                     QWidget *parent = nullptr)
         : QDialog(parent)
+        , m_arTestDepthOverlay(arTestDepthOverlay)
     {
         setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
         setAttribute(Qt::WA_TranslucentBackground);
@@ -212,6 +215,70 @@ public:
         }
 
         vbox->addLayout(grid);
+        vbox->addSpacing(20);
+        vbox->addWidget(makeSeparator(root));
+        vbox->addSpacing(16);
+
+        // ── AR test depth overlay toggle ──────────────────────────────────────
+        auto *overlayRow = new QHBoxLayout;
+        overlayRow->setSpacing(12);
+
+        auto *overlayLbl = new QLabel(tr("Visualisation profondeur test AR"), root);
+        overlayLbl->setStyleSheet(hasLidar
+            ? "color:#e0e0e0; font-family:'Arial'; font-size:13pt;"
+            : "color:#555;    font-family:'Arial'; font-size:13pt;");
+        overlayRow->addWidget(overlayLbl, 1);
+
+        const QString activeToggleStyle =
+            "QPushButton { background:#1a3030; color:#75D0C5; border-radius:8px;"
+            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+            "              border:1px solid #2a7a70; }"
+            "QPushButton:pressed { background:#153030; }";
+        const QString inactiveToggleStyle =
+            "QPushButton { background:#1a1a1a; color:#888; border-radius:8px;"
+            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+            "              border:1px solid #333; }"
+            "QPushButton:pressed { background:#222; }";
+        const QString disabledToggleStyle =
+            "QPushButton { background:#141414; color:#444; border-radius:8px;"
+            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+            "              border:1px solid #2a2a2a; }";
+
+        auto *btnOn  = new QPushButton(tr("ON"),  root);
+        auto *btnOff = new QPushButton(tr("OFF"), root);
+        btnOn ->setFixedHeight(44);
+        btnOff->setFixedHeight(44);
+
+        if (!hasLidar) {
+            btnOn ->setEnabled(false);
+            btnOff->setEnabled(false);
+            btnOn ->setStyleSheet(disabledToggleStyle);
+            btnOff->setStyleSheet(disabledToggleStyle);
+            m_arTestDepthOverlay = false;
+
+            auto *noLidarLbl = new QLabel(tr("(LiDAR requis)"), root);
+            noLidarLbl->setStyleSheet(
+                "color:#555; font-family:'Arial'; font-size:10pt; font-style:italic;");
+            overlayRow->addWidget(noLidarLbl);
+        } else {
+            const bool on = m_arTestDepthOverlay;
+            btnOn ->setStyleSheet(on  ? activeToggleStyle : inactiveToggleStyle);
+            btnOff->setStyleSheet(!on ? activeToggleStyle : inactiveToggleStyle);
+
+            auto updateToggle = [this, btnOn, btnOff,
+                                  activeToggleStyle, inactiveToggleStyle](bool nowOn) {
+                m_arTestDepthOverlay = nowOn;
+                btnOn ->setStyleSheet(nowOn  ? activeToggleStyle : inactiveToggleStyle);
+                btnOff->setStyleSheet(!nowOn ? activeToggleStyle : inactiveToggleStyle);
+            };
+            connect(btnOn,  &QPushButton::clicked, root, [updateToggle]() { updateToggle(true);  });
+            connect(btnOff, &QPushButton::clicked, root, [updateToggle]() { updateToggle(false); });
+        }
+
+        overlayRow->addWidget(btnOn);
+        overlayRow->addWidget(btnOff);
+        vbox->addLayout(overlayRow);
+
         vbox->addStretch(1);
         vbox->addWidget(makeSeparator(root));
         vbox->addSpacing(8);
@@ -232,21 +299,24 @@ public:
             s.incisionColor = kPalette[m_groups[1]->checkedId()];
             s.targetColor   = kPalette[m_groups[2]->checkedId()];
             emit styleApplied(s);
+            emit arTestDepthOverlayChanged(m_arTestDepthOverlay);
             accept();
         });
     }
 
 signals:
     void styleApplied(OverlayRenderer::Style style);
+    void arTestDepthOverlayChanged(bool enabled);
 
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }
 
 private:
-    int          m_lineIdx     = 0;
-    int          m_incisionIdx = 2;
-    int          m_targetIdx   = 1;
-    QButtonGroup *m_groups[3]  = {};
+    int          m_lineIdx            = 0;
+    int          m_incisionIdx        = 2;
+    int          m_targetIdx          = 1;
+    QButtonGroup *m_groups[3]         = {};
+    bool         m_arTestDepthOverlay = true;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -491,11 +561,15 @@ private:
 SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
                                double                        currentReprojThreshold,
                                const TagPositions           &currentTagPositions,
+                               bool                          hasLidar,
+                               bool                          arTestDepthOverlay,
                                QWidget                      *parent)
     : QDialog(parent)
     , m_style(currentStyle)
     , m_reprojThreshold(currentReprojThreshold)
     , m_tagPositions(currentTagPositions)
+    , m_hasLidar(hasLidar)
+    , m_arTestDepthOverlay(arTestDepthOverlay)
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -698,11 +772,16 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
     // ── Open sub-dialogs ──────────────────────────────────────────────────────
     connect(btnGraphics, &QPushButton::clicked, this, [this]() {
-        auto *dlg = new GraphicsSettingsDialog(m_style, this);
+        auto *dlg = new GraphicsSettingsDialog(m_style, m_hasLidar, m_arTestDepthOverlay, this);
         connect(dlg, &GraphicsSettingsDialog::styleApplied, this,
                 [this](OverlayRenderer::Style s) {
             m_style = s;
             emit styleChanged(s);
+        });
+        connect(dlg, &GraphicsSettingsDialog::arTestDepthOverlayChanged, this,
+                [this](bool enabled) {
+            m_arTestDepthOverlay = enabled;
+            emit arTestDepthOverlayChanged(enabled);
         });
         dlg->exec();
         dlg->deleteLater();

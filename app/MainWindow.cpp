@@ -234,6 +234,7 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
     loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_tagPositions);
+    m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
 
 #ifdef FEATURE_PLAN_SCANNER
     // With the scanner: init without a plan path (plan comes from the wizard)
@@ -288,6 +289,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_controller, &AppController::setCalibration);
     connect(m_arCamera, &ARKitSession::lidarAvailable,
             m_controller, &AppController::onLidarAvailable);
+    connect(m_arCamera, &ARKitSession::lidarAvailable,
+            this, [this](bool available) { m_hasLidar = available; });
     connect(m_arCamera, &ARKitSession::lidarDepthReady,
             m_controller, &AppController::onLidarDepth);
     connect(m_controller, &AppController::lockStateChanged,
@@ -410,9 +413,12 @@ MainWindow::MainWindow(QWidget *parent)
             Qt::QueuedConnection);
         m_btnEditPlan->setVisible(true);
 #ifdef Q_OS_IOS
-        QMetaObject::invokeMethod(m_controller,
-            [this]() { m_controller->setShowDepthOverlay(true); },
-            Qt::QueuedConnection);
+        {
+            const bool show = m_arTestDepthOverlay;
+            QMetaObject::invokeMethod(m_controller,
+                [this, show]() { m_controller->setShowDepthOverlay(show); },
+                Qt::QueuedConnection);
+        }
 #endif
         startAR();
     });
@@ -558,7 +564,9 @@ void MainWindow::setArCalibrating(bool calibrating)
 
 void MainWindow::openSettings()
 {
-    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_tagPositions, this);
+    m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
+    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_tagPositions,
+                       m_hasLidar, m_arTestDepthOverlay, this);
 
     connect(&dlg, &SettingsDialog::styleChanged, this,
             [this](OverlayRenderer::Style style) {
@@ -576,6 +584,12 @@ void MainWindow::openSettings()
         QMetaObject::invokeMethod(m_controller,
             [this, px]() { m_controller->setReprojThreshold(px); },
             Qt::QueuedConnection);
+    });
+
+    connect(&dlg, &SettingsDialog::arTestDepthOverlayChanged, this,
+            [this](bool enabled) {
+        m_arTestDepthOverlay = enabled;
+        QSettings().setValue("arTestDepthOverlay", enabled);
     });
 
     connect(&dlg, &SettingsDialog::tagPositionChanged, this,

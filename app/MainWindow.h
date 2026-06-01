@@ -57,8 +57,10 @@ private:
 
     // Local copies of current settings — passed to SettingsDialog on open
     OverlayRenderer::Style m_renderStyle;
-    double                 m_reprojThreshold = 1.0;
+    double                 m_reprojThreshold    = 1.0;
     TagPositions           m_tagPositions;
+    bool                   m_hasLidar           = false;
+    bool                   m_arTestDepthOverlay = true;
 
     void openSettings();
 
