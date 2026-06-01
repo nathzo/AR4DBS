@@ -3,3 +3,5 @@ build-ios/
 *.ipa
 *.xcuserstate
 .DS_Store
+.claude/
+.qtcreator/
