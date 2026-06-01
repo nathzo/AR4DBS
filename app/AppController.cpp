@@ -759,7 +759,7 @@ void AppController::onARFrame(const cv::Mat &frame,
                 if (dbgAngleDeg >= 0.0) {
                     std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
                     dbg(buf, dbgAngleDeg >= 175.0);
-                    std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=0.8)", dbgReprojPx);
+                    std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=%.2f)", dbgReprojPx, m_maxInitReprojPx);
                     dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= m_maxInitReprojPx);
                 } else {
                     dbg("angle:  -- (no pose)", false);
