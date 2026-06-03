@@ -12,7 +12,6 @@
 #include <QScreen>
 #include <cmath>
 
-static constexpr auto DARK_BG      = "#1a1b1d";
 static constexpr auto IMPULSE_RED  = "#DE5F5E";
 static constexpr auto ARC_BLUE     = "#75D0C5";
 
@@ -83,22 +82,24 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     layout->addLayout(topRow);
     connect(gearBtn, &QPushButton::clicked, this, &StartScreen::settingsRequested);
 
-    auto *logo = new QLabel(this);
-    QPixmap logoPixmap(":/resources/logo.png");
-    const qreal dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
-    const int px = qRound(150 * dpr);
-    QPixmap scaledPix = logoPixmap.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    scaledPix.setDevicePixelRatio(dpr);
-    logo->setPixmap(scaledPix);
-    logo->setAlignment(Qt::AlignCenter);
-
-    auto *title = new QLabel("AR4DBS", this);
     int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
     QString family = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
-    QFont tf(family, 36, QFont::Bold);
+
+    auto *title = new QLabel(this);
+    QFont tf(family, 72, QFont::Bold);
     title->setFont(tf);
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(QString("color: %1;").arg(IMPULSE_RED));
+    title->setStyleSheet("background: transparent;");
+    title->setText(
+        QString("<span style='color:white;'>St</span>"
+                "<span style='color:%1;'>A</span>"
+                "<span style='color:white;'>R</span>").arg(IMPULSE_RED));
+
+    auto *subtitle = new QLabel(tr("AR-guided stereotactic preparation for DBS"), this);
+    QFont sf(family, 13);
+    subtitle->setFont(sf);
+    subtitle->setAlignment(Qt::AlignCenter);
+    subtitle->setStyleSheet("color: #8A8C8F; background: transparent;");
 
     auto btnStyle = [](const char *bg, const char *fg = "white") {
         return QString(
@@ -121,13 +122,41 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     auto *btnTest = new QPushButton(tr("Mode test AR"), this);
     btnTest->setStyleSheet(btnStyle(ARC_BLUE, "#000000"));
 
+    // NeuroRestore logo for bottom attribution
+    const qreal dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
+    QPixmap neuroPixmap(":/resources/neurorestore.png");
+    const int logoH = qRound(36 * dpr);
+    QPixmap scaledNeuroPix = neuroPixmap.scaled(
+        neuroPixmap.width() * logoH / neuroPixmap.height(),
+        logoH, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    scaledNeuroPix.setDevicePixelRatio(dpr);
+    auto *neuroLogo = new QLabel(this);
+    neuroLogo->setPixmap(scaledNeuroPix);
+    neuroLogo->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+
+    auto *byLabel = new QLabel("by ", this);
+    QFont byFont(family, 12);
+    byLabel->setFont(byFont);
+    byLabel->setStyleSheet("color: #DE5F5E; background: transparent;");
+    byLabel->setAlignment(Qt::AlignVCenter | Qt::AlignRight);
+
+    auto *bottomRow = new QHBoxLayout;
+    bottomRow->setSpacing(6);
+    bottomRow->addStretch(1);
+    bottomRow->addWidget(byLabel);
+    bottomRow->addWidget(neuroLogo);
+    bottomRow->addStretch(1);
+
     layout->addStretch(1);
-    layout->addWidget(logo,    0, Qt::AlignCenter);
-    layout->addWidget(title,   0, Qt::AlignCenter);
-    layout->addSpacing(32);
-    layout->addWidget(btnNew,  0, Qt::AlignCenter);
-    layout->addWidget(btnTest, 0, Qt::AlignCenter);
+    layout->addWidget(title,    0, Qt::AlignCenter);
+    layout->addSpacing(8);
+    layout->addWidget(subtitle, 0, Qt::AlignCenter);
+    layout->addSpacing(40);
+    layout->addWidget(btnNew,   0, Qt::AlignCenter);
+    layout->addWidget(btnTest,  0, Qt::AlignCenter);
     layout->addStretch(1);
+    layout->addSpacing(16);
+    layout->addLayout(bottomRow);
 
     connect(btnNew,  &QPushButton::clicked, this, &StartScreen::newSurgeryRequested);
     connect(btnTest, &QPushButton::clicked, this, &StartScreen::directARRequested);

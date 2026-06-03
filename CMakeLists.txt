@@ -246,6 +246,7 @@ qt_add_resources(DBSAR "assets"
         resources/calibration.json
         resources/surgical_plan.json
         resources/logo.png
+        resources/neurorestore.png
         resources/Diagramm-Bold.ttf
 )
 
