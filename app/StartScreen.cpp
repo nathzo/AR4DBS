@@ -149,13 +149,13 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 
     layout->addStretch(1);
     layout->addWidget(title,    0, Qt::AlignCenter);
-    layout->addSpacing(8);
+    layout->addSpacing(4);
     layout->addWidget(subtitle, 0, Qt::AlignCenter);
     layout->addSpacing(40);
     layout->addWidget(btnNew,   0, Qt::AlignCenter);
     layout->addWidget(btnTest,  0, Qt::AlignCenter);
     layout->addStretch(1);
-    layout->addSpacing(16);
+    layout->addSpacing(12);
     layout->addLayout(bottomRow);
 
     connect(btnNew,  &QPushButton::clicked, this, &StartScreen::newSurgeryRequested);
