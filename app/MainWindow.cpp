@@ -246,6 +246,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg, m_tagPositions);
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
+#ifdef Q_OS_IOS
+    m_hasLidar = ARKitSession::isLidarAvailable();
+#endif
 
 #ifdef FEATURE_PLAN_SCANNER
     // With the scanner: init without a plan path (plan comes from the wizard)

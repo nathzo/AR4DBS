@@ -20,6 +20,9 @@ public:
     void start();
     void stop();
 
+    // Returns true if the device has a LiDAR sensor, without starting a session.
+    static bool isLidarAvailable();
+
     struct Impl;
 
 signals:

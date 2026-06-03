@@ -226,3 +226,9 @@ void ARKitSession::stop()
     if (m_impl->session)
         [m_impl->session pause];
 }
+
+bool ARKitSession::isLidarAvailable()
+{
+    return [ARWorldTrackingConfiguration
+                supportsFrameSemantics:ARFrameSemanticSceneDepth];
+}
