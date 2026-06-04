@@ -92,8 +92,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     title->setStyleSheet("background: transparent;");
     title->setText(
         QString("<span style='color:white;'>St</span>"
-                "<span style='color:%1;'>A</span>"
-                "<span style='color:white;'>R</span>").arg(IMPULSE_RED));
+                "<span style='color:%1;'>AR</span>").arg(IMPULSE_RED));
 
     auto *subtitle = new QLabel(tr("AR-guided stereotactic preparation for DBS"), this);
     QFont sf(family, 13);

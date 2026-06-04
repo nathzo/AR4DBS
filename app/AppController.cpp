@@ -457,11 +457,37 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         const cv::Point3d diff = { tgt.x-end.x, tgt.y-end.y, tgt.z-end.z };
         std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
         std::array<bool,        RAY_SAMPLES + 1> ptVis;
+
+#ifdef Q_OS_IOS
+        LockedIncision &lock = m_lockedIncision[i];
+        double t_inc = 0.0;
+#endif
+
         for (int s = 0; s <= RAY_SAMPLES; ++s) {
             const double t = static_cast<double>(s) / RAY_SAMPLES;
             pts[s]   = { end.x + t*diff.x, end.y + t*diff.y, end.z + t*diff.z };
             ptVis[s] = visible(pts[s]);
         }
+
+#ifdef Q_OS_IOS
+        // When the incision is locked, freeze occlusion at the locked position:
+        // segments toward lineEnd stay visible, segments toward target are hidden.
+        if (lock.locked) {
+            const double diff_len_sq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+            t_inc = 1.0;
+            if (diff_len_sq > 1e-12) {
+                const cv::Point3d off = {
+                    lock.leksellPt.x - end.x,
+                    lock.leksellPt.y - end.y,
+                    lock.leksellPt.z - end.z
+                };
+                t_inc = (off.x*diff.x + off.y*diff.y + off.z*diff.z) / diff_len_sq;
+            }
+            for (int s = 0; s <= RAY_SAMPLES; ++s)
+                ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc);
+        }
+#endif
+
         for (int s = 0; s < RAY_SAMPLES; ++s) {
             if (ptVis[s] && ptVis[s+1])
                 m_renderer->drawSegment(pts[s], pts[s+1], m_K, rvec, tvec);
@@ -471,10 +497,10 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
             m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
 
 #ifdef Q_OS_IOS
-        // Lock-and-project: once N consecutive high-quality frames agree on the same
-        // Leksell-space point, freeze it there — no more depth sampling each frame.
-        LockedIncision &lock = m_lockedIncision[i];
         if (lock.locked) {
+            // Fill the gap from the last full sample to the exact incision point.
+            const int s_last = std::max(0, std::min(RAY_SAMPLES, static_cast<int>(t_inc * RAY_SAMPLES)));
+            m_renderer->drawSegment(pts[s_last], lock.leksellPt, m_K, rvec, tvec);
             m_renderer->drawIncisionMarker(lock.leksellPt, m_K, rvec, tvec);
         } else {
             auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
