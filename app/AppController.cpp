@@ -458,21 +458,17 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
         std::array<bool,        RAY_SAMPLES + 1> ptVis;
 
-#ifdef Q_OS_IOS
-        LockedIncision &lock = m_lockedIncision[i];
-        double t_inc = 0.0;
-#endif
-
         for (int s = 0; s <= RAY_SAMPLES; ++s) {
             const double t = static_cast<double>(s) / RAY_SAMPLES;
-            pts[s]   = { end.x + t*diff.x, end.y + t*diff.y, end.z + t*diff.z };
-            ptVis[s] = visible(pts[s]);
+            pts[s] = { end.x + t*diff.x, end.y + t*diff.y, end.z + t*diff.z };
         }
 
 #ifdef Q_OS_IOS
-        // When the incision is locked, freeze occlusion at the locked position:
-        // segments toward lineEnd stay visible, segments toward target are hidden.
+        LockedIncision &lock = m_lockedIncision[i];
+        double t_inc = 0.0;
         if (lock.locked) {
+            // Incision locked: derive visibility geometrically from the frozen
+            // position — no depth sampling needed until recalibration resets the lock.
             const double diff_len_sq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
             t_inc = 1.0;
             if (diff_len_sq > 1e-12) {
@@ -485,7 +481,13 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
             }
             for (int s = 0; s <= RAY_SAMPLES; ++s)
                 ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc);
+        } else {
+            for (int s = 0; s <= RAY_SAMPLES; ++s)
+                ptVis[s] = visible(pts[s]);
         }
+#else
+        for (int s = 0; s <= RAY_SAMPLES; ++s)
+            ptVis[s] = visible(pts[s]);
 #endif
 
         for (int s = 0; s < RAY_SAMPLES; ++s) {

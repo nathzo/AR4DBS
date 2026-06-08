@@ -94,12 +94,6 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
         QString("<span style='color:white;'>St</span>"
                 "<span style='color:%1;'>AR</span>").arg(IMPULSE_RED));
 
-    auto *subtitle = new QLabel(tr("AR-guided stereotactic preparation for DBS"), this);
-    QFont sf(family, 13);
-    subtitle->setFont(sf);
-    subtitle->setAlignment(Qt::AlignCenter);
-    subtitle->setStyleSheet("color: #8A8C8F; background: transparent;");
-
     auto btnStyle = [](const char *bg, const char *fg = "white") {
         return QString(
                    "QPushButton {"
@@ -139,23 +133,21 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     byLabel->setStyleSheet("color: #DE5F5E; background: transparent;");
     byLabel->setAlignment(Qt::AlignVCenter | Qt::AlignRight);
 
-    auto *bottomRow = new QHBoxLayout;
-    bottomRow->setSpacing(6);
-    bottomRow->addStretch(1);
-    bottomRow->addWidget(byLabel);
-    bottomRow->addWidget(neuroLogo);
-    bottomRow->addStretch(1);
+    auto *attributionRow = new QHBoxLayout;
+    attributionRow->setSpacing(6);
+    attributionRow->addStretch(1);
+    attributionRow->addWidget(byLabel);
+    attributionRow->addWidget(neuroLogo);
+    attributionRow->addStretch(1);
 
     layout->addStretch(1);
     layout->addWidget(title,    0, Qt::AlignCenter);
     layout->addSpacing(4);
-    layout->addWidget(subtitle, 0, Qt::AlignCenter);
+    layout->addLayout(attributionRow);
     layout->addSpacing(40);
     layout->addWidget(btnNew,   0, Qt::AlignCenter);
     layout->addWidget(btnTest,  0, Qt::AlignCenter);
     layout->addStretch(1);
-    layout->addSpacing(12);
-    layout->addLayout(bottomRow);
 
     connect(btnNew,  &QPushButton::clicked, this, &StartScreen::newSurgeryRequested);
     connect(btnTest, &QPushButton::clicked, this, &StartScreen::directARRequested);
