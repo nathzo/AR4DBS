@@ -142,7 +142,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
 
     layout->addStretch(1);
     layout->addWidget(title,    0, Qt::AlignCenter);
-    layout->addSpacing(4);
+    layout->addSpacing(0);
     layout->addLayout(attributionRow);
     layout->addSpacing(40);
     layout->addWidget(btnNew,   0, Qt::AlignCenter);

@@ -166,12 +166,12 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build-ios/Release-iphoneos/DBSAR.app Payload/
-          zip -r AR4DBS.ipa Payload/
+          zip -r StAR.ipa Payload/
           rm -rf Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: AR4DBS-ios
-          path: AR4DBS.ipa
+          name: StAR-ios
+          path: StAR.ipa
           retention-days: 7

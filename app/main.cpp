@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING);
 
     QApplication app(argc, argv);
-    app.setApplicationName("AR4DBS");
+    app.setApplicationName("StAR");
     app.setOrganizationName("NeuroRestore");
     app.setFont(QFont("Arial", 12));
 
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
     }
 
     MainWindow window;
-    window.setWindowTitle("AR4DBS");
+    window.setWindowTitle("StAR");
     window.resize(1280, 720);
     window.show();
 

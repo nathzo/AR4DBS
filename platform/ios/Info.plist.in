@@ -4,10 +4,10 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>AR4DBS</string>
+    <string>StAR</string>
 
     <key>CFBundleDisplayName</key>
-    <string>AR4DBS</string>
+    <string>StAR</string>
 
     <key>CFBundleIdentifier</key>
     <string>ch.epfl.neurorestore.dbsar</string>
