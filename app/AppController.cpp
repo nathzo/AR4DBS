@@ -480,7 +480,7 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
                 t_inc = (off.x*diff.x + off.y*diff.y + off.z*diff.z) / diff_len_sq;
             }
             for (int s = 0; s <= RAY_SAMPLES; ++s)
-                ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc);
+                ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc) && (cameraDepth(pts[s]) > 0);
         } else {
             for (int s = 0; s <= RAY_SAMPLES; ++s)
                 ptVis[s] = visible(pts[s]);
