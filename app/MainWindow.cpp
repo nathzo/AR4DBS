@@ -5,6 +5,9 @@
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
+#include <QDateTime>
+#include <QStandardPaths>
+#include <QTextStream>
 #include <QSettings>
 #include <QLabel>
 #include <QMessageBox>
@@ -227,6 +230,24 @@ MainWindow::MainWindow(QWidget *parent)
 {
     // Clear debug log at startup so each app session has a fresh log
     DialogLogger::clearLog();
+
+    // Write a status file showing which log path is working
+    {
+        QString logPath = DialogLogger::getSuccessfulLogPath();
+        QString statusContent = "LOG STATUS\n";
+        statusContent += "===========\n";
+        statusContent += "Time: " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + "\n";
+        statusContent += "Active Log Path: " + logPath + "\n";
+        statusContent += "\nIf you see this file, file writing is working!\n";
+
+        QString statusFile = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/dbsar_log_status.txt";
+        QFile file(statusFile);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream stream(&file);
+            stream << statusContent;
+            file.close();
+        }
+    }
 
     // Force dark background on the root window so nothing system-coloured shows
     // through during transitions or around safe-area insets on iOS.

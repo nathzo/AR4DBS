@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "DialogLogger.h"
 #include "core/tracking/AprilTagTracker.h"
 #include "core/math/IncisionLine.h"
 #include "core/math/PoseUtils.h"
@@ -827,6 +828,17 @@ void AppController::onARFrame(const cv::Mat &frame,
                 "conf map: " + std::to_string(confidenceMap.cols) + "x"
                               + std::to_string(confidenceMap.rows),
                 !confidenceMap.empty());
+    }
+
+    // Log status indicator (visible in Test AR mode regardless of depth overlay)
+    if (m_showDepthOverlay) {
+        QString logDiag = DialogLogger::getDiagnosticsString();
+        bool logsWorking = logDiag.contains("WRITING");
+        const cv::Scalar shadow(0, 0, 0);
+        const cv::Scalar color = logsWorking ? cv::Scalar(50, 220, 50) : cv::Scalar(50, 50, 255);
+        std::string logMsg = logDiag.toStdString();
+        cv::putText(out, logMsg, {22, 92}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
+        cv::putText(out, logMsg, {20, 90}, cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
     }
 
     // Depth visualization overlay: red = close, blue = far.
