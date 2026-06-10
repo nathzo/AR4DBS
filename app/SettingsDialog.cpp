@@ -595,6 +595,19 @@ public:
         btnCancel->setFocus();
     }
 
+    ~CalibrationSettingsDialog()
+    {
+        disconnect();
+#ifdef Q_OS_IOS
+        for (auto child : findChildren<QWidget *>()) {
+            child->setAccessibleName(QString());
+            child->setAccessibleDescription(QString());
+        }
+#endif
+        setAccessibleDescription(QString());
+        setAccessibleName(QString());
+    }
+
 signals:
     void reprojThresholdApplied(double px);
     void movementThresholdsApplied(double transMm, double rotDeg);
@@ -891,10 +904,13 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
 SettingsDialog::~SettingsDialog()
 {
-    // Clear accessibility for all widgets before destruction.
-    // On iOS with LiDAR, the accessibility system aggressively queries widgets during destruction,
+    // Disconnect all signals before destroying widgets to prevent signal handlers
+    // from being triggered during destruction. This is critical on iOS with LiDAR,
+    // where the accessibility system aggressively queries widgets during destruction,
     // causing use-after-free crashes when it tries to call methods on deleted objects.
-    // Clearing this info prevents the accessibility cache from attempting to query them.
+    disconnect();
+
+    // Clear accessibility for all widgets before destruction.
 #ifdef Q_OS_IOS
     for (auto child : findChildren<QWidget *>()) {
         child->setAccessibleName(QString());
