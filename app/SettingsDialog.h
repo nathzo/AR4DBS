@@ -20,6 +20,7 @@ public:
                             bool                          hasLidar,
                             bool                          arTestDepthOverlay,
                             QWidget                      *parent = nullptr);
+    ~SettingsDialog();
 
 signals:
     void styleChanged(OverlayRenderer::Style style);

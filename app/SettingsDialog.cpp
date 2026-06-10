@@ -889,6 +889,16 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     });
 }
 
+SettingsDialog::~SettingsDialog()
+{
+    // Block accessibility events during widget destruction to prevent
+    // the accessibility system from accessing deleted widgets on LiDAR iPhones.
+    // Qt's accessibility cache can try to query destroyed widgets during cleanup,
+    // causing use-after-free crashes (EXC_BAD_ACCESS).
+    setAccessibleDescription(QString());
+    setAccessibleName(QString());
+}
+
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }
 
 #include "SettingsDialog.moc"

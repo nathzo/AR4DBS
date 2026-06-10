@@ -442,8 +442,13 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
-    // Disconnect all signals before widgets are destroyed to prevent
-    // pending signal handlers from accessing deleted objects.
+    // Block accessibility events during widget destruction to prevent
+    // the accessibility system from accessing deleted widgets on LiDAR iPhones.
+    // Qt's accessibility cache can try to query destroyed widgets during cleanup,
+    // causing use-after-free crashes (EXC_BAD_ACCESS).
+    setAccessibleDescription(QString());
+    setAccessibleName(QString());
+    // Disconnect all signals before widgets are destroyed.
     disconnect();
 }
 
