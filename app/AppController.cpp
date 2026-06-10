@@ -467,30 +467,32 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         }
 
 #ifdef Q_OS_IOS
-        // Lock the depth mutex to safely access m_lockedIncision.
-        // Race condition was occurring on LiDAR phones where multiple threads
-        // accessed this structure simultaneously (onARFrame vs renderWithOcclusion).
-        std::lock_guard<std::mutex> lk(m_depthMutex);
-        LockedIncision &lock = m_lockedIncision[i];
-        double t_inc = 0.0;
-        if (lock.locked) {
-            // Incision locked: derive visibility geometrically from the frozen
-            // position — no depth sampling needed until recalibration resets the lock.
-            const double diff_len_sq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-            t_inc = 1.0;
-            if (diff_len_sq > 1e-12) {
-                const cv::Point3d off = {
-                    lock.leksellPt.x - end.x,
-                    lock.leksellPt.y - end.y,
-                    lock.leksellPt.z - end.z
-                };
-                t_inc = (off.x*diff.x + off.y*diff.y + off.z*diff.z) / diff_len_sq;
+        double t_inc = 0.0; // needed by both visibility computation and rendering below
+        {
+            // Lock the depth mutex to safely access m_lockedIncision.
+            // Race condition was occurring on LiDAR phones where multiple threads
+            // accessed this structure simultaneously (onARFrame vs renderWithOcclusion).
+            std::lock_guard<std::mutex> lk(m_depthMutex);
+            LockedIncision &lock = m_lockedIncision[i];
+            if (lock.locked) {
+                // Incision locked: derive visibility geometrically from the frozen
+                // position — no depth sampling needed until recalibration resets the lock.
+                const double diff_len_sq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+                t_inc = 1.0;
+                if (diff_len_sq > 1e-12) {
+                    const cv::Point3d off = {
+                        lock.leksellPt.x - end.x,
+                        lock.leksellPt.y - end.y,
+                        lock.leksellPt.z - end.z
+                    };
+                    t_inc = (off.x*diff.x + off.y*diff.y + off.z*diff.z) / diff_len_sq;
+                }
+                for (int s = 0; s <= RAY_SAMPLES; ++s)
+                    ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc) && (cameraDepth(pts[s]) > 0);
+            } else {
+                for (int s = 0; s <= RAY_SAMPLES; ++s)
+                    ptVis[s] = visible(pts[s]);
             }
-            for (int s = 0; s <= RAY_SAMPLES; ++s)
-                ptVis[s] = (static_cast<double>(s) / RAY_SAMPLES <= t_inc) && (cameraDepth(pts[s]) > 0);
-        } else {
-            for (int s = 0; s <= RAY_SAMPLES; ++s)
-                ptVis[s] = visible(pts[s]);
         }
 #else
         for (int s = 0; s <= RAY_SAMPLES; ++s)
