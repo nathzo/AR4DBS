@@ -201,7 +201,7 @@ public:
         : QDialog(parent)
         , m_arTestDepthOverlay(arTestDepthOverlay)
     {
-        setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+        setWindowFlags(Qt::Dialog);
         setAttribute(Qt::WA_TranslucentBackground);
         const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
         setFixedSize(ag.width(), ag.height());
@@ -344,6 +344,8 @@ public:
         });
     }
 
+    ~GraphicsSettingsDialog() { disconnect(); }
+
 signals:
     void styleApplied(OverlayRenderer::Style style);
     void arTestDepthOverlayChanged(bool enabled);
@@ -468,7 +470,7 @@ public:
                                        QWidget            *parent = nullptr)
         : QDialog(parent)
     {
-        setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+        setWindowFlags(Qt::Dialog);
         setAttribute(Qt::WA_TranslucentBackground);
         const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
         setFixedSize(ag.width(), ag.height());
@@ -597,6 +599,7 @@ public:
 
     ~CalibrationSettingsDialog()
     {
+        disconnect();
     }
 
 signals:
@@ -651,7 +654,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     , m_hasLidar(hasLidar)
     , m_arTestDepthOverlay(arTestDepthOverlay)
 {
-    setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
     setFixedSize(ag.width(), ag.height());
@@ -895,6 +898,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
 SettingsDialog::~SettingsDialog()
 {
+    disconnect();
 }
 
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }

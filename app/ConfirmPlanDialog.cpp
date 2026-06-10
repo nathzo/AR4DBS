@@ -272,7 +272,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
     : QDialog(parent), m_scanMode(mode == Mode::Scan)
 {
     setWindowTitle(tr("Confirmer le plan chirurgical"));
-    setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     {
         const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
@@ -417,10 +417,11 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         chainSide(m_right);
 
         // Auto-focus the x field whenever the user switches tabs.
-        // Use direct connection instead of queued to prevent event queue buildup.
+        // Use queued connection to prevent crashes on newer iOS devices when
+        // the dialog closes while signals are still in the event queue.
         connect(tabs, &QTabWidget::currentChanged, this, [this](int idx) {
             ((idx == 0) ? m_left.x : m_right.x)->setFocus();
-        });
+        }, Qt::QueuedConnection);
     } else {
         // Edit mode: Annuler and Confirmer side-by-side at the bottom.
         auto *cancelBtn = new QPushButton(tr("Annuler"), this);
@@ -442,6 +443,9 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
+    // Disconnect all connections to prevent crashes on newer iOS devices
+    // when pending signals reference deleted widgets
+    disconnect();
 }
 
 // ── Flag management ───────────────────────────────────────────────────────────
