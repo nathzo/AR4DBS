@@ -666,7 +666,6 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     , m_arTestDepthOverlay(arTestDepthOverlay)
 {
     DialogLogger::logEvent("SettingsDialog", "constructor started");
-{
     setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
@@ -747,10 +746,10 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             noText  = "Annuler";
         }
 
-        QMessageBox box(QMessageBox::NoIcon, title, QString(), QMessageBox::Yes | QMessageBox::No, this);
-        box.setButtonText(QMessageBox::Yes, yesText);
-        box.setButtonText(QMessageBox::No,  noText);
-        box.setDefaultButton(QMessageBox::No);
+        QMessageBox box(QMessageBox::NoIcon, title, QString(), QMessageBox::NoButton, this);
+        auto *yesBtn = box.addButton(yesText, QMessageBox::YesRole);
+        auto *noBtn = box.addButton(noText, QMessageBox::NoRole);
+        box.setDefaultButton(noBtn);
 
         // HTML body: title bold + message below
         box.setText(
@@ -782,23 +781,19 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             "}"
         );
 
-        // Style individual buttons after the dialog builds its layout
-        if (auto *yes = qobject_cast<QPushButton*>(box.button(QMessageBox::Yes))) {
-            yes->setStyleSheet(
-                "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-                "              padding:10px 14px; font-family:Arial;"
-                "              font-size:12pt; font-weight:bold; }"
-                "QPushButton:pressed { background:#a33c3f; }");
-        }
-        if (auto *no = qobject_cast<QPushButton*>(box.button(QMessageBox::No))) {
-            no->setStyleSheet(
-                "QPushButton { background:#2a2b2d; color:#c0c0c0; border-radius:8px;"
-                "              padding:10px 14px; font-family:Arial;"
-                "              font-size:12pt; font-weight:bold; }"
-                "QPushButton:pressed { background:#3a3b3d; }");
-        }
+        // Style individual buttons
+        yesBtn->setStyleSheet(
+            "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
+            "              padding:10px 14px; font-family:Arial;"
+            "              font-size:12pt; font-weight:bold; }"
+            "QPushButton:pressed { background:#a33c3f; }");
+        noBtn->setStyleSheet(
+            "QPushButton { background:#2a2b2d; color:#c0c0c0; border-radius:8px;"
+            "              padding:10px 14px; font-family:Arial;"
+            "              font-size:12pt; font-weight:bold; }"
+            "QPushButton:pressed { background:#3a3b3d; }");
 
-        if (box.exec() == QMessageBox::Yes) {
+        if (box.exec() && box.clickedButton() == yesBtn) {
             QSettings().setValue("language", lang);
             QCoreApplication::quit();
         }
