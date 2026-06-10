@@ -20,7 +20,6 @@
 #include <QScreen>
 #include <QInputMethod>
 #include <QCoreApplication>
-#include <QAccessible>
 #include <functional>
 
 static constexpr float kConfidenceThreshold = 0.99f;
@@ -448,12 +447,12 @@ ConfirmPlanDialog::~ConfirmPlanDialog()
     disconnect();
 
 #ifdef Q_OS_IOS
-    // On LiDAR iPhones, the accessibility system aggressively caches widget state
-    // and continues querying widgets even during destruction. Disable accessibility
-    // entirely for this dialog to prevent use-after-free crashes.
-    setAccessibleRole(QAccessible::NoRole);
+    // On LiDAR iPhones, the accessibility system aggressively queries widgets during
+    // destruction. Hide the dialog and all children to prevent the accessibility system
+    // from attempting to query them while they're being destroyed.
+    hide();
     for (auto child : findChildren<QWidget *>()) {
-        child->setAccessibleRole(QAccessible::NoRole);
+        child->hide();
     }
 #endif
 }
