@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "AppController.h"
 #include "SettingsDialog.h"
+#include "DialogLogger.h"
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
@@ -224,6 +225,9 @@ private:
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    // Clear debug log at startup so each app session has a fresh log
+    DialogLogger::clearLog();
+
     // Force dark background on the root window so nothing system-coloured shows
     // through during transitions or around safe-area insets on iOS.
     setStyleSheet("QMainWindow { background-color: #000000; }");
@@ -583,10 +587,10 @@ void MainWindow::setArCalibrating(bool calibrating)
 void MainWindow::openSettings()
 {
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
-    SettingsDialog dlg(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
-                       m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
+    auto *dlg = new SettingsDialog(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
+                                   m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
 
-    connect(&dlg, &SettingsDialog::styleChanged, this,
+    connect(dlg, &SettingsDialog::styleChanged, this,
             [this](OverlayRenderer::Style style) {
         m_renderStyle = style;
         saveStyle(style);
@@ -595,7 +599,7 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    connect(&dlg, &SettingsDialog::reprojThresholdChanged, this,
+    connect(dlg, &SettingsDialog::reprojThresholdChanged, this,
             [this](double px) {
         m_reprojThreshold = px;
         saveReprojThreshold(px);
@@ -604,7 +608,7 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    connect(&dlg, &SettingsDialog::movementThresholdsChanged, this,
+    connect(dlg, &SettingsDialog::movementThresholdsChanged, this,
             [this](double transMm, double rotDeg) {
         m_moveTransMm = transMm;
         m_moveRotDeg  = rotDeg;
@@ -614,7 +618,7 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    connect(&dlg, &SettingsDialog::arTestDepthOverlayChanged, this,
+    connect(dlg, &SettingsDialog::arTestDepthOverlayChanged, this,
             [this](bool enabled) {
         m_arTestDepthOverlay = enabled;
         QSettings().setValue("arTestDepthOverlay", enabled);
@@ -623,7 +627,7 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    connect(&dlg, &SettingsDialog::tagPositionChanged, this,
+    connect(dlg, &SettingsDialog::tagPositionChanged, this,
             [this](int tagId, double tx, double ty, double tz) {
         m_tagPositions.tx_m[tagId] = tx;
         m_tagPositions.ty_m[tagId] = ty;
@@ -636,7 +640,12 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    dlg.exec();
+    // Use non-modal show() + deferred deletion with deleteLater() instead of exec().
+    // This allows pending queued events to drain before the dialog is destroyed,
+    // preventing a crash on LiDAR iPhones where pending accessibility/widget events
+    // could trigger during dialog destruction.
+    connect(dlg, &QDialog::finished, dlg, &QObject::deleteLater);
+    dlg->show();
 }
 
 #include "MainWindow.moc"

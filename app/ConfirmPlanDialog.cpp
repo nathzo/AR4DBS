@@ -1,4 +1,5 @@
 #include "ConfirmPlanDialog.h"
+#include "DialogLogger.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -271,6 +272,7 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
                                      QWidget *parent)
     : QDialog(parent), m_scanMode(mode == Mode::Scan)
 {
+    DialogLogger::logEvent("ConfirmPlanDialog", "constructor started");
     setWindowTitle(tr("Confirmer le plan chirurgical"));
     setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -347,7 +349,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         "  border-radius: 10px; padding: 16px 40px;"
         "  font-family: 'Arial'; font-size: 15pt; font-weight: bold; }"
         "QPushButton:disabled { background: #5a2e2f; color: #888; }");
-    connect(m_confirmBtn, &QPushButton::clicked, this, &QDialog::accept);
+    connect(m_confirmBtn, &QPushButton::clicked, this, [this]() {
+        DialogLogger::logEvent("ConfirmPlanDialog", "confirm clicked");
+        accept();
+    });
 
     // ── Scan mode: Annuler top-left so it stays reachable above the keyboard ──
     if (m_scanMode) {
@@ -355,7 +360,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         cancelBtn->setObjectName("cancelBtn");
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
-        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+        connect(cancelBtn, &QPushButton::clicked, this, [this]() {
+            DialogLogger::logEvent("ConfirmPlanDialog", "cancel clicked (scan mode)");
+            reject();
+        });
 
         auto *topRow = new QHBoxLayout();
         topRow->setSpacing(12);
@@ -417,18 +425,21 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         chainSide(m_right);
 
         // Auto-focus the x field whenever the user switches tabs.
-        // Use queued connection to prevent crashes on newer iOS devices when
-        // the dialog closes while signals are still in the event queue.
+        // Use direct connection instead of queued to prevent event queue buildup
+        // that can crash on LiDAR iPhones when dialogs close.
         connect(tabs, &QTabWidget::currentChanged, this, [this](int idx) {
             ((idx == 0) ? m_left.x : m_right.x)->setFocus();
-        }, Qt::QueuedConnection);
+        });
     } else {
         // Edit mode: Annuler and Confirmer side-by-side at the bottom.
         auto *cancelBtn = new QPushButton(tr("Annuler"), this);
         cancelBtn->setObjectName("cancelBtn");
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
-        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+        connect(cancelBtn, &QPushButton::clicked, this, [this]() {
+            DialogLogger::logEvent("ConfirmPlanDialog", "cancel clicked (edit mode)");
+            reject();
+        });
 
         auto *bottomRow = new QHBoxLayout();
         bottomRow->addWidget(cancelBtn);
@@ -443,9 +454,11 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
+    DialogLogger::logEvent("ConfirmPlanDialog", "destructor starting");
     // Disconnect all connections to prevent crashes on newer iOS devices
     // when pending signals reference deleted widgets
     disconnect();
+    DialogLogger::logEvent("ConfirmPlanDialog", "destructor completed");
 }
 
 // ── Flag management ───────────────────────────────────────────────────────────

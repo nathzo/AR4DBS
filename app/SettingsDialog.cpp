@@ -1,4 +1,5 @@
 #include "SettingsDialog.h"
+#include "DialogLogger.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -201,6 +202,7 @@ public:
         : QDialog(parent)
         , m_arTestDepthOverlay(arTestDepthOverlay)
     {
+        DialogLogger::logEvent("GraphicsSettingsDialog", "constructor started");
         setWindowFlags(Qt::Dialog);
         setAttribute(Qt::WA_TranslucentBackground);
         const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
@@ -334,6 +336,7 @@ public:
 
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         connect(btnApply,  &QPushButton::clicked, this, [this]() {
+            DialogLogger::logEvent("GraphicsSettingsDialog", "apply clicked");
             OverlayRenderer::Style s;
             s.lineColor     = kPalette[m_groups[0]->checkedId()];
             s.incisionColor = kPalette[m_groups[1]->checkedId()];
@@ -344,7 +347,11 @@ public:
         });
     }
 
-    ~GraphicsSettingsDialog() { disconnect(); }
+    ~GraphicsSettingsDialog() {
+        DialogLogger::logEvent("GraphicsSettingsDialog", "destructor starting");
+        disconnect();
+        DialogLogger::logEvent("GraphicsSettingsDialog", "destructor completed");
+    }
 
 signals:
     void styleApplied(OverlayRenderer::Style style);
@@ -470,6 +477,7 @@ public:
                                        QWidget            *parent = nullptr)
         : QDialog(parent)
     {
+        DialogLogger::logEvent("CalibrationSettingsDialog", "constructor started");
         setWindowFlags(Qt::Dialog);
         setAttribute(Qt::WA_TranslucentBackground);
         const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
@@ -582,6 +590,7 @@ public:
 
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         connect(btnApply,  &QPushButton::clicked, this, [this]() {
+            DialogLogger::logEvent("CalibrationSettingsDialog", "apply clicked");
             emit reprojThresholdApplied(m_reprojSB->value());
             emit movementThresholdsApplied(m_moveTransSB->value(), m_moveRotSB->value());
             for (int t = 0; t < 2; ++t) {
@@ -599,7 +608,9 @@ public:
 
     ~CalibrationSettingsDialog()
     {
+        DialogLogger::logEvent("CalibrationSettingsDialog", "destructor starting");
         disconnect();
+        DialogLogger::logEvent("CalibrationSettingsDialog", "destructor completed");
     }
 
 signals:
@@ -653,6 +664,8 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     , m_tagPositions(currentTagPositions)
     , m_hasLidar(hasLidar)
     , m_arTestDepthOverlay(arTestDepthOverlay)
+{
+    DialogLogger::logEvent("SettingsDialog", "constructor started");
 {
     setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -898,7 +911,9 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
 SettingsDialog::~SettingsDialog()
 {
+    DialogLogger::logEvent("SettingsDialog", "destructor starting");
     disconnect();
+    DialogLogger::logEvent("SettingsDialog", "destructor completed");
 }
 
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }

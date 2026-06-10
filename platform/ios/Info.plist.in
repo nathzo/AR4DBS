@@ -53,5 +53,9 @@
     <!-- Prevent screen from sleeping during a procedure -->
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+
+    <!-- Enable file sharing to access debug logs through the Files app -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
 </dict>
 </plist>
