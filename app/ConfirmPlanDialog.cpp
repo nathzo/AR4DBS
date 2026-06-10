@@ -20,6 +20,7 @@
 #include <QScreen>
 #include <QInputMethod>
 #include <QCoreApplication>
+#include <QAccessible>
 #include <functional>
 
 static constexpr float kConfidenceThreshold = 0.99f;

@@ -22,6 +22,7 @@
 #include <QKeyEvent>
 #include <QCoreApplication>
 #include <QScreen>
+#include <QAccessible>
 
 // ── Shared palette ────────────────────────────────────────────────────────────
 
