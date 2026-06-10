@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <opencv2/imgproc.hpp>
+#include <atomic>
 
 static constexpr qint64 MIN_FRAME_MS = 32;
 
@@ -34,6 +35,7 @@ struct IOSCamera::Impl {
     int                          captureHeight = 720;
     bool                         calibEmitted  = false;
     QElapsedTimer                frameTimer;
+    std::atomic<bool>            isRunning     = false;  // signals safe to process frames
 };
 
 // ─── Constructor ─────────────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ IOSCamera::~IOSCamera()
 void IOSCamera::start()
 {
     m_impl->calibEmitted = false;
+    m_impl->isRunning = true;
     requestCameraAccess([this](bool granted) {
         if (granted) {
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -136,19 +139,32 @@ void IOSCamera::start()
             });
         } else {
             qWarning() << "IOSCamera: camera permission denied";
+            m_impl->isRunning = false;
         }
     });
 }
 
 void IOSCamera::stop()
 {
+    m_impl->isRunning = false;
     if (m_impl->session && m_impl->session.isRunning)
         [m_impl->session stopRunning];
+}
+
+bool IOSCamera::isRunning() const
+{
+    return m_impl->isRunning;
 }
 
 // ─── Frame handler (called on m_impl->queue, NOT the main thread) ────────────
 void IOSCamera::handleSampleBuffer(CMSampleBufferRef sampleBuffer)
 {
+    // Reject frames if camera is not running — prevents crashes when frames
+    // are in-flight during stop() on LiDAR devices where dispatch queue may
+    // be processing frames concurrently with the main thread.
+    if (!m_impl->isRunning)
+        return;
+
     // Throttle
     if (m_impl->frameTimer.isValid() &&
         m_impl->frameTimer.elapsed() < MIN_FRAME_MS)

@@ -20,6 +20,7 @@ public:
     void stop();
 
     void handleSampleBuffer(CMSampleBufferRef sampleBuffer);  // called by native delegate
+    bool isRunning() const;  // check if camera is accepting frames
 
 signals:
     void frameReady(const cv::Mat &bgr);
