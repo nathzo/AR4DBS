@@ -632,9 +632,6 @@ void MainWindow::openSettings()
         QMetaObject::invokeMethod(m_controller,
             [this, tagId, tx, ty, tz]() {
                 m_controller->setTagPosition(tagId, tx, ty, tz);
-#ifdef Q_OS_IOS
-                m_controller->resetARRegistration();
-#endif
             },
             Qt::QueuedConnection);
     });
