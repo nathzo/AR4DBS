@@ -26,6 +26,7 @@ public:
     explicit ConfirmPlanDialog(const SurgicalPlan &initial,
                                Mode                mode,
                                QWidget            *parent = nullptr);
+    ~ConfirmPlanDialog();
 
     SurgicalPlan plan() const;
 

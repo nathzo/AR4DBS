@@ -196,7 +196,7 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     form->setHorizontalSpacing(16);
     form->setContentsMargins(16, 16, 16, 16);
 
-    w.enabled = new QCheckBox(tr("Activer"), parent);
+    w.enabled = new QCheckBox(tr("Activer"));
     w.enabled->setChecked(true);
 
     // confidence[] < 0 → field not detected; 0–1 → Vision confidence
@@ -206,11 +206,11 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     bool ringDet = t.confidence[3] >= 0.f;
     bool arcDet  = t.confidence[4] >= 0.f;
 
-    w.x    = makeSpinBox(300, xDet,    t.x_mm,     " mm", parent);
-    w.y    = makeSpinBox(300, yDet,    t.y_mm,     " mm", parent);
-    w.z    = makeSpinBox(200, zDet,    t.z_mm,     " mm", parent);
-    w.ring = makeSpinBox(360, ringDet, t.ring_deg, " °",  parent);
-    w.arc  = makeSpinBox(180, arcDet,  t.arc_deg,  " °",  parent);
+    w.x    = makeSpinBox(300, xDet,    t.x_mm,     " mm", nullptr);
+    w.y    = makeSpinBox(300, yDet,    t.y_mm,     " mm", nullptr);
+    w.z    = makeSpinBox(200, zDet,    t.z_mm,     " mm", nullptr);
+    w.ring = makeSpinBox(360, ringDet, t.ring_deg, " °",  nullptr);
+    w.arc  = makeSpinBox(180, arcDet,  t.arc_deg,  " °",  nullptr);
 
     form->addRow(w.enabled);
     form->addRow("X (mm) :",        w.x);
@@ -228,7 +228,7 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
         w.arc->setEnabled(on);
     };
     updateEnabled(true);
-    QObject::connect(w.enabled, &QCheckBox::toggled, box, updateEnabled);
+    QObject::connect(w.enabled, &QCheckBox::toggled, this, updateEnabled);
     // Re-evaluate the Confirmer gate when a side is toggled on/off.
     QObject::connect(w.enabled, &QCheckBox::toggled, this,
                      [this](bool) { updateConfirmButton(); });
@@ -441,6 +441,13 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
     // Set initial Confirmer state based on flagged count.
     updateConfirmButton();
+}
+
+ConfirmPlanDialog::~ConfirmPlanDialog()
+{
+    // Disconnect all signals before widgets are destroyed to prevent
+    // pending signal handlers from accessing deleted objects.
+    disconnect();
 }
 
 // ── Flag management ───────────────────────────────────────────────────────────
