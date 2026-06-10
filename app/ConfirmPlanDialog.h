@@ -59,4 +59,6 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void accept() override;   // Explicit cleanup on acceptance
+    void reject() override;   // Explicit cleanup on rejection
 };

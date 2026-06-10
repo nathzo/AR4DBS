@@ -19,6 +19,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QInputMethod>
+#include <QCoreApplication>
 #include <functional>
 
 static constexpr float kConfidenceThreshold = 0.99f;
@@ -441,6 +442,26 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
     // Set initial Confirmer state based on flagged count.
     updateConfirmButton();
+}
+
+void ConfirmPlanDialog::accept()
+{
+    // Disconnect all signals immediately to prevent pending events from
+    // accessing widgets during dialog closure. This is critical on LiDAR
+    // iPhones where event processing can race with widget destruction.
+    disconnect();
+    // Process any remaining queued events to flush signal handlers.
+    QCoreApplication::processEvents();
+    // Call the parent implementation.
+    QDialog::accept();
+}
+
+void ConfirmPlanDialog::reject()
+{
+    // Same cleanup as accept() for consistency.
+    disconnect();
+    QCoreApplication::processEvents();
+    QDialog::reject();
 }
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
