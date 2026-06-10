@@ -442,19 +442,6 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
-    // Disconnect all signals before destroying widgets to prevent signal handlers
-    // from being triggered during destruction.
-    disconnect();
-
-#ifdef Q_OS_IOS
-    // On LiDAR iPhones, the accessibility system aggressively queries widgets during
-    // destruction. Hide the dialog and all children to prevent the accessibility system
-    // from attempting to query them while they're being destroyed.
-    hide();
-    for (auto child : findChildren<QWidget *>()) {
-        child->hide();
-    }
-#endif
 }
 
 // ── Flag management ───────────────────────────────────────────────────────────
