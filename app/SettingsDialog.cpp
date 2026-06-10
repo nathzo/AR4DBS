@@ -600,20 +600,14 @@ public:
         disconnect();
 
 #ifdef Q_OS_IOS
-        // Flush any pending accessibility queries before destroying widgets.
-        // On LiDAR iPhones, the accessibility system queues queries that can execute
-        // after the destructor starts, causing use-after-free when it tries to access
-        // deleted widgets. Process all pending events to clear these queued queries.
-        QCoreApplication::processEvents();
-
-        // Clear accessibility for all widgets before destruction.
+        // On LiDAR iPhones, the accessibility system aggressively caches widget state
+        // and continues querying widgets even during destruction. Disable accessibility
+        // entirely for this dialog to prevent use-after-free crashes.
+        setAccessibleRole(QAccessible::NoRole);
         for (auto child : findChildren<QWidget *>()) {
-            child->setAccessibleName(QString());
-            child->setAccessibleDescription(QString());
+            child->setAccessibleRole(QAccessible::NoRole);
         }
 #endif
-        setAccessibleDescription(QString());
-        setAccessibleName(QString());
     }
 
 signals:
@@ -919,20 +913,14 @@ SettingsDialog::~SettingsDialog()
     disconnect();
 
 #ifdef Q_OS_IOS
-    // Flush any pending accessibility queries before destroying widgets.
-    // On LiDAR iPhones, the accessibility system queues queries that can execute
-    // after the destructor starts, causing use-after-free when it tries to access
-    // deleted widgets. Process all pending events to clear these queued queries.
-    QCoreApplication::processEvents();
-
-    // Clear accessibility for all widgets before destruction.
+    // On LiDAR iPhones, the accessibility system aggressively caches widget state
+    // and continues querying widgets even during destruction. Disable accessibility
+    // entirely for this dialog to prevent use-after-free crashes.
+    setAccessibleRole(QAccessible::NoRole);
     for (auto child : findChildren<QWidget *>()) {
-        child->setAccessibleName(QString());
-        child->setAccessibleDescription(QString());
+        child->setAccessibleRole(QAccessible::NoRole);
     }
 #endif
-    setAccessibleDescription(QString());
-    setAccessibleName(QString());
 }
 
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }
