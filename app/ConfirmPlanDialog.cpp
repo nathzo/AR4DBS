@@ -442,13 +442,18 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
-    // Block accessibility events during widget destruction to prevent
-    // the accessibility system from accessing deleted widgets on LiDAR iPhones.
-    // Qt's accessibility cache can try to query destroyed widgets during cleanup,
-    // causing use-after-free crashes (EXC_BAD_ACCESS).
+    // Clear accessibility for all widgets before destruction.
+    // On iOS with LiDAR, the accessibility system aggressively queries widgets during destruction,
+    // causing use-after-free crashes when it tries to call methods on deleted objects.
+    // Clearing this info prevents the accessibility cache from attempting to query them.
+#ifdef Q_OS_IOS
+    for (auto child : findChildren<QWidget *>()) {
+        child->setAccessibleName(QString());
+        child->setAccessibleDescription(QString());
+    }
+#endif
     setAccessibleDescription(QString());
     setAccessibleName(QString());
-    // Disconnect all signals before widgets are destroyed.
     disconnect();
 }
 
