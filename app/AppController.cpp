@@ -109,7 +109,10 @@ void AppController::setSurgicalPlan(const SurgicalPlan &plan)
         ? std::make_unique<IncisionLine>(IncisionLine::fromLeksell(plan.right))
         : nullptr;
 #ifdef Q_OS_IOS
-    for (auto &lock : m_lockedIncision) lock = LockedIncision{};
+    {
+        std::lock_guard<std::mutex> lk(m_depthMutex);
+        for (auto &lock : m_lockedIncision) lock = LockedIncision{};
+    }
 #endif
 }
 
@@ -464,6 +467,10 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
         }
 
 #ifdef Q_OS_IOS
+        // Lock the depth mutex to safely access m_lockedIncision.
+        // Race condition was occurring on LiDAR phones where multiple threads
+        // accessed this structure simultaneously (onARFrame vs renderWithOcclusion).
+        std::lock_guard<std::mutex> lk(m_depthMutex);
         LockedIncision &lock = m_lockedIncision[i];
         double t_inc = 0.0;
         if (lock.locked) {
@@ -499,51 +506,55 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
             m_renderer->drawTargetMarker(tgt, m_K, rvec, tvec);
 
 #ifdef Q_OS_IOS
-        if (lock.locked) {
-            // Fill the gap from the last full sample to the exact incision point.
-            const int s_last = std::max(0, std::min(RAY_SAMPLES, static_cast<int>(t_inc * RAY_SAMPLES)));
-            m_renderer->drawSegment(pts[s_last], lock.leksellPt, m_K, rvec, tvec);
-            m_renderer->drawIncisionMarker(lock.leksellPt, m_K, rvec, tvec);
-        } else {
-            auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
-            if (hit.has_value()) {
-                if (checkIncisionQuality(*hit, rvec, tvec, depthAnchor, depthMap, confidenceMap)) {
-                    if (lock.streakCount == 0) {
-                        lock.streakSum   = *hit;
-                        lock.streakCount = 1;
-                    } else {
-                        const cv::Point3d avg = {
-                            lock.streakSum.x / lock.streakCount,
-                            lock.streakSum.y / lock.streakCount,
-                            lock.streakSum.z / lock.streakCount
-                        };
-                        const cv::Point3d diff = {
-                            hit->x - avg.x, hit->y - avg.y, hit->z - avg.z
-                        };
-                        const double dist = std::sqrt(
-                            diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-                        if (dist < kIncisionLockRadius) {
-                            lock.streakSum  += *hit;
-                            lock.streakCount++;
-                        } else {
+        {
+            std::lock_guard<std::mutex> lk(m_depthMutex);
+            LockedIncision &lock = m_lockedIncision[i];
+            if (lock.locked) {
+                // Fill the gap from the last full sample to the exact incision point.
+                const int s_last = std::max(0, std::min(RAY_SAMPLES, static_cast<int>(t_inc * RAY_SAMPLES)));
+                m_renderer->drawSegment(pts[s_last], lock.leksellPt, m_K, rvec, tvec);
+                m_renderer->drawIncisionMarker(lock.leksellPt, m_K, rvec, tvec);
+            } else {
+                auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
+                if (hit.has_value()) {
+                    if (checkIncisionQuality(*hit, rvec, tvec, depthAnchor, depthMap, confidenceMap)) {
+                        if (lock.streakCount == 0) {
                             lock.streakSum   = *hit;
                             lock.streakCount = 1;
+                        } else {
+                            const cv::Point3d avg = {
+                                lock.streakSum.x / lock.streakCount,
+                                lock.streakSum.y / lock.streakCount,
+                                lock.streakSum.z / lock.streakCount
+                            };
+                            const cv::Point3d diff = {
+                                hit->x - avg.x, hit->y - avg.y, hit->z - avg.z
+                            };
+                            const double dist = std::sqrt(
+                                diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
+                            if (dist < kIncisionLockRadius) {
+                                lock.streakSum  += *hit;
+                                lock.streakCount++;
+                            } else {
+                                lock.streakSum   = *hit;
+                                lock.streakCount = 1;
+                            }
                         }
+                        if (lock.streakCount >= kIncisionLockFrames) {
+                            lock.leksellPt = {
+                                lock.streakSum.x / lock.streakCount,
+                                lock.streakSum.y / lock.streakCount,
+                                lock.streakSum.z / lock.streakCount
+                            };
+                            lock.locked = true;
+                        }
+                    } else {
+                        lock.streakCount = 0;
                     }
-                    if (lock.streakCount >= kIncisionLockFrames) {
-                        lock.leksellPt = {
-                            lock.streakSum.x / lock.streakCount,
-                            lock.streakSum.y / lock.streakCount,
-                            lock.streakSum.z / lock.streakCount
-                        };
-                        lock.locked = true;
-                    }
+                    m_renderer->drawIncisionMarker(*hit, m_K, rvec, tvec);
                 } else {
                     lock.streakCount = 0;
                 }
-                m_renderer->drawIncisionMarker(*hit, m_K, rvec, tvec);
-            } else {
-                lock.streakCount = 0;
             }
         }
 #else
@@ -573,7 +584,10 @@ void AppController::resetARRegistration()
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
     m_prevWorldTCamera    = cv::Mat();
     m_lowFeatFrames       = 0;
-    for (auto &lock : m_lockedIncision) lock = LockedIncision{};
+    {
+        std::lock_guard<std::mutex> lk(m_depthMutex);
+        for (auto &lock : m_lockedIncision) lock = LockedIncision{};
+    }
     if (!m_streakPoses.empty()) {
         m_streakPoses.clear();
         emit calibrationProgressChanged(false);
@@ -768,6 +782,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             dbg(buf, m_lowFeatFrames == 0);
         }
         if (m_usingLiDAR && !m_T_world_leksell.empty()) {
+            std::lock_guard<std::mutex> lk(m_depthMutex);
             const char *const sides[2] = {"L", "R"};
             for (int i = 0; i < 2; ++i) {
                 if (!m_lines[i]) continue;
