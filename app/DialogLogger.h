@@ -24,7 +24,6 @@ public:
     static QString getDiagnosticsString() {
         QStringList paths = getPossibleLogPaths();
         QString result = "Logs: ";
-        bool anyWorking = false;
 
         for (int i = 0; i < paths.size(); ++i) {
             const QString &path = paths.at(i);
@@ -33,9 +32,11 @@ public:
 
             if (file.open(QIODevice::Append | QIODevice::Text)) {
                 file.close();
-                result += "✓ WRITING";
-                anyWorking = true;
-                break;
+                result += "✓ WRITING to ";
+                // Extract just the last part of the path for readability
+                QString displayPath = QFileInfo(path).dir().dirName() + "/" + QFileInfo(path).fileName();
+                result += displayPath;
+                return result;
             } else {
                 // Diagnose why it failed
                 if (!dir.exists()) {
@@ -49,10 +50,7 @@ public:
             }
         }
 
-        if (!anyWorking) {
-            result += "| Tried: docs, appdata, cache, temp";
-        }
-
+        result += "| Tried: docs, appdata, cache, temp";
         return result;
     }
 
