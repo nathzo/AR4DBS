@@ -598,7 +598,15 @@ public:
     ~CalibrationSettingsDialog()
     {
         disconnect();
+
 #ifdef Q_OS_IOS
+        // Flush any pending accessibility queries before destroying widgets.
+        // On LiDAR iPhones, the accessibility system queues queries that can execute
+        // after the destructor starts, causing use-after-free when it tries to access
+        // deleted widgets. Process all pending events to clear these queued queries.
+        QCoreApplication::processEvents();
+
+        // Clear accessibility for all widgets before destruction.
         for (auto child : findChildren<QWidget *>()) {
             child->setAccessibleName(QString());
             child->setAccessibleDescription(QString());
@@ -910,8 +918,14 @@ SettingsDialog::~SettingsDialog()
     // causing use-after-free crashes when it tries to call methods on deleted objects.
     disconnect();
 
-    // Clear accessibility for all widgets before destruction.
 #ifdef Q_OS_IOS
+    // Flush any pending accessibility queries before destroying widgets.
+    // On LiDAR iPhones, the accessibility system queues queries that can execute
+    // after the destructor starts, causing use-after-free when it tries to access
+    // deleted widgets. Process all pending events to clear these queued queries.
+    QCoreApplication::processEvents();
+
+    // Clear accessibility for all widgets before destruction.
     for (auto child : findChildren<QWidget *>()) {
         child->setAccessibleName(QString());
         child->setAccessibleDescription(QString());
