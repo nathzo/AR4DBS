@@ -59,8 +59,9 @@ public:
 protected:
     void focusInEvent(QFocusEvent *e) override {
         QDoubleSpinBox::focusInEvent(e);
-        QMetaObject::invokeMethod(this, [this]() { lineEdit()->selectAll(); },
-                                  Qt::QueuedConnection);
+        // Select text immediately instead of queuing — prevents event queue buildup
+        // that can crash on LiDAR iPhones when dialogs close.
+        lineEdit()->selectAll();
     }
 
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override {
@@ -416,15 +417,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         chainSide(m_right);
 
         // Auto-focus the x field whenever the user switches tabs.
+        // Use direct connection instead of queued to prevent event queue buildup.
         connect(tabs, &QTabWidget::currentChanged, this, [this](int idx) {
-            QMetaObject::invokeMethod(this, [this, idx]() {
-                ((idx == 0) ? m_left.x : m_right.x)->setFocus();
-            }, Qt::QueuedConnection);
+            ((idx == 0) ? m_left.x : m_right.x)->setFocus();
         });
-
-        // Auto-focus left.x when the dialog first appears.
-        QMetaObject::invokeMethod(this, [this]() { m_left.x->setFocus(); },
-                                  Qt::QueuedConnection);
     } else {
         // Edit mode: Annuler and Confirmer side-by-side at the bottom.
         auto *cancelBtn = new QPushButton(tr("Annuler"), this);
@@ -442,26 +438,6 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
     // Set initial Confirmer state based on flagged count.
     updateConfirmButton();
-}
-
-void ConfirmPlanDialog::accept()
-{
-    // Disconnect all signals immediately to prevent pending events from
-    // accessing widgets during dialog closure. This is critical on LiDAR
-    // iPhones where event processing can race with widget destruction.
-    disconnect();
-    // Process any remaining queued events to flush signal handlers.
-    QCoreApplication::processEvents();
-    // Call the parent implementation.
-    QDialog::accept();
-}
-
-void ConfirmPlanDialog::reject()
-{
-    // Same cleanup as accept() for consistency.
-    disconnect();
-    QCoreApplication::processEvents();
-    QDialog::reject();
 }
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
@@ -538,6 +514,10 @@ void ConfirmPlanDialog::showEvent(QShowEvent *e)
     QDialog::showEvent(e);
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
     move(ag.topLeft());
+    // Auto-focus the x field in Scan mode when dialog appears.
+    // Use direct call instead of queued to prevent event queue buildup.
+    if (m_scanMode && m_left.x)
+        m_left.x->setFocus();
 }
 
 void ConfirmPlanDialog::keyPressEvent(QKeyEvent *event)
