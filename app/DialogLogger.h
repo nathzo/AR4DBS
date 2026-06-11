@@ -30,23 +30,33 @@ public:
             QFile file(path);
             QDir dir(QFileInfo(path).dir());
 
+            // Ensure directory exists
+            if (!dir.exists()) {
+                dir.mkpath(".");
+            }
+
+            // Try to actually write a test line and verify it exists
             if (file.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream stream(&file);
+                stream << "";  // Write empty content to test
+                stream.flush();
                 file.close();
-                result += "✓ WRITING to ";
-                // Extract just the last part of the path for readability
-                QString displayPath = QFileInfo(path).dir().dirName() + "/" + QFileInfo(path).fileName();
-                result += displayPath;
-                return result;
-            } else {
-                // Diagnose why it failed
-                if (!dir.exists()) {
-                    result += "✗ dir-missing ";
-                } else if (!file.exists() && !file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                    result += "✗ no-write-perm ";
-                    file.close();
-                } else {
-                    result += "✗ open-failed ";
+
+                // Verify file exists after closing
+                if (file.exists()) {
+                    result += "✓ WRITING to ";
+                    // Extract just the last part of the path for readability
+                    QString displayPath = QFileInfo(path).dir().dirName() + "/" + QFileInfo(path).fileName();
+                    result += displayPath;
+                    return result;
                 }
+            }
+
+            // Diagnose why it failed
+            if (!dir.exists()) {
+                result += "✗ dir-missing ";
+            } else {
+                result += "✗ file-persist-failed ";
             }
         }
 
