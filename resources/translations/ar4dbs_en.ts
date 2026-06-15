@@ -3,6 +3,14 @@
 <TS version="2.1" language="en_US">
 
 <context>
+    <name>AppController</name>
+    <message>
+        <source>Angle : %1° (> 175° requis)</source>
+        <translation>Angle : %1° (needs > 175°)</translation>
+    </message>
+</context>
+
+<context>
     <name>StartScreen</name>
     <message>
         <source>Nouvelle chirurgie</source>
