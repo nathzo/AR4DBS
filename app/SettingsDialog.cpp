@@ -850,11 +850,11 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     auto *btnGraphics = makeNavBtn("  " + tr("Paramètres graphiques") + "   ›");
     auto *btnCalib    = makeNavBtn("  " + tr("Paramètres de calibration") + "   ›");
     auto *btnDebugLogs = makeNavBtn("  " + tr("Journaux de débogage") + "   ›");
-    vbox->addWidget(btnGraphics);
+    vbox->addWidget(btnGraphics, 0, Qt::AlignHCenter);
     vbox->addSpacing(12);
-    vbox->addWidget(btnCalib);
+    vbox->addWidget(btnCalib, 0, Qt::AlignHCenter);
     vbox->addSpacing(12);
-    vbox->addWidget(btnDebugLogs);
+    vbox->addWidget(btnDebugLogs, 0, Qt::AlignHCenter);
     vbox->addStretch(1);
     vbox->addWidget(makeSeparator(root));
     vbox->addSpacing(16);

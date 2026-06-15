@@ -228,6 +228,7 @@ private:
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    EmailLogger::initialize();
     EmailLogger::logEvent("MainWindow", "Application started");
 
     // Force dark background on the root window so nothing system-coloured shows
