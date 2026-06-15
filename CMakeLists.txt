@@ -31,6 +31,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     Multimedia
     MultimediaWidgets
+    Network
 )
 # QtConcurrent is part of qtbase on desktop; on iOS the kit may omit it
 if(NOT IOS)
@@ -191,6 +192,8 @@ set(APP_SOURCES
     app/MainWindow.cpp
     app/SettingsDialog.h
     app/SettingsDialog.cpp
+    app/EmailLogger.h
+    app/EmailLogger.cpp
 )
 
 set(CORE_SOURCES
@@ -344,6 +347,7 @@ target_link_libraries(DBSAR PRIVATE
     Qt6::Widgets
     Qt6::Multimedia
     Qt6::MultimediaWidgets
+    Qt6::Network
     $<$<NOT:$<PLATFORM_ID:iOS>>:Qt6::Concurrent>
     ${OpenCV_LIBS}
     $<$<BOOL:${VISP_FOUND}>:${VISP_LIBRARIES}>

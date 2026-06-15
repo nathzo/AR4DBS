@@ -5,3 +5,4 @@ build-ios/
 .DS_Store
 .claude/
 .qtcreator/
+*.md

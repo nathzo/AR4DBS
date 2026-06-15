@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 #include "AppController.h"
 #include "SettingsDialog.h"
-#include "DialogLogger.h"
+#include "EmailLogger.h"
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
@@ -228,26 +228,11 @@ private:
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    // Clear debug log at startup so each app session has a fresh log
-    DialogLogger::clearLog();
-
-    // Write a status file showing which log path is working
-    {
-        QString logPath = DialogLogger::getSuccessfulLogPath();
-        QString statusContent = "LOG STATUS\n";
-        statusContent += "===========\n";
-        statusContent += "Time: " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + "\n";
-        statusContent += "Active Log Path: " + logPath + "\n";
-        statusContent += "\nIf you see this file, file writing is working!\n";
-
-        QString statusFile = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/dbsar_log_status.txt";
-        QFile file(statusFile);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream stream(&file);
-            stream << statusContent;
-            file.close();
-        }
-    }
+    // Initialize email logger with credentials
+    // Note: Set your Gmail address and app password here
+    // To generate an app password: https://myaccount.google.com/apppasswords
+    EmailLogger::initialize("nathan.tabet95@gmail.com", "iayk wpbb bcky vzhe");
+    EmailLogger::logEvent("MainWindow", "Application started");
 
     // Force dark background on the root window so nothing system-coloured shows
     // through during transitions or around safe-area insets on iOS.
@@ -488,6 +473,9 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    // Log app close
+    EmailLogger::logEvent("MainWindow", "closeEvent triggered");
+
     // Stop cameras first so no more frames are queued at the controller.
     if (m_arCamera) {
         m_arCamera->disconnect();
@@ -506,6 +494,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         m_controllerThread->quit();
         m_controllerThread->wait();
     }
+
+    // Send accumulated logs before exit
+    EmailLogger::logEvent("MainWindow", "sending logs on exit");
+    EmailLogger::sendOnExit();
 
     event->accept();
 }
@@ -529,8 +521,12 @@ void MainWindow::onPlanDetected(const SurgicalPlan &detected)
 {
     m_scanScreen->stopCamera();
 
+    EmailLogger::logEvent("MainWindow", "onPlanDetected: creating ConfirmPlanDialog (Scan mode)");
     ConfirmPlanDialog dlg(detected, ConfirmPlanDialog::Mode::Scan, this);
-    if (dlg.exec() != QDialog::Accepted) {
+    int result = dlg.exec();
+    EmailLogger::logEvent("MainWindow", "onPlanDetected: ConfirmPlanDialog closed, result=" + QString::number(result));
+
+    if (result != QDialog::Accepted) {
         // User cancelled — go back to scan screen
         m_stack->setCurrentIndex(1);
         m_scanScreen->startCamera();
@@ -550,8 +546,12 @@ void MainWindow::editPlan()
 {
     m_arCamera->stop();
 
+    EmailLogger::logEvent("MainWindow", "editPlan: creating ConfirmPlanDialog (Edit mode)");
     ConfirmPlanDialog dlg(m_currentPlan, ConfirmPlanDialog::Mode::Edit, this);
-    if (dlg.exec() == QDialog::Accepted) {
+    int result = dlg.exec();
+    EmailLogger::logEvent("MainWindow", "editPlan: ConfirmPlanDialog closed, result=" + QString::number(result));
+
+    if (result == QDialog::Accepted) {
         m_currentPlan = dlg.plan();
         const SurgicalPlan plan = m_currentPlan;
         QMetaObject::invokeMethod(m_controller,
@@ -607,6 +607,7 @@ void MainWindow::setArCalibrating(bool calibrating)
 
 void MainWindow::openSettings()
 {
+    EmailLogger::logEvent("MainWindow", "openSettings: creating SettingsDialog");
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
     auto *dlg = new SettingsDialog(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
                                    m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
@@ -665,7 +666,11 @@ void MainWindow::openSettings()
     // This allows pending queued events to drain before the dialog is destroyed,
     // preventing a crash on LiDAR iPhones where pending accessibility/widget events
     // could trigger during dialog destruction.
+    connect(dlg, &QDialog::finished, dlg, [this]() {
+        EmailLogger::logEvent("MainWindow", "openSettings: SettingsDialog finished");
+    });
     connect(dlg, &QDialog::finished, dlg, &QObject::deleteLater);
+    EmailLogger::logEvent("MainWindow", "openSettings: showing SettingsDialog");
     dlg->show();
 }
 

@@ -1,5 +1,5 @@
 #include "AppController.h"
-#include "DialogLogger.h"
+#include "EmailLogger.h"
 #include "core/tracking/AprilTagTracker.h"
 #include "core/math/IncisionLine.h"
 #include "core/math/PoseUtils.h"
@@ -23,8 +23,12 @@ static float sampleDepthAt(const cv::Mat &depthMap, cv::Point2f p); // defined b
 static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
 
-AppController::AppController(QObject *parent) : QObject(parent) {}
-AppController::~AppController() = default;
+AppController::AppController(QObject *parent) : QObject(parent) {
+    EmailLogger::logEvent("AppController", "constructor started");
+}
+AppController::~AppController() {
+    EmailLogger::logEvent("AppController", "destructor started");
+}
 
 bool AppController::init(const QString &calibPath,
                          const QString &tagConfigPath,
@@ -103,6 +107,7 @@ void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double t
 
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
+    EmailLogger::logEvent("AppController", "setSurgicalPlan called");
     m_lines[0] = plan.hasLeft()
         ? std::make_unique<IncisionLine>(IncisionLine::fromLeksell(plan.left))
         : nullptr;
@@ -582,6 +587,7 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
+    EmailLogger::logEvent("AppController", "resetARRegistration called");
     m_T_world_leksell     = cv::Mat();
     m_anchorTrackingState = 2;
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
@@ -850,13 +856,12 @@ void AppController::onARFrame(const cv::Mat &frame,
 
     // Log status indicator (visible in Test AR mode regardless of depth overlay)
     if (m_showDepthOverlay) {
-        QString logDiag = DialogLogger::getDiagnosticsString();
-        bool logsWorking = logDiag.contains("WRITING");
+        QString logMsg = QString("EMAIL LOGGING ACTIVE");
         const cv::Scalar shadow(0, 0, 0);
-        const cv::Scalar color = logsWorking ? cv::Scalar(50, 220, 50) : cv::Scalar(50, 50, 255);
-        std::string logMsg = logDiag.toStdString();
-        cv::putText(out, logMsg, {22, 92}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
-        cv::putText(out, logMsg, {20, 90}, cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
+        const cv::Scalar color = cv::Scalar(50, 220, 50);
+        std::string logMsgStr = logMsg.toStdString();
+        cv::putText(out, logMsgStr, {22, 92}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
+        cv::putText(out, logMsgStr, {20, 90}, cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
     }
 
     // Depth visualization overlay: red = close, blue = far.
