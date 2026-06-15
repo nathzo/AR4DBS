@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 #include "EmailLogger.h"
+#include "DebugLogDialog.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -848,9 +849,12 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
     auto *btnGraphics = makeNavBtn("  " + tr("Paramètres graphiques") + "   ›");
     auto *btnCalib    = makeNavBtn("  " + tr("Paramètres de calibration") + "   ›");
+    auto *btnDebugLogs = makeNavBtn("  " + tr("Journaux de débogage") + "   ›");
     vbox->addWidget(btnGraphics);
     vbox->addSpacing(12);
     vbox->addWidget(btnCalib);
+    vbox->addSpacing(12);
+    vbox->addWidget(btnDebugLogs);
     vbox->addStretch(1);
     vbox->addWidget(makeSeparator(root));
     vbox->addSpacing(16);
@@ -899,6 +903,13 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             m_tagPositions.tz_m[tagId] = tz;
             emit tagPositionChanged(tagId, tx, ty, tz);
         });
+        dlg->exec();
+        dlg->deleteLater();
+    });
+
+    // ── Debug Logs dialog ─────────────────────────────────────────────────────
+    connect(btnDebugLogs, &QPushButton::clicked, this, [this]() {
+        auto *dlg = new DebugLogDialog(this);
         dlg->exec();
         dlg->deleteLater();
     });

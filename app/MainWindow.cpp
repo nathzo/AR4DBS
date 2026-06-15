@@ -228,10 +228,6 @@ private:
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    // Initialize email logger with credentials
-    // Note: Set your Gmail address and app password here
-    // To generate an app password: https://myaccount.google.com/apppasswords
-    EmailLogger::initialize("nathan.tabet95@gmail.com", "iayk wpbb bcky vzhe");
     EmailLogger::logEvent("MainWindow", "Application started");
 
     // Force dark background on the root window so nothing system-coloured shows
@@ -495,10 +491,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         m_controllerThread->wait();
     }
 
-    // Send accumulated logs before exit
-    EmailLogger::logEvent("MainWindow", "sending logs on exit");
-    EmailLogger::sendOnExit();
-
+    EmailLogger::logEvent("MainWindow", "closeEvent completed");
     event->accept();
 }
 
