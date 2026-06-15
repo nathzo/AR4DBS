@@ -750,9 +750,14 @@ void AppController::onARFrame(const cv::Mat &frame,
         QString angleMsg = tr("Angle : %1 (> 175 requis)").arg(dbgAngleDeg, 0, 'f', 1);
         std::string angleText = angleMsg.toStdString();
 
-        // Draw with subtle shadow for better visibility, using bold font
-        const cv::Scalar shadow(0, 0, 0);
-        cv::putText(out, angleText, {21, 71}, cv::FONT_HERSHEY_DUPLEX, 1.5, shadow, 2, cv::LINE_AA);
+        // Draw with smoothed shadow for better visibility, using bold font
+        {
+            cv::Mat shadowLayer = out.clone();
+            const cv::Scalar shadow(0, 0, 0);
+            cv::putText(shadowLayer, angleText, {22, 72}, cv::FONT_HERSHEY_DUPLEX, 1.5, shadow, 6, cv::LINE_AA);
+            cv::GaussianBlur(shadowLayer, shadowLayer, cv::Size(5, 5), 0);
+            cv::addWeighted(out, 1.0, shadowLayer, 0.5, 0, out);
+        }
         cv::putText(out, angleText, {20, 70}, cv::FONT_HERSHEY_DUPLEX, 1.5, color,  3, cv::LINE_AA);
     }
 
