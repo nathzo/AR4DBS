@@ -5,8 +5,8 @@
 <context>
     <name>AppController</name>
     <message>
-        <source>Angle : %1° (> 175° requis)</source>
-        <translation>Angle : %1° (needs > 175°)</translation>
+        <source>Angle : %1 (> 175 requis)</source>
+        <translation>Angle : %1 (needs > 175)</translation>
     </message>
 </context>
 
