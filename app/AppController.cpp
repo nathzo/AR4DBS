@@ -815,6 +815,78 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── Render ─────────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 
+    // Draw angle indicator during calibration phase (before early return)
+    if (m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
+        // Color: red if below 175, blue if 175 or above
+        const bool belowThreshold = dbgAngleDeg < 175.0;
+        const QColor color = belowThreshold
+            ? QColor(222, 95, 94, 255)      // IMPULSE_RED #DE5F5E
+            : QColor(117, 208, 197, 255);   // ARC_BLUE #75D0C5
+
+        // Format the text with translated message and angle value (no degree symbol due to encoding)
+        QString angleMsg = tr("Angle : %1 (> 175 requis)").arg(dbgAngleDeg, 0, 'f', 1);
+
+        // Load Diagramm-Regular font once
+        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+        static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+
+        QColor shadowColor(0, 0, 0, 255);
+        QFont font(fontFamily, 36);
+        QFontMetrics fm(font);
+
+        // Calculate text dimensions
+        int textW = fm.horizontalAdvance(angleMsg) + 8;
+        int textH = fm.height() + 8;
+
+        // Create image for text with explicit RGBA format
+        QImage textImg(textW, textH, QImage::Format_ARGB32);
+        textImg.fill(Qt::transparent);
+
+        QPainter p(&textImg);
+        p.setFont(font);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+        // Draw shadow (black, offset)
+        p.setPen(shadowColor);
+        p.drawText(3, fm.ascent() + 3, angleMsg);
+
+        // Draw text with full opacity
+        p.setPen(color);
+        p.drawText(1, fm.ascent() + 1, angleMsg);
+        p.end();
+
+        // Composite onto frame at position (20, 70)
+        int startX = 20;
+        int startY = 70 - fm.ascent();
+
+        // Only render if text fits within frame bounds
+        if (startY + textImg.height() <= out.rows && startY >= 0) {
+            for (int dy = 0; dy < textImg.height() && startY + dy < out.rows; ++dy) {
+                const QRgb *src = reinterpret_cast<const QRgb *>(textImg.scanLine(dy));
+                uchar *dst = out.ptr<uchar>(startY + dy, startX);
+
+                for (int dx = 0; dx < textImg.width() && startX + dx < out.cols; ++dx) {
+                    const quint32 px = src[dx];
+                    const int a = qAlpha(px);
+                    if (a == 0) {
+                        dst += 3;
+                        continue;
+                    }
+
+                    const int ia = 255 - a;
+                    const int r = qRed(px);
+                    const int g = qGreen(px);
+                    const int b = qBlue(px);
+
+                    dst[0] = static_cast<uchar>(((dst[0] * ia) >> 8) + b);
+                    dst[1] = static_cast<uchar>(((dst[1] * ia) >> 8) + g);
+                    dst[2] = static_cast<uchar>(((dst[2] * ia) >> 8) + r);
+                    dst += 3;
+                }
+            }
+        }
+    }
 
     if (!m_showDepthOverlay && (T_cam_leksell.empty() || !anyLine)) {
         m_lastFrameMs = m_frameTimer.elapsed();
@@ -1028,7 +1100,7 @@ void AppController::onARFrame(const cv::Mat &frame,
         QString angleMsg = QString::fromUtf8(angleBuf);
 
         // Render angle using same process as debug lines
-        QFont font(fontFamily, 28);
+        QFont font(fontFamily, 36);
         QFontMetrics fm(font);
 
         int textW = fm.horizontalAdvance(angleMsg) + 8;

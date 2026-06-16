@@ -62,9 +62,9 @@ public:
         m_status->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
-        lay->addStretch(1);             // gap from edge (same as below for constant center)
+        lay->addStretch(1);             // gap from edge
         lay->addWidget(m_status);
-        lay->addStretch(1);             // gap toward centre (equal to above for constant center)
+        lay->addStretch(2);             // gap below status (increased for button spacing)
 
         captureBtn = new QPushButton(m_inner);
         captureBtn->setStyleSheet(
@@ -73,7 +73,7 @@ public:
             "              font-size:16pt; font-weight:bold; }"
             "QPushButton:pressed { background:#a33c3f; }");
         lay->addWidget(captureBtn, 0, Qt::AlignHCenter);
-        lay->addStretch(3);             // ¾ gap toward other edge
+        lay->addStretch(3);             // gap toward menu button
 
         backBtn = new QPushButton("← Menu", m_inner);
         backBtn->setStyleSheet(
@@ -82,7 +82,7 @@ public:
             "              font-size:13pt; font-weight:bold; }"
             "QPushButton:pressed { background:#6d6f72; }");
         lay->addWidget(backBtn, 0, Qt::AlignHCenter);
-        lay->addStretch(1);             // ¼ gap from edge
+        lay->addStretch(1);             // gap from bottom
     }
 
     ~RotatedStrip() override { delete m_inner; }

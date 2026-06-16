@@ -150,7 +150,7 @@ public:
             "padding: 6px; font-size: 12pt;");
         lay->addStretch(1);
         lay->addWidget(statusLabel);
-        lay->addStretch(1);
+        lay->addStretch(2);
 
         btnEdit = new QPushButton(m_inner);
         btnEdit->setText(tr("Modifier\nle plan"));
