@@ -841,7 +841,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             QColor textColor = isAngle ? (ok ? ARC_BLUE : IMPULSE_RED)
                                        : (ok ? QColor(50, 220, 50, 255) : QColor(255, 50, 50, 255));
             QColor shadowColor(0, 0, 0, 255);
-            QFont font(fontFamily, 28);
+            QFont font(fontFamily, 36);
             QFontMetrics fm(font);
             QString qmsg = QString::fromStdString(msg);
 
@@ -958,11 +958,11 @@ void AppController::onARFrame(const cv::Mat &frame,
                 dbg(buf, dbgCorners >= 8);
                 if (dbgAngleDeg >= 0.0) {
                     std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
-                    dbg(buf, dbgAngleDeg >= 175.0, true);
+                    dbg(buf, dbgAngleDeg >= 175.0);
                     std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=%.2f)", dbgReprojPx, m_maxInitReprojPx);
                     dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= m_maxInitReprojPx);
                 } else {
-                    dbg("angle:  -- (no pose)", false, true);
+                    dbg("angle:  -- (no pose)", false);
                     dbg("reproj: -- (no pose)", false);
                 }
             }
@@ -1009,6 +1009,77 @@ void AppController::onARFrame(const cv::Mat &frame,
     }
 
     m_renderer->endFrame();
+
+    // ── Angle indicator during calibration phase ───────────────────────────────
+    // Display angle on regular AR screen using same rendering as debug lines
+    if (m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
+        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+        static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+
+        const QColor IMPULSE_RED(222, 95, 94, 255);    // #DE5F5E
+        const QColor ARC_BLUE(117, 208, 197, 255);     // #75D0C5
+
+        // Determine color based on angle threshold
+        QColor angleColor = (dbgAngleDeg >= 175.0) ? ARC_BLUE : IMPULSE_RED;
+
+        // Format angle message
+        char angleBuf[64];
+        std::snprintf(angleBuf, sizeof(angleBuf), "Angle : %.1f", dbgAngleDeg);
+        QString angleMsg = QString::fromUtf8(angleBuf);
+
+        // Render angle using same process as debug lines
+        QFont font(fontFamily, 28);
+        QFontMetrics fm(font);
+
+        int textW = fm.horizontalAdvance(angleMsg) + 8;
+        int textH = fm.height() + 8;
+
+        QImage textImg(textW, textH, QImage::Format_ARGB32);
+        textImg.fill(Qt::transparent);
+
+        QPainter p(&textImg);
+        p.setFont(font);
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        // Draw shadow (black, offset)
+        p.setPen(QColor(0, 0, 0, 255));
+        p.drawText(3, fm.ascent() + 3, angleMsg);
+
+        // Draw angle text
+        p.setPen(angleColor);
+        p.drawText(1, fm.ascent() + 1, angleMsg);
+        p.end();
+
+        // Composite onto frame at position (20, 70)
+        int startX = 20;
+        int startY = 70 - fm.ascent();
+
+        if (startY + textImg.height() <= out.rows && startY >= 0) {
+            for (int dy = 0; dy < textImg.height() && startY + dy < out.rows; ++dy) {
+                const QRgb *src = reinterpret_cast<const QRgb *>(textImg.scanLine(dy));
+                uchar *dst = out.ptr<uchar>(startY + dy, startX);
+
+                for (int dx = 0; dx < textImg.width() && startX + dx < out.cols; ++dx) {
+                    const quint32 px = src[dx];
+                    const int a = qAlpha(px);
+                    if (a == 0) {
+                        dst += 3;
+                        continue;
+                    }
+
+                    const int ia = 255 - a;
+                    const int r = qRed(px);
+                    const int g = qGreen(px);
+                    const int b = qBlue(px);
+
+                    dst[0] = static_cast<uchar>(((dst[0] * ia) >> 8) + b);
+                    dst[1] = static_cast<uchar>(((dst[1] * ia) >> 8) + g);
+                    dst[2] = static_cast<uchar>(((dst[2] * ia) >> 8) + r);
+                    dst += 3;
+                }
+            }
+        }
+    }
 
     m_lastFrameMs = m_frameTimer.elapsed();
     emit frameReady(out);
