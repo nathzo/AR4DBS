@@ -14,6 +14,10 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDebug>
+#include <QPainter>
+#include <QFont>
+#include <QFontDatabase>
+#include <QImage>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
@@ -756,10 +760,53 @@ void AppController::onARFrame(const cv::Mat &frame,
         int y = 100;
         const int lineH = 70;
         auto dbg = [&](const std::string &msg, bool ok) {
-            const cv::Scalar shadow(0, 0, 0);
-            const cv::Scalar color = ok ? cv::Scalar(50, 220, 50) : cv::Scalar(50, 50, 255);
-            cv::putText(out, msg, {22, y+2}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
-            cv::putText(out, msg, {20, y},   cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
+            const QColor color = ok ? QColor(50, 220, 50) : QColor(50, 50, 255);
+            const QColor shadow(0, 0, 0);
+
+            // Render text using Qt with Diagramm-Regular font
+            static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+            static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+
+            QFont font(fontFamily, 18);
+            QFontMetrics fm(font);
+            int textWidth = fm.horizontalAdvance(QString::fromStdString(msg));
+            int textHeight = fm.height();
+
+            // Create a temporary image for text rendering
+            QImage textImg(textWidth + 10, textHeight + 10, QImage::Format_ARGB32);
+            textImg.fill(Qt::transparent);
+
+            QPainter textPainter(&textImg);
+            textPainter.setFont(font);
+            textPainter.setRenderHint(QPainter::Antialiasing);
+
+            // Draw shadow
+            textPainter.setPen(shadow);
+            textPainter.drawText(3, textHeight, QString::fromStdString(msg));
+
+            // Draw text
+            textPainter.setPen(color);
+            textPainter.drawText(1, textHeight - 2, QString::fromStdString(msg));
+            textPainter.end();
+
+            // Composite onto output frame
+            for (int dy = 0; dy < textImg.height() && y + dy < out.rows; ++dy) {
+                const QRgb *src = reinterpret_cast<const QRgb *>(textImg.scanLine(dy));
+                uchar *dst = out.ptr<uchar>(y + dy, 20);
+                for (int dx = 0; dx < textImg.width() && 20 + dx < out.cols; ++dx, dst += 3) {
+                    const quint32 px = src[dx];
+                    const int a = qAlpha(px);
+                    if (a == 0) continue;
+                    const int ia = 255 - a;
+                    const int r = qRed(px);
+                    const int g = qGreen(px);
+                    const int b = qBlue(px);
+                    dst[0] = static_cast<uchar>(((dst[0] * ia) >> 8) + b);
+                    dst[1] = static_cast<uchar>(((dst[1] * ia) >> 8) + g);
+                    dst[2] = static_cast<uchar>(((dst[2] * ia) >> 8) + r);
+                }
+            }
+
             y += lineH;
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",

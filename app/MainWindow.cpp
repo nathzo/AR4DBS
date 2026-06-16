@@ -154,7 +154,7 @@ public:
         btnEdit->setText(tr("Modifier\nle plan"));
         btnEdit->setStyleSheet(
             "QPushButton { background:#75D0C5; color:black; border-radius:8px;"
-            "              padding:6px 16px; font-family:'Arial';"
+            "              padding:6px 16px;"
             "              font-size:13pt; font-weight:bold; }"
             "QPushButton:pressed { background:#5ab8ae; }");
         btnEdit->setVisible(false);
@@ -164,7 +164,7 @@ public:
         btnMenu = new QPushButton(tr("← Menu"), m_inner);
         btnMenu->setStyleSheet(
             "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial';"
+            "              padding:8px 20px;"
             "              font-size:13pt; font-weight:bold; }"
             "QPushButton:pressed { background:#6d6f72; }");
         lay->addWidget(btnMenu, 0, Qt::AlignHCenter);

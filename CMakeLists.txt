@@ -253,6 +253,7 @@ qt_add_resources(DBSAR "assets"
         resources/logo.png
         resources/neurorestore.png
         resources/Diagramm-Bold.ttf
+        resources/Diagramm-Regular.ttf
 )
 
 # On iOS, Qt 6.4+ uses FFmpeg as the ONLY multimedia backend (AVFoundation is

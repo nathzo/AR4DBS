@@ -69,7 +69,7 @@ public:
         captureBtn = new QPushButton(m_inner);
         captureBtn->setStyleSheet(
             "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-            "              padding:12px 28px; font-family:'Arial';"
+            "              padding:12px 28px;"
             "              font-size:16pt; font-weight:bold; }"
             "QPushButton:pressed { background:#a33c3f; }");
         lay->addWidget(captureBtn, 0, Qt::AlignHCenter);
@@ -78,7 +78,7 @@ public:
         backBtn = new QPushButton("← Menu", m_inner);
         backBtn->setStyleSheet(
             "QPushButton { background:#8A8C8F; color:black; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial';"
+            "              padding:8px 20px;"
             "              font-size:13pt; font-weight:bold; }"
             "QPushButton:pressed { background:#6d6f72; }");
         lay->addWidget(backBtn, 0, Qt::AlignHCenter);

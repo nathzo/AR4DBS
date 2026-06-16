@@ -83,10 +83,13 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     connect(gearBtn, &QPushButton::clicked, this, &StartScreen::settingsRequested);
 
     int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
-    QString family = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+    QString boldFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+
+    int regularFontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+    QString regularFamily = regularFontId != -1 ? QFontDatabase::applicationFontFamilies(regularFontId).first() : "Arial";
 
     auto *title = new QLabel(this);
-    QFont tf(family, 72, QFont::Bold);
+    QFont tf(boldFamily, 72, QFont::Bold);
     title->setFont(tf);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet("background: transparent;");
@@ -94,7 +97,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
         QString("<span style='color:white;'>St</span>"
                 "<span style='color:%1;'>AR</span>").arg(IMPULSE_RED));
 
-    auto btnStyle = [](const char *bg, const char *fg = "white") {
+    auto btnStyle = [&regularFamily](const char *bg, const char *fg = "white") {
         return QString(
                    "QPushButton {"
                    "  background-color: %1;"
@@ -102,12 +105,12 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
                    "  border: none;"
                    "  border-radius: 12px;"
                    "  padding: 18px 48px;"
-                   "  font-family: 'Arial';"
+                   "  font-family: '%3';"
                    "  font-size: 16pt;"
                    "  font-weight: bold;"
                    "}"
                    "QPushButton:pressed { padding: 20px 46px; }"
-                   ).arg(bg, fg);
+                   ).arg(bg, fg, regularFamily);
     };
 
     auto *btnNew = new QPushButton(tr("Nouvelle chirurgie"), this);
@@ -128,7 +131,7 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     neuroLogo->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
 
     auto *byLabel = new QLabel("by ", this);
-    QFont byFont(family, 12);
+    QFont byFont(regularFamily, 12);
     byLabel->setFont(byFont);
     byLabel->setStyleSheet("color: #DE5F5E; background: transparent;");
     byLabel->setAlignment(Qt::AlignVCenter | Qt::AlignRight);

@@ -3,6 +3,7 @@
 #include <QtGlobal>
 #include <QMetaType>
 #include <QFont>
+#include <QFontDatabase>
 #include <QTranslator>
 #include <QSettings>
 #include "MainWindow.h"
@@ -55,7 +56,10 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName("StAR");
     app.setOrganizationName("NeuroRestore");
-    app.setFont(QFont("Arial", 12));
+
+    int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+    QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
+    app.setFont(QFont(fontFamily, 12));
 
     // Load language preference before any UI is created so all tr() calls
     // in constructors pick up the right language immediately.

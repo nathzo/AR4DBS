@@ -51,16 +51,16 @@ static const char *kBaseSS =
     "QDialog  { background: transparent; }"
     "QWidget#content, QWidget#innerContent { background: #0d0d0d; }"
     "QLabel   { background: transparent; color: #e0e0e0;"
-    "           font-family: 'Arial'; font-size: 13pt; }"
+    "           font-size: 13pt; }"
     "QGroupBox {"
     "  border: 1px solid #333; border-radius: 8px;"
     "  margin-top: 14px; padding-top: 10px;"
-    "  color: #aaa; font-family: 'Arial'; font-size: 11pt; font-weight: bold;"
+    "  color: #aaa; font-size: 11pt; font-weight: bold;"
     "}"
     "QGroupBox::title { subcontrol-origin: margin; left: 12px; }"
     "QDoubleSpinBox {"
     "  background: #2a2b2d; border: 1px solid #444; border-radius: 6px;"
-    "  color: #e0e0e0; font-family: 'Arial'; font-size: 13pt;"
+    "  color: #e0e0e0; font-size: 13pt;"
     "  padding: 6px 10px; min-height: 36px;"
     "  selection-color: #e0e0e0; selection-background-color: #2d5f7a;"
     "}"
@@ -78,7 +78,7 @@ static QPushButton *makePrimaryBtn(const QString &text, QWidget *parent)
     auto *b = new QPushButton(text, parent);
     b->setStyleSheet(
         "QPushButton { background:#75D0C5; color:black; border-radius:8px;"
-        "              padding:12px 30px; font-family:'Arial';"
+        "              padding:12px 30px;"
         "              font-size:13pt; font-weight:bold; }"
         "QPushButton:pressed { background:#5ab8ae; }");
     return b;
@@ -89,7 +89,7 @@ static QPushButton *makeSecondaryBtn(const QString &text, QWidget *parent)
     auto *b = new QPushButton(text, parent);
     b->setStyleSheet(
         "QPushButton { background:#2a2b2d; color:#e0e0e0; border-radius:8px;"
-        "              padding:12px 30px; font-family:'Arial';"
+        "              padding:12px 30px;"
         "              font-size:13pt; border: 1px solid #444; }"
         "QPushButton:pressed { background:#3a3b3d; }");
     return b;
@@ -221,7 +221,7 @@ public:
         auto *title = new QLabel(tr("Paramètres graphiques"), root);
         title->setAlignment(Qt::AlignCenter);
         title->setStyleSheet(
-            "color:white; font-family:'Arial'; font-size:18pt; font-weight:bold;");
+            "color:white; font-size:18pt; font-weight:bold;");
         vbox->addWidget(title);
         vbox->addWidget(makeSeparator(root));
         vbox->addSpacing(8);
@@ -241,7 +241,7 @@ public:
             auto *lbl = new QLabel(colorLabels[c], root);
             lbl->setAlignment(Qt::AlignCenter);
             lbl->setStyleSheet(
-                "color:#888; font-family:'Arial'; font-size:10pt;");
+                "color:#888; font-size:10pt;");
             grid->addWidget(lbl, 0, c + 1);
         }
 
@@ -260,7 +260,7 @@ public:
         for (int r = 0; r < 3; ++r) {
             auto *lbl = new QLabel(rows[r].label, root);  // label is already tr()'d above
             lbl->setStyleSheet(
-                "color:#e0e0e0; font-family:'Arial'; font-size:13pt;");
+                "color:#e0e0e0; font-size:13pt;");
             grid->addWidget(lbl, r + 1, 0, Qt::AlignVCenter | Qt::AlignLeft);
 
             auto *grp = new QButtonGroup(this);
@@ -302,15 +302,15 @@ public:
 
         auto *overlayLbl = new QLabel(tr("Visualisation profondeur test AR"), root);
         overlayLbl->setStyleSheet(hasLidar
-            ? "color:#e0e0e0; font-family:'Arial'; font-size:13pt;"
-            : "color:#555;    font-family:'Arial'; font-size:13pt;");
+            ? "color:#e0e0e0; font-size:13pt;"
+            : "color:#555;    font-size:13pt;");
         overlayRow->addWidget(overlayLbl, 1);
 
         if (!hasLidar) {
             m_arTestDepthOverlay = false;
             auto *noLidarLbl = new QLabel(tr("(LiDAR requis)"), root);
             noLidarLbl->setStyleSheet(
-                "color:#555; font-family:'Arial'; font-size:10pt; font-style:italic;");
+                "color:#555; font-size:10pt; font-style:italic;");
             overlayRow->addWidget(noLidarLbl);
         }
 
@@ -496,7 +496,7 @@ public:
         auto *title = new QLabel(tr("Paramètres de calibration"), root);
         title->setAlignment(Qt::AlignCenter);
         title->setStyleSheet(
-            "color:white; font-family:'Arial'; font-size:18pt; font-weight:bold;");
+            "color:white; font-size:18pt; font-weight:bold;");
         vbox->addWidget(title);
         vbox->addWidget(makeSeparator(root));
         vbox->addSpacing(8);
@@ -685,7 +685,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     auto *title = new QLabel(tr("Paramètres"), root);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(
-        "color:white; font-family:'Arial'; font-size:20pt; font-weight:bold;");
+        "color:white; font-size:20pt; font-weight:bold;");
     vbox->addWidget(title);
     vbox->addSpacing(20);
     vbox->addWidget(makeSeparator(root));
@@ -696,18 +696,18 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     langRow->setSpacing(12);
     auto *langLbl = new QLabel(tr("Langue :"), root);
     langLbl->setStyleSheet(
-        "color:#e0e0e0; font-family:'Arial'; font-size:13pt;");
+        "color:#e0e0e0; font-size:13pt;");
     auto *btnFr = new QPushButton("Français", root);
     auto *btnEn = new QPushButton("English",  root);
 
     const QString activeLangStyle =
         "QPushButton { background:#1a3030; color:#75D0C5; border-radius:8px;"
-        "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+        "              padding:8px 20px; font-size:12pt;"
         "              border:1px solid #2a7a70; }"
         "QPushButton:pressed { background:#153030; }";
     const QString inactiveLangStyle =
         "QPushButton { background:#1a1a1a; color:#888; border-radius:8px;"
-        "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+        "              padding:8px 20px; font-size:12pt;"
         "              border:1px solid #333; }"
         "QPushButton:pressed { background:#222; }";
 
@@ -754,10 +754,10 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
         // HTML body: title bold + message below
         box.setText(
-            "<span style='color:#e0e0e0; font-family:Arial; font-size:13pt; font-weight:bold;'>"
+            "<span style='color:#e0e0e0; font-size:13pt; font-weight:bold;'>"
             + title.toHtmlEscaped() +
             "</span><br><br>"
-            "<span style='color:#a0a0a0; font-family:Arial; font-size:11pt;'>"
+            "<span style='color:#a0a0a0; font-size:11pt;'>"
             + QString(message).replace('\n', "<br>") +
             "</span>");
 
@@ -770,11 +770,9 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             "}"
             "QMessageBox QLabel {"
             "  color: #e0e0e0;"
-            "  font-family: Arial;"
             "  min-width: 280px;"
             "}"
             "QMessageBox QPushButton {"
-            "  font-family: Arial;"
             "  font-size: 12pt;"
             "  font-weight: bold;"
             "  border-radius: 8px;"
@@ -785,12 +783,12 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         // Style individual buttons
         yesBtn->setStyleSheet(
             "QPushButton { background:#DE5F5E; color:white; border-radius:8px;"
-            "              padding:10px 14px; font-family:Arial;"
+            "              padding:10px 14px;"
             "              font-size:12pt; font-weight:bold; }"
             "QPushButton:pressed { background:#a33c3f; }");
         noBtn->setStyleSheet(
             "QPushButton { background:#2a2b2d; color:#c0c0c0; border-radius:8px;"
-            "              padding:10px 14px; font-family:Arial;"
+            "              padding:10px 14px;"
             "              font-size:12pt; font-weight:bold; }"
             "QPushButton:pressed { background:#3a3b3d; }");
 
@@ -808,7 +806,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     refRow->setSpacing(12);
     auto *refLbl   = new QLabel(tr("Référentiel :"), root);
     refLbl->setStyleSheet(
-        "color:#666; font-family:'Arial'; font-size:13pt;");
+        "color:#666; font-size:13pt;");
     auto *btnMdt = new QPushButton("Medtronic", root);
     auto *btnBL  = new QPushButton("BrainLab",  root);
     for (auto *b : {btnMdt, btnBL}) {
@@ -816,13 +814,13 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         b->setEnabled(false);
         b->setStyleSheet(
             "QPushButton { background:#1a1a1a; color:#444; border-radius:8px;"
-            "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+            "              padding:8px 20px; font-size:12pt;"
             "              border:1px solid #333; }");
     }
     // Medtronic is the default selection — highlight it like the active choice
     btnMdt->setStyleSheet(
         "QPushButton { background:#1a3030; color:#3a6060; border-radius:8px;"
-        "              padding:8px 20px; font-family:'Arial'; font-size:12pt;"
+        "              padding:8px 20px; font-size:12pt;"
         "              border:1px solid #2a5050; }");
     refRow->addWidget(refLbl);
     refRow->addStretch(1);
@@ -840,7 +838,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         b->setStyleSheet(
             "QPushButton {"
             "  background:#1e1e1e; color:#e0e0e0; border-radius:10px;"
-            "  padding:0px 20px; font-family:'Arial'; font-size:14pt;"
+            "  padding:0px 20px; font-size:14pt;"
             "  text-align:left; border:1px solid #333;"
             "}"
             "QPushButton:pressed { background:#2e2e2e; }");
