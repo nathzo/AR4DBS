@@ -8,6 +8,7 @@ class DebugLogDialog : public QDialog {
     Q_OBJECT
 public:
     explicit DebugLogDialog(QWidget *parent = nullptr);
+    ~DebugLogDialog();
 
 private:
     void onCopyToClipboard();

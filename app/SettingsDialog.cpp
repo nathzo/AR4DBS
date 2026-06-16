@@ -850,11 +850,11 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     auto *btnGraphics = makeNavBtn("  " + tr("Paramètres graphiques") + "   ›");
     auto *btnCalib    = makeNavBtn("  " + tr("Paramètres de calibration") + "   ›");
     auto *btnDebugLogs = makeNavBtn("  " + tr("Journaux de débogage") + "   ›");
-    vbox->addWidget(btnGraphics, 0, Qt::AlignHCenter);
+    vbox->addWidget(btnGraphics);
     vbox->addSpacing(12);
-    vbox->addWidget(btnCalib, 0, Qt::AlignHCenter);
+    vbox->addWidget(btnCalib);
     vbox->addSpacing(12);
-    vbox->addWidget(btnDebugLogs, 0, Qt::AlignHCenter);
+    vbox->addWidget(btnDebugLogs);
     vbox->addStretch(1);
     vbox->addWidget(makeSeparator(root));
     vbox->addSpacing(16);
@@ -867,59 +867,80 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
     // ── Open sub-dialogs ──────────────────────────────────────────────────────
     connect(btnGraphics, &QPushButton::clicked, this, [this]() {
+        EmailLogger::logEvent("SettingsDialog", "btnGraphics clicked: creating GraphicsSettingsDialog");
         auto *dlg = new GraphicsSettingsDialog(m_style, m_hasLidar, m_arTestDepthOverlay, this);
+        EmailLogger::logEvent("SettingsDialog", "btnGraphics: connecting signals");
         connect(dlg, &GraphicsSettingsDialog::styleApplied, this,
                 [this](OverlayRenderer::Style s) {
+            EmailLogger::logEvent("SettingsDialog", "btnGraphics: styleApplied signal received");
             m_style = s;
             emit styleChanged(s);
         });
         connect(dlg, &GraphicsSettingsDialog::arTestDepthOverlayChanged, this,
                 [this](bool enabled) {
+            EmailLogger::logEvent("SettingsDialog", "btnGraphics: arTestDepthOverlayChanged signal received");
             m_arTestDepthOverlay = enabled;
             emit arTestDepthOverlayChanged(enabled);
         });
+        EmailLogger::logEvent("SettingsDialog", "btnGraphics: showing dialog via exec()");
         dlg->exec();
+        EmailLogger::logEvent("SettingsDialog", "btnGraphics: dialog closed, calling deleteLater()");
         dlg->deleteLater();
+        EmailLogger::logEvent("SettingsDialog", "btnGraphics: deleteLater() called, returning from click handler");
     });
 
     connect(btnCalib, &QPushButton::clicked, this, [this]() {
+        EmailLogger::logEvent("SettingsDialog", "btnCalib clicked: creating CalibrationSettingsDialog");
         auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
                                                   m_tagPositions, this);
+        EmailLogger::logEvent("SettingsDialog", "btnCalib: connecting signals");
         connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
                 [this](double px) {
+            EmailLogger::logEvent("SettingsDialog", "btnCalib: reprojThresholdApplied signal received");
             m_reprojThreshold = px;
             emit reprojThresholdChanged(px);
         });
         connect(dlg, &CalibrationSettingsDialog::movementThresholdsApplied, this,
                 [this](double transMm, double rotDeg) {
+            EmailLogger::logEvent("SettingsDialog", "btnCalib: movementThresholdsApplied signal received");
             m_moveTransMm = transMm;
             m_moveRotDeg  = rotDeg;
             emit movementThresholdsChanged(transMm, rotDeg);
         });
         connect(dlg, &CalibrationSettingsDialog::tagPositionApplied, this,
                 [this](int tagId, double tx, double ty, double tz) {
+            EmailLogger::logEvent("SettingsDialog", "btnCalib: tagPositionApplied signal received");
             m_tagPositions.tx_m[tagId] = tx;
             m_tagPositions.ty_m[tagId] = ty;
             m_tagPositions.tz_m[tagId] = tz;
             emit tagPositionChanged(tagId, tx, ty, tz);
         });
+        EmailLogger::logEvent("SettingsDialog", "btnCalib: showing dialog via exec()");
         dlg->exec();
+        EmailLogger::logEvent("SettingsDialog", "btnCalib: dialog closed, calling deleteLater()");
         dlg->deleteLater();
+        EmailLogger::logEvent("SettingsDialog", "btnCalib: deleteLater() called, returning from click handler");
     });
 
     // ── Debug Logs dialog ─────────────────────────────────────────────────────
     connect(btnDebugLogs, &QPushButton::clicked, this, [this]() {
+        EmailLogger::logEvent("SettingsDialog", "btnDebugLogs clicked: creating DebugLogDialog");
         auto *dlg = new DebugLogDialog(this);
+        EmailLogger::logEvent("SettingsDialog", "btnDebugLogs: showing dialog via exec()");
         dlg->exec();
+        EmailLogger::logEvent("SettingsDialog", "btnDebugLogs: dialog closed, calling deleteLater()");
         dlg->deleteLater();
+        EmailLogger::logEvent("SettingsDialog", "btnDebugLogs: deleteLater() called, returning from click handler");
     });
 }
 
 SettingsDialog::~SettingsDialog()
 {
-    EmailLogger::logEvent("SettingsDialog", "destructor starting");
+    EmailLogger::logEvent("SettingsDialog", "destructor: entered");
+    EmailLogger::logEvent("SettingsDialog", "destructor: calling disconnect() to remove all signal handlers");
     disconnect();
-    EmailLogger::logEvent("SettingsDialog", "destructor completed");
+    EmailLogger::logEvent("SettingsDialog", "destructor: disconnect() completed");
+    EmailLogger::logEvent("SettingsDialog", "destructor: about to return (destruction complete)");
 }
 
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }
