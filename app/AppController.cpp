@@ -816,7 +816,7 @@ void AppController::onARFrame(const cv::Mat &frame,
     cv::Mat out = frame.clone();
 
     // Draw angle indicator during calibration phase (same gate as debug diagnostics)
-    if (m_showDepthOverlay && m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
+    if (!m_showDepthOverlay && m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
         // Color: red if below 175, blue if 175 or above
         const bool belowThreshold = dbgAngleDeg < 175.0;
         const QColor color = belowThreshold
