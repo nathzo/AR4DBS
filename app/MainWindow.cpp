@@ -139,16 +139,17 @@ public:
         lay->setSpacing(8);
 
         // Status label — holds calibration state on iOS; transparent on desktop.
+        // Adapts vertically based on text; center stays constant with equal stretches.
         statusLabel = new QLabel(m_inner);
         statusLabel->setAlignment(Qt::AlignCenter);
         statusLabel->setWordWrap(true);
-        statusLabel->setFixedHeight(60);
+        statusLabel->setMinimumHeight(60);
         statusLabel->setStyleSheet(
             "color: transparent; background: transparent;"
             "padding: 6px; font-size: 12pt;");
         lay->addStretch(1);
         lay->addWidget(statusLabel);
-        lay->addStretch(3);
+        lay->addStretch(1);
 
         btnEdit = new QPushButton(m_inner);
         btnEdit->setText(tr("Modifier\nle plan"));

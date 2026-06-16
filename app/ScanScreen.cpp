@@ -56,15 +56,15 @@ public:
         m_status = new QLabel(m_inner);
         m_status->setAlignment(Qt::AlignCenter);
         m_status->setWordWrap(true);
-        // Fixed height so that changing the text never shifts the buttons.
-        // Sized for the longest possible message at 12pt with word-wrap.
-        m_status->setFixedHeight(60);
+        // Minimum height to ensure readability; adapts vertically based on text length.
+        // Center position stays constant by using equal stretches above and below.
+        m_status->setMinimumHeight(60);
         m_status->setStyleSheet(
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
-        lay->addStretch(1);             // ¼ gap from edge
+        lay->addStretch(1);             // gap from edge (same as below for constant center)
         lay->addWidget(m_status);
-        lay->addStretch(3);             // ¾ gap toward centre
+        lay->addStretch(1);             // gap toward centre (equal to above for constant center)
 
         captureBtn = new QPushButton(m_inner);
         captureBtn->setStyleSheet(
