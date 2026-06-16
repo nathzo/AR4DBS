@@ -194,7 +194,7 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     box->setCheckable(false);
     box->setObjectName("side_group");
     auto *form = new QFormLayout(box);
-    form->setLabelAlignment(Qt::AlignRight);
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     form->setVerticalSpacing(14);
     form->setHorizontalSpacing(16);
     form->setContentsMargins(16, 16, 16, 16);
@@ -215,12 +215,20 @@ ConfirmPlanDialog::TargetWidgets ConfirmPlanDialog::buildSide(
     w.ring = makeSpinBox(360, ringDet, t.ring_deg, " °",  nullptr);
     w.arc  = makeSpinBox(180, arcDet,  t.arc_deg,  " °",  nullptr);
 
+    // Create labels with matching height to spinboxes for proper vertical alignment
+    auto makeLabel = [&](const QString &text) {
+        auto *lbl = new QLabel(text);
+        lbl->setFixedHeight(52);
+        lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        return lbl;
+    };
+
     form->addRow(w.enabled);
-    form->addRow("X (mm) :",        w.x);
-    form->addRow("Y (mm) :",        w.y);
-    form->addRow("Z (mm) :",        w.z);
-    form->addRow(tr("Ring (degrés) :"), w.ring);
-    form->addRow(tr("Arc  (degrés) :"), w.arc);
+    form->addRow(makeLabel("X (mm) :"),        w.x);
+    form->addRow(makeLabel("Y (mm) :"),        w.y);
+    form->addRow(makeLabel("Z (mm) :"),        w.z);
+    form->addRow(makeLabel(tr("Ring (degrés) :")), w.ring);
+    form->addRow(makeLabel(tr("Arc  (degrés) :")), w.arc);
 
     // Disable spinboxes when side is unchecked
     auto updateEnabled = [w](bool on) {

@@ -766,8 +766,8 @@ void AppController::onARFrame(const cv::Mat &frame,
 
         auto dbg = [&](const std::string &msg, bool ok) {
             // Render using Qt with Diagramm-Regular font
-            QColor textColor = ok ? QColor(50, 220, 50) : QColor(50, 50, 255);
-            QFont font(fontFamily, 20, QFont::Bold);
+            QColor textColor = ok ? QColor(50, 220, 50) : QColor(255, 50, 50);
+            QFont font(fontFamily, 28, QFont::Bold);
             QFontMetrics fm(font);
             QString qmsg = QString::fromStdString(msg);
 
@@ -792,36 +792,40 @@ void AppController::onARFrame(const cv::Mat &frame,
             p.drawText(1, fm.ascent() + 1, qmsg);
             p.end();
 
-            // Composite onto frame at position (20, y)
+            // Composite onto frame at position (20, y), but clamp to frame bounds
             int startX = 20;
             int startY = y - fm.ascent();
 
-            for (int dy = 0; dy < textImg.height() && startY + dy < out.rows; ++dy) {
-                if (startY + dy < 0) continue;
-                const QRgb *src = reinterpret_cast<const QRgb *>(textImg.scanLine(dy));
-                uchar *dst = out.ptr<uchar>(startY + dy, startX);
+            // Only render if text fits within frame bounds
+            if (startY + textImg.height() <= out.rows && startY >= 0) {
+                for (int dy = 0; dy < textImg.height() && startY + dy < out.rows; ++dy) {
+                    const QRgb *src = reinterpret_cast<const QRgb *>(textImg.scanLine(dy));
+                    uchar *dst = out.ptr<uchar>(startY + dy, startX);
 
-                for (int dx = 0; dx < textImg.width() && startX + dx < out.cols; ++dx) {
-                    const quint32 px = src[dx];
-                    const int a = qAlpha(px);
-                    if (a == 0) {
+                    for (int dx = 0; dx < textImg.width() && startX + dx < out.cols; ++dx) {
+                        const quint32 px = src[dx];
+                        const int a = qAlpha(px);
+                        if (a == 0) {
+                            dst += 3;
+                            continue;
+                        }
+
+                        const int ia = 255 - a;
+                        const int r = qRed(px);
+                        const int g = qGreen(px);
+                        const int b = qBlue(px);
+
+                        dst[0] = static_cast<uchar>(((dst[0] * ia) >> 8) + b);
+                        dst[1] = static_cast<uchar>(((dst[1] * ia) >> 8) + g);
+                        dst[2] = static_cast<uchar>(((dst[2] * ia) >> 8) + r);
                         dst += 3;
-                        continue;
                     }
-
-                    const int ia = 255 - a;
-                    const int r = qRed(px);
-                    const int g = qGreen(px);
-                    const int b = qBlue(px);
-
-                    dst[0] = static_cast<uchar>(((dst[0] * ia) >> 8) + b);
-                    dst[1] = static_cast<uchar>(((dst[1] * ia) >> 8) + g);
-                    dst[2] = static_cast<uchar>(((dst[2] * ia) >> 8) + r);
-                    dst += 3;
                 }
             }
 
-            y += lineH;
+            if (startY + textImg.height() <= out.rows) {
+                y += lineH;
+            }
         };
         dbg(m_showDepthOverlay ? "overlay flag: ON" : "overlay flag: OFF",
             m_showDepthOverlay);
