@@ -815,8 +815,8 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── Render ─────────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 
-    // Draw angle indicator during calibration phase (before early return)
-    if (m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
+    // Draw angle indicator during calibration phase (same gate as debug diagnostics)
+    if (m_showDepthOverlay && m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
         // Color: red if below 175, blue if 175 or above
         const bool belowThreshold = dbgAngleDeg < 175.0;
         const QColor color = belowThreshold
@@ -832,6 +832,7 @@ void AppController::onARFrame(const cv::Mat &frame,
 
         QColor shadowColor(0, 0, 0, 255);
         QFont font(fontFamily, 54);
+        font.setBold(true);
         QFontMetrics fm(font);
 
         // Calculate text dimensions
@@ -897,7 +898,7 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Debug diagnostics — test AR mode only
     if (m_showDepthOverlay) {
         int y = 100;
-        const int lineH = 105;
+        const int lineH = 88;
 
         // Load Diagramm-Bold font once
         static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
@@ -913,7 +914,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             QColor textColor = isAngle ? (ok ? ARC_BLUE : IMPULSE_RED)
                                        : (ok ? QColor(50, 220, 50, 255) : QColor(255, 50, 50, 255));
             QColor shadowColor(0, 0, 0, 255);
-            QFont font(fontFamily, 54);
+            QFont font(fontFamily, 45);
             QFontMetrics fm(font);
             QString qmsg = QString::fromStdString(msg);
 
