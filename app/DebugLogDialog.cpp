@@ -16,12 +16,12 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     DebugLogger::logEvent("DebugLogDialog", "constructor: started");
     setWindowTitle(tr("Debug Logs"));
 
-    // Fill the entire screen
-    const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
-    setGeometry(ag);
+    // Fill the entire screen (100%)
+    const QRect screenGeom = QGuiApplication::primaryScreen()->geometry();
+    setGeometry(screenGeom);
 
-    // Set window flags for proper modal behavior
-    setWindowFlags(Qt::Dialog);
+    // Set window flags for proper fullscreen behavior
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
 
     auto *mainLayout = new QVBoxLayout;

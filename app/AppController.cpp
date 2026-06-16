@@ -826,12 +826,12 @@ void AppController::onARFrame(const cv::Mat &frame,
         // Format the text with translated message and angle value (no degree symbol due to encoding)
         QString angleMsg = tr("Angle : %1 (> 175 requis)").arg(dbgAngleDeg, 0, 'f', 1);
 
-        // Load Diagramm-Regular font once
-        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+        // Load Diagramm-Bold font once
+        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
         static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
 
         QColor shadowColor(0, 0, 0, 255);
-        QFont font(fontFamily, 36);
+        QFont font(fontFamily, 54);
         QFontMetrics fm(font);
 
         // Calculate text dimensions
@@ -856,9 +856,9 @@ void AppController::onARFrame(const cv::Mat &frame,
         p.drawText(1, fm.ascent() + 1, angleMsg);
         p.end();
 
-        // Composite onto frame at position (20, 70)
+        // Composite onto frame at position (20, 70), adjusting for larger font size
         int startX = 20;
-        int startY = 70 - fm.ascent();
+        int startY = 105 - fm.ascent();
 
         // Only render if text fits within frame bounds
         if (startY + textImg.height() <= out.rows && startY >= 0) {
@@ -897,10 +897,10 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Debug diagnostics — test AR mode only
     if (m_showDepthOverlay) {
         int y = 100;
-        const int lineH = 70;
+        const int lineH = 105;
 
-        // Load Diagramm-Regular font once
-        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
+        // Load Diagramm-Bold font once
+        static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Bold.ttf");
         static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
 
         // Brand colors for angle indication
@@ -908,12 +908,12 @@ void AppController::onARFrame(const cv::Mat &frame,
         const QColor ARC_BLUE(117, 208, 197, 255);     // #75D0C5
 
         auto dbg = [&](const std::string &msg, bool ok, bool isAngle = false) {
-            // Render using Qt with Diagramm-Regular font
+            // Render using Qt with Diagramm-Bold font
             // Use brand colors for angle indication, standard colors for others
             QColor textColor = isAngle ? (ok ? ARC_BLUE : IMPULSE_RED)
                                        : (ok ? QColor(50, 220, 50, 255) : QColor(255, 50, 50, 255));
             QColor shadowColor(0, 0, 0, 255);
-            QFont font(fontFamily, 36);
+            QFont font(fontFamily, 54);
             QFontMetrics fm(font);
             QString qmsg = QString::fromStdString(msg);
 
