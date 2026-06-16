@@ -16,14 +16,9 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     EmailLogger::logEvent("DebugLogDialog", "constructor: started");
     setWindowTitle(tr("Debug Logs"));
 
-    // Fill the screen width but leave room for safe area on iOS
+    // Fill the entire screen
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
-    int dialogWidth = static_cast<int>(ag.width() * 0.95);  // 95% of screen width
-    int dialogHeight = static_cast<int>(ag.height() * 0.85); // 85% of screen height
-    setGeometry(ag.x() + (ag.width() - dialogWidth) / 2,
-                ag.y() + (ag.height() - dialogHeight) / 2,
-                dialogWidth,
-                dialogHeight);
+    setGeometry(ag);
 
     // Set window flags for proper modal behavior
     setWindowFlags(Qt::Dialog);
