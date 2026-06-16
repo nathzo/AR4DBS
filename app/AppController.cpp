@@ -744,23 +744,6 @@ void AppController::onARFrame(const cv::Mat &frame,
     // ── Render ─────────────────────────────────────────────────────────────────
     cv::Mat out = frame.clone();
 
-    // Draw angle indicator during calibration phase (before early return)
-    if (m_T_world_leksell.empty() && dbgAngleDeg >= 0.0) {
-        // Color: red if below 175, blue if 175 or above
-        const bool belowThreshold = dbgAngleDeg < 175.0;
-        const cv::Scalar color = belowThreshold
-            ? cv::Scalar(94, 95, 222)   // IMPULSE_RED (BGR order: #DE5F5E)
-            : cv::Scalar(197, 208, 117); // ARC_BLUE (BGR order: #75D0C5)
-
-        // Format the text with translated message and angle value (no degree symbol due to encoding)
-        QString angleMsg = tr("Angle : %1 (> 175 requis)").arg(dbgAngleDeg, 0, 'f', 1);
-        std::string angleText = angleMsg.toStdString();
-
-        // Draw with shadow for better visibility, using bold font
-        const cv::Scalar shadow(0, 0, 0);
-        cv::putText(out, angleText, {22, 72}, cv::FONT_HERSHEY_DUPLEX, 1.5, shadow, 6, cv::LINE_AA);
-        cv::putText(out, angleText, {20, 70}, cv::FONT_HERSHEY_DUPLEX, 1.5, color,  3, cv::LINE_AA);
-    }
 
     if (!m_showDepthOverlay && (T_cam_leksell.empty() || !anyLine)) {
         m_lastFrameMs = m_frameTimer.elapsed();
@@ -854,15 +837,6 @@ void AppController::onARFrame(const cv::Mat &frame,
                 !confidenceMap.empty());
     }
 
-    // Log status indicator (visible in Test AR mode regardless of depth overlay)
-    if (m_showDepthOverlay) {
-        QString logMsg = QString("EMAIL LOGGING ACTIVE");
-        const cv::Scalar shadow(0, 0, 0);
-        const cv::Scalar color = cv::Scalar(50, 220, 50);
-        std::string logMsgStr = logMsg.toStdString();
-        cv::putText(out, logMsgStr, {22, 92}, cv::FONT_HERSHEY_SIMPLEX, 1.5, shadow, 5, cv::LINE_AA);
-        cv::putText(out, logMsgStr, {20, 90}, cv::FONT_HERSHEY_SIMPLEX, 1.5, color,  2, cv::LINE_AA);
-    }
 
     // Depth visualization overlay: red = close, blue = far.
     if (m_showDepthOverlay && m_showDepthVisualization && !depthMap.empty()) {

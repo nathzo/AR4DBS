@@ -55,26 +55,11 @@ QString EmailLogger::getAllLogs()
     return s_logQueue.join("\n");
 }
 
-QString EmailLogger::getLogsForEmail()
-{
-    QMutexLocker lock(&s_mutex);
-
-    QString subject = "[DBSAR Debug Log] " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-    QString body = "Application Session Log\n";
-    body += "=======================\n";
-    body += "Generated: " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + "\n";
-    body += "Total events: " + QString::number(s_logQueue.size()) + "\n";
-    body += "\n";
-    body += s_logQueue.join("\n");
-
-    return body;
-}
-
 void EmailLogger::clearLogs()
 {
     QMutexLocker lock(&s_mutex);
     s_logQueue.clear();
     QSettings settings;
     settings.remove(SETTINGS_KEY);
-    qDebug() << "EmailLogger: logs cleared after sending";
+    qDebug() << "EmailLogger: logs cleared";
 }

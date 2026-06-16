@@ -8,8 +8,6 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QDesktopServices>
-#include <QUrl>
 #include <QDateTime>
 
 DebugLogDialog::DebugLogDialog(QWidget *parent)
@@ -81,49 +79,25 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     m_btnCopy->setMinimumHeight(36);
     m_btnCopy->setStyleSheet(
         "QPushButton {"
-        "  background: #2a5f7a; color: white;"
+        "  background: #DE5F5E; color: white;"  // IMPULSE_RED
         "  border-radius: 6px; padding: 8px;"
         "  font-size: 11pt; font-weight: bold;"
         "}"
-        "QPushButton:pressed { background: #1a4a6a; }");
+        "QPushButton:pressed { background: #b84a48; }");
     connect(m_btnCopy, &QPushButton::clicked, this, &DebugLogDialog::onCopyToClipboard);
     btnLayout->addWidget(m_btnCopy);
-
-    m_btnMail = new QPushButton(tr("Open Mail App"));
-    m_btnMail->setMinimumHeight(36);
-    m_btnMail->setStyleSheet(
-        "QPushButton {"
-        "  background: #2a7a5f; color: white;"
-        "  border-radius: 6px; padding: 8px;"
-        "  font-size: 11pt; font-weight: bold;"
-        "}"
-        "QPushButton:pressed { background: #1a6a4f; }");
-    connect(m_btnMail, &QPushButton::clicked, this, &DebugLogDialog::onOpenMailApp);
-    btnLayout->addWidget(m_btnMail);
 
     m_btnClear = new QPushButton(tr("Clear Logs"));
     m_btnClear->setMinimumHeight(36);
     m_btnClear->setStyleSheet(
         "QPushButton {"
-        "  background: #7a5a2a; color: white;"
+        "  background: #75D0C5; color: black;"  // ARC_BLUE
         "  border-radius: 6px; padding: 8px;"
         "  font-size: 11pt; font-weight: bold;"
         "}"
-        "QPushButton:pressed { background: #6a4a1a; }");
+        "QPushButton:pressed { background: #5ab8ae; }");
     connect(m_btnClear, &QPushButton::clicked, this, &DebugLogDialog::onClear);
     btnLayout->addWidget(m_btnClear);
-
-    auto *btnClose = new QPushButton(tr("Close"));
-    btnClose->setMinimumHeight(36);
-    btnClose->setStyleSheet(
-        "QPushButton {"
-        "  background: #555; color: white;"
-        "  border-radius: 6px; padding: 8px;"
-        "  font-size: 11pt; font-weight: bold;"
-        "}"
-        "QPushButton:pressed { background: #333; }");
-    connect(btnClose, &QPushButton::clicked, this, &QDialog::accept);
-    btnLayout->addWidget(btnClose);
 
     mainLayout->addLayout(btnLayout);
     setLayout(mainLayout);
@@ -147,28 +121,6 @@ void DebugLogDialog::onCopyToClipboard()
     // Update the text to show it was copied
     m_logText->setPlainText("✓ Logs copied to clipboard!\n\n" + logs);
     EmailLogger::logEvent("DebugLogDialog", "copy button: display updated");
-}
-
-void DebugLogDialog::onOpenMailApp()
-{
-    EmailLogger::logEvent("DebugLogDialog", "mail button: clicked");
-    EmailLogger::logEvent("DebugLogDialog", "mail button: getting logs for email");
-    QString logs = EmailLogger::getLogsForEmail();
-    EmailLogger::logEvent("DebugLogDialog", "mail button: copying logs to clipboard (" + QString::number(logs.length()) + " chars)");
-    QGuiApplication::clipboard()->setText(logs);
-
-    // Open default mail client with subject line
-    // Note: mailto URLs don't reliably support body parameter, so we copy to clipboard
-    QString subject = "DBSAR Debug Logs - " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-    QString mailtoUrl = "mailto:?subject=" + subject.replace(" ", "%20");
-    EmailLogger::logEvent("DebugLogDialog", "mail button: opening mail app with mailto URL");
-    QDesktopServices::openUrl(QUrl(mailtoUrl));
-    EmailLogger::logEvent("DebugLogDialog", "mail button: returned from openUrl()");
-
-    // Show message that logs are in clipboard
-    m_logText->setPlainText("✓ Mail app opened!\n\nThe logs have been copied to your clipboard.\n"
-                           "Paste them into the email body.\n\n" + logs);
-    EmailLogger::logEvent("DebugLogDialog", "mail button: display updated");
 }
 
 void DebugLogDialog::onClear()

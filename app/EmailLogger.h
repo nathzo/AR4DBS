@@ -15,10 +15,7 @@ public:
     // Get all accumulated logs as a single string
     static QString getAllLogs();
 
-    // Get logs formatted as email body (with summary)
-    static QString getLogsForEmail();
-
-    // Clear the log queue and QSettings (call after user sends email)
+    // Clear the log queue and QSettings
     static void clearLogs();
 
 private:
