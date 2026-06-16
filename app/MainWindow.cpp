@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 #include "AppController.h"
 #include "SettingsDialog.h"
-#include "EmailLogger.h"
+#include "DebugLogger.h"
 #include "core/rendering/GLWidget.h"
 
 #include <QFile>
@@ -22,6 +22,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QResizeEvent>
+#include <QThread>
 #include <cmath>
 
 // ── Persistent settings helpers ───────────────────────────────────────────────
@@ -229,17 +230,17 @@ private:
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    EmailLogger::initialize();
-    EmailLogger::logEvent("MainWindow", "Application started");
+    DebugLogger::initialize();
+    DebugLogger::logEvent("MainWindow", "Application started");
 
     // Log system and locale information
-    EmailLogger::logEvent("MainWindow", QString("Locale: %1, Language: %2")
+    DebugLogger::logEvent("MainWindow", QString("Locale: %1, Language: %2")
         .arg(QLocale().name())
         .arg(QLocale().languageToString(QLocale().language())));
-    EmailLogger::logEvent("MainWindow", QString("Qt version: %1, Platform: %2")
+    DebugLogger::logEvent("MainWindow", QString("Qt version: %1, Platform: %2")
         .arg(QT_VERSION_STR)
         .arg(QSysInfo::prettyProductName()));
-    EmailLogger::logEvent("MainWindow", QString("Thread ID at startup: 0x%1")
+    DebugLogger::logEvent("MainWindow", QString("Thread ID at startup: 0x%1")
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 
     // Force dark background on the root window so nothing system-coloured shows
@@ -249,11 +250,11 @@ MainWindow::MainWindow(QWidget *parent)
     // ── Controller — runs on a dedicated thread so detect+blend never block UI ─
     m_controller       = new AppController;   // no parent — will be moved to thread
     m_controllerThread = new QThread(this);
-    EmailLogger::logEvent("MainWindow", QString("Created controller thread, ptr=0x%1")
+    DebugLogger::logEvent("MainWindow", QString("Created controller thread, ptr=0x%1")
         .arg(reinterpret_cast<quintptr>(m_controllerThread), 0, 16));
 
     m_controller->moveToThread(m_controllerThread);
-    EmailLogger::logEvent("MainWindow", QString("Moved controller to thread, controller=0x%1")
+    DebugLogger::logEvent("MainWindow", QString("Moved controller to thread, controller=0x%1")
         .arg(reinterpret_cast<quintptr>(m_controller), 0, 16));
 
     // Destroy the controller when the thread finishes, and quit the thread when
@@ -261,7 +262,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_controllerThread, &QThread::finished,
             m_controller,       &QObject::deleteLater);
     m_controllerThread->start();
-    EmailLogger::logEvent("MainWindow", "Started controller thread");
+    DebugLogger::logEvent("MainWindow", "Started controller thread");
 
 #ifndef Q_OS_IOS
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
@@ -273,10 +274,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
 #ifdef Q_OS_IOS
     m_hasLidar = ARKitSession::isLidarAvailable();
-    EmailLogger::logEvent("MainWindow", QString("Platform: iOS, LiDAR available: %1")
+    DebugLogger::logEvent("MainWindow", QString("Platform: iOS, LiDAR available: %1")
         .arg(m_hasLidar ? "YES" : "NO"));
 #else
-    EmailLogger::logEvent("MainWindow", "Platform: Desktop");
+    DebugLogger::logEvent("MainWindow", "Platform: Desktop");
 #endif
 
 #ifdef FEATURE_PLAN_SCANNER
@@ -493,7 +494,7 @@ MainWindow::~MainWindow() {}
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     // Log app close
-    EmailLogger::logEvent("MainWindow", "closeEvent triggered");
+    DebugLogger::logEvent("MainWindow", "closeEvent triggered");
 
     // Stop cameras first so no more frames are queued at the controller.
     if (m_arCamera) {
@@ -514,7 +515,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         m_controllerThread->wait();
     }
 
-    EmailLogger::logEvent("MainWindow", "closeEvent completed");
+    DebugLogger::logEvent("MainWindow", "closeEvent completed");
     event->accept();
 }
 
@@ -537,10 +538,10 @@ void MainWindow::onPlanDetected(const SurgicalPlan &detected)
 {
     m_scanScreen->stopCamera();
 
-    EmailLogger::logEvent("MainWindow", "onPlanDetected: creating ConfirmPlanDialog (Scan mode)");
+    DebugLogger::logEvent("MainWindow", "onPlanDetected: creating ConfirmPlanDialog (Scan mode)");
     ConfirmPlanDialog dlg(detected, ConfirmPlanDialog::Mode::Scan, this);
     int result = dlg.exec();
-    EmailLogger::logEvent("MainWindow", "onPlanDetected: ConfirmPlanDialog closed, result=" + QString::number(result));
+    DebugLogger::logEvent("MainWindow", "onPlanDetected: ConfirmPlanDialog closed, result=" + QString::number(result));
 
     if (result != QDialog::Accepted) {
         // User cancelled — go back to scan screen
@@ -562,10 +563,10 @@ void MainWindow::editPlan()
 {
     m_arCamera->stop();
 
-    EmailLogger::logEvent("MainWindow", "editPlan: creating ConfirmPlanDialog (Edit mode)");
+    DebugLogger::logEvent("MainWindow", "editPlan: creating ConfirmPlanDialog (Edit mode)");
     ConfirmPlanDialog dlg(m_currentPlan, ConfirmPlanDialog::Mode::Edit, this);
     int result = dlg.exec();
-    EmailLogger::logEvent("MainWindow", "editPlan: ConfirmPlanDialog closed, result=" + QString::number(result));
+    DebugLogger::logEvent("MainWindow", "editPlan: ConfirmPlanDialog closed, result=" + QString::number(result));
 
     if (result == QDialog::Accepted) {
         m_currentPlan = dlg.plan();
@@ -586,7 +587,7 @@ void MainWindow::editPlan()
 #ifdef Q_OS_IOS
 void MainWindow::setArLocked(bool locked)
 {
-    EmailLogger::logEvent("MainWindow::setArLocked",
+    DebugLogger::logEvent("MainWindow::setArLocked",
         QString("SIGNAL RECEIVED: locked=%1, thread=0x%2")
         .arg(locked ? 1 : 0)
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
@@ -599,7 +600,7 @@ void MainWindow::setArLocked(bool locked)
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText(tr("Recalibrer"));
-        EmailLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: locked state displayed");
+        DebugLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: locked state displayed");
     } else {
         m_arCalibrating = false;
         m_calibLabel->setText(tr("Calibration requise : placez la caméra face aux repères"));
@@ -607,21 +608,21 @@ void MainWindow::setArLocked(bool locked)
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText(tr("← Menu"));
-        EmailLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: unlocked state displayed");
+        DebugLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: unlocked state displayed");
     }
     if (m_arStrip) m_arStrip->update();
 }
 
 void MainWindow::setArCalibrating(bool calibrating)
 {
-    EmailLogger::logEvent("MainWindow::setArCalibrating",
+    DebugLogger::logEvent("MainWindow::setArCalibrating",
         QString("SIGNAL RECEIVED: calibrating=%1, arLocked=%2, thread=0x%3")
         .arg(calibrating ? 1 : 0)
         .arg(m_arLocked ? 1 : 0)
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 
     if (m_arLocked) {
-        EmailLogger::logEvent("MainWindow::setArCalibrating", "IGNORED: locked state takes priority");
+        DebugLogger::logEvent("MainWindow::setArCalibrating", "IGNORED: locked state takes priority");
         return; // locked state takes priority
     }
     m_arCalibrating = calibrating;
@@ -632,7 +633,7 @@ void MainWindow::setArCalibrating(bool calibrating)
         "color: #DE5F5E; background: rgba(222,95,94,50);"
         "padding: 6px; font-size: 12pt;");
     if (m_arStrip) m_arStrip->update();
-    EmailLogger::logEvent("MainWindow::setArCalibrating", "UI UPDATED");
+    DebugLogger::logEvent("MainWindow::setArCalibrating", "UI UPDATED");
 }
 #endif
 
@@ -640,7 +641,7 @@ void MainWindow::setArCalibrating(bool calibrating)
 
 void MainWindow::openSettings()
 {
-    EmailLogger::logEvent("MainWindow", "openSettings: creating SettingsDialog");
+    DebugLogger::logEvent("MainWindow", "openSettings: creating SettingsDialog");
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
     auto *dlg = new SettingsDialog(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
                                    m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
@@ -700,18 +701,18 @@ void MainWindow::openSettings()
     // preventing a crash on LiDAR iPhones where pending accessibility/widget events
     // could trigger during dialog destruction.
     connect(dlg, &QDialog::finished, dlg, [this, dlg]() {
-        EmailLogger::logEvent("MainWindow", QString("openSettings: SettingsDialog finished signal, result=%1, thread=0x%2")
+        DebugLogger::logEvent("MainWindow", QString("openSettings: SettingsDialog finished signal, result=%1, thread=0x%2")
             .arg(dlg->result())
             .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
     });
     connect(dlg, &QDialog::finished, dlg, [dlg]() {
-        EmailLogger::logEvent("MainWindow", "openSettings: calling deleteLater() on SettingsDialog");
+        DebugLogger::logEvent("MainWindow", "openSettings: calling deleteLater() on SettingsDialog");
         dlg->deleteLater();
     });
-    EmailLogger::logEvent("MainWindow", QString("openSettings: showing SettingsDialog (non-modal), ptr=0x%1")
+    DebugLogger::logEvent("MainWindow", QString("openSettings: showing SettingsDialog (non-modal), ptr=0x%1")
         .arg(reinterpret_cast<quintptr>(dlg), 0, 16));
     dlg->show();
-    EmailLogger::logEvent("MainWindow", "openSettings: show() returned successfully");
+    DebugLogger::logEvent("MainWindow", "openSettings: show() returned successfully");
 }
 
 #include "MainWindow.moc"

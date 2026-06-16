@@ -1,5 +1,5 @@
 #include "AppController.h"
-#include "EmailLogger.h"
+#include "DebugLogger.h"
 #include "core/tracking/AprilTagTracker.h"
 #include "core/math/IncisionLine.h"
 #include "core/math/PoseUtils.h"
@@ -18,6 +18,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QImage>
+#include <QThread>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
@@ -28,12 +29,12 @@ static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
 
 AppController::AppController(QObject *parent) : QObject(parent) {
-    EmailLogger::logEvent("AppController",
+    DebugLogger::logEvent("AppController",
         QString("constructor started, thread=0x%1")
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 }
 AppController::~AppController() {
-    EmailLogger::logEvent("AppController",
+    DebugLogger::logEvent("AppController",
         QString("destructor started, thread=0x%1")
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 }
@@ -43,42 +44,42 @@ bool AppController::init(const QString &calibPath,
                          const QString &planPath,
                          const QString &depthModelPath)
 {
-    EmailLogger::logEvent("AppController::init", "starting initialization");
+    DebugLogger::logEvent("AppController::init", "starting initialization");
 
     m_K = loadCalibration(calibPath); // also populates m_dist
     if (m_K.empty()) {
-        EmailLogger::logEvent("AppController::init", "ERROR: calibration load failed");
+        DebugLogger::logEvent("AppController::init", "ERROR: calibration load failed");
         qWarning() << "AppController: could not load calibration from" << calibPath;
         return false;
     }
-    EmailLogger::logEvent("AppController::init", "calibration loaded");
+    DebugLogger::logEvent("AppController::init", "calibration loaded");
 
     m_tagConfigs = loadTagConfigs(tagConfigPath);
     if (m_tagConfigs.empty()) {
-        EmailLogger::logEvent("AppController::init", "ERROR: tag config load failed");
+        DebugLogger::logEvent("AppController::init", "ERROR: tag config load failed");
         qWarning() << "AppController: could not load tag config from" << tagConfigPath;
         return false;
     }
-    EmailLogger::logEvent("AppController::init", QString("tag configs loaded, count=%1").arg(m_tagConfigs.size()));
+    DebugLogger::logEvent("AppController::init", QString("tag configs loaded, count=%1").arg(m_tagConfigs.size()));
 
     m_tracker  = std::make_unique<AprilTagTracker>(m_K, m_dist, m_markerSize);
     m_renderer = std::make_unique<OverlayRenderer>();
     m_renderer->setDistortion(m_dist);
-    EmailLogger::logEvent("AppController::init", "tracker and renderer created");
+    DebugLogger::logEvent("AppController::init", "tracker and renderer created");
 
     if (!depthModelPath.isEmpty()) {
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
         if (!m_depth->isLoaded()) {
-            EmailLogger::logEvent("AppController::init", "depth model load failed (ignored)");
+            DebugLogger::logEvent("AppController::init", "depth model load failed (ignored)");
             qWarning() << "AppController: depth model not loaded from" << depthModelPath;
             m_depth.reset();
         } else {
-            EmailLogger::logEvent("AppController::init", "depth estimation enabled");
+            DebugLogger::logEvent("AppController::init", "depth estimation enabled");
             qDebug() << "AppController: depth estimation enabled";
         }
     }
 
-    EmailLogger::logEvent("AppController::init", "initialization complete");
+    DebugLogger::logEvent("AppController::init", "initialization complete");
     return true;
 }
 
@@ -125,7 +126,7 @@ void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double t
 
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
-    EmailLogger::logEvent("AppController::setSurgicalPlan",
+    DebugLogger::logEvent("AppController::setSurgicalPlan",
         QString("called with left=%1, right=%2")
         .arg(plan.hasLeft() ? 1 : 0)
         .arg(plan.hasRight() ? 1 : 0));
@@ -140,9 +141,9 @@ void AppController::setSurgicalPlan(const SurgicalPlan &plan)
         std::lock_guard<std::mutex> lk(m_depthMutex);
         for (auto &lock : m_lockedIncision) lock = LockedIncision{};
     }
-    EmailLogger::logEvent("AppController::setSurgicalPlan", "incision locks cleared");
+    DebugLogger::logEvent("AppController::setSurgicalPlan", "incision locks cleared");
 #endif
-    EmailLogger::logEvent("AppController::setSurgicalPlan", "plan set successfully");
+    DebugLogger::logEvent("AppController::setSurgicalPlan", "plan set successfully");
 }
 
 void AppController::onNewFrame(const cv::Mat &frame)
@@ -611,8 +612,8 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 void AppController::resetARRegistration()
 {
     const bool wasLocked = !m_T_world_leksell.empty();
-    const int streakSize = m_streakPoses.size();
-    EmailLogger::logEvent("AppController::resetARRegistration",
+    const int streakSize = static_cast<int>(m_streakPoses.size());
+    DebugLogger::logEvent("AppController::resetARRegistration",
         QString("CALLED: wasLocked=%1, streakSize=%2/10, thread=0x%3")
         .arg(wasLocked ? 1 : 0).arg(streakSize)
         .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
@@ -628,17 +629,17 @@ void AppController::resetARRegistration()
     }
     if (!m_streakPoses.empty()) {
         m_streakPoses.clear();
-        EmailLogger::logEvent("AppController::resetARRegistration", "STREAK CLEARED: emitting calibrationProgressChanged(false)");
+        DebugLogger::logEvent("AppController::resetARRegistration", "STREAK CLEARED: emitting calibrationProgressChanged(false)");
         emit calibrationProgressChanged(false);
     }
-    EmailLogger::logEvent("AppController::resetARRegistration", "RESET COMPLETE: emitting lockStateChanged(false)");
+    DebugLogger::logEvent("AppController::resetARRegistration", "RESET COMPLETE: emitting lockStateChanged(false)");
     emit lockStateChanged(false);
-    EmailLogger::logEvent("AppController::resetARRegistration", "ALL SIGNALS EMITTED");
+    DebugLogger::logEvent("AppController::resetARRegistration", "ALL SIGNALS EMITTED");
 }
 
 void AppController::onLidarAvailable(bool available)
 {
-    EmailLogger::logEvent("AppController::onLidarAvailable",
+    DebugLogger::logEvent("AppController::onLidarAvailable",
         QString("Depth source changed: %1").arg(available ? "LiDAR" : "none"));
     m_usingLiDAR  = available;
     m_depthAnchor = available ? 1.0 : 0.0;
@@ -653,7 +654,7 @@ void AppController::onTrackingQualityChanged(int state)
     const QString anchorName = (m_anchorTrackingState >= 0 && m_anchorTrackingState <= 2)
         ? stateNames[m_anchorTrackingState] : "Unknown";
 
-    EmailLogger::logEvent("AppController::onTrackingQualityChanged",
+    DebugLogger::logEvent("AppController::onTrackingQualityChanged",
         QString("state=%1 (%2), locked=%3, anchorState=%4 (%5)")
         .arg(state).arg(stateName)
         .arg(m_T_world_leksell.empty() ? 0 : 1)
@@ -664,7 +665,7 @@ void AppController::onTrackingQualityChanged(int state)
     // the level recorded at anchor time (so a lock done at "limited" quality won't
     // immediately reset on the next frame).
     if (!m_T_world_leksell.empty() && state < m_anchorTrackingState) {
-        EmailLogger::logEvent("AppController::onTrackingQualityChanged",
+        DebugLogger::logEvent("AppController::onTrackingQualityChanged",
             QString("TRIGGERING RESET: quality dropped from %1 to %2").arg(anchorName).arg(stateName));
         resetARRegistration();
     }
@@ -684,7 +685,7 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Log AR frame state at entry (sample every 30 frames to avoid spam)
     static int s_frameCounter = 0;
     if (++s_frameCounter % 30 == 0) {
-        EmailLogger::logEvent("AppController::onARFrame",
+        DebugLogger::logEvent("AppController::onARFrame",
             QString("frame #%1: locked=%2, streak=%3/%4, features=%5")
             .arg(s_frameCounter)
             .arg(m_T_world_leksell.empty() ? 0 : 1)
@@ -728,11 +729,11 @@ void AppController::onARFrame(const cv::Mat &frame,
         if (meetsInitConditions(detections, T_from_tags)) {
             // Accumulate qualifying frames; lock only after 10 consecutive successes.
             if (m_streakPoses.empty()) {
-                EmailLogger::logEvent("AppController::onARFrame", "STREAK STARTED: first qualifying frame");
+                DebugLogger::logEvent("AppController::onARFrame", "STREAK STARTED: first qualifying frame");
                 emit calibrationProgressChanged(true); // streak just started
             }
             m_streakPoses.push_back(world_T_camera_cv * T_from_tags);
-            EmailLogger::logEvent("AppController::onARFrame",
+            DebugLogger::logEvent("AppController::onARFrame",
                 QString("STREAK PROGRESS: %1/10 frames (corners=%2, angle=%.1f°, reproj=%.2fpx)")
                 .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
 
@@ -756,15 +757,15 @@ void AppController::onARFrame(const cv::Mat &frame,
 
                 m_anchorTrackingState = m_trackingState;
                 m_streakPoses.clear();
-                EmailLogger::logEvent("AppController::onARFrame", "LOCKED: emitting calibrationProgressChanged(false) and lockStateChanged(true)");
+                DebugLogger::logEvent("AppController::onARFrame", "LOCKED: emitting calibrationProgressChanged(false) and lockStateChanged(true)");
                 emit calibrationProgressChanged(false);
                 emit lockStateChanged(true);
-                EmailLogger::logEvent("AppController::onARFrame", "LOCKED: signals emitted successfully");
+                DebugLogger::logEvent("AppController::onARFrame", "LOCKED: signals emitted successfully");
             }
         } else {
             // Streak broken — reset accumulator.
             if (!m_streakPoses.empty()) {
-                EmailLogger::logEvent("AppController::onARFrame",
+                DebugLogger::logEvent("AppController::onARFrame",
                     QString("STREAK BROKEN at frame %1/10: conditions not met (corners=%2, angle=%.1f°, reproj=%.2fpx)")
                     .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
                 m_streakPoses.clear();

@@ -4,7 +4,7 @@
 #include <QMutex>
 #include <QStringList>
 
-class EmailLogger {
+class DebugLogger {
 public:
     // Initialize — loads persisted logs from QSettings
     static void initialize();

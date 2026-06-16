@@ -1,5 +1,5 @@
 #include "DebugLogDialog.h"
-#include "EmailLogger.h"
+#include "DebugLogger.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTextEdit>
@@ -13,7 +13,7 @@
 DebugLogDialog::DebugLogDialog(QWidget *parent)
     : QDialog(parent)
 {
-    EmailLogger::logEvent("DebugLogDialog", "constructor: started");
+    DebugLogger::logEvent("DebugLogDialog", "constructor: started");
     setWindowTitle(tr("Debug Logs"));
 
     // Fill the entire screen
@@ -30,7 +30,7 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
 
     // ── Header with title and close button ──────────────────────────────────
     auto *headerLayout = new QHBoxLayout;
-    int lineCount = EmailLogger::getLogLineCount();
+    int lineCount = DebugLogger::getLogLineCount();
     auto *titleLabel = new QLabel(tr("Debug Logs (%1 lines)").arg(lineCount));
     titleLabel->setStyleSheet("color: white; font-weight: bold; font-size: 14pt;");
     headerLayout->addWidget(titleLabel);
@@ -53,10 +53,10 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     mainLayout->addLayout(headerLayout);
 
     // ── Text edit to display logs ──────────────────────────────────────────
-    EmailLogger::logEvent("DebugLogDialog", "constructor: creating text edit widget");
+    DebugLogger::logEvent("DebugLogDialog", "constructor: creating text edit widget");
     m_logText = new QTextEdit;
     m_logText->setReadOnly(true);
-    m_logText->setPlainText(EmailLogger::getAllLogs());
+    m_logText->setPlainText(DebugLogger::getAllLogs());
     m_logText->setStyleSheet(
         "QTextEdit {"
         "  background: #1a1a1a; color: #e0e0e0;"
@@ -70,7 +70,7 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     auto *btnLayout = new QVBoxLayout;
     btnLayout->setSpacing(8);
 
-    EmailLogger::logEvent("DebugLogDialog", "constructor: creating buttons");
+    DebugLogger::logEvent("DebugLogDialog", "constructor: creating buttons");
     m_btnCopy = new QPushButton(tr("Copy to Clipboard"));
     m_btnCopy->setMinimumHeight(36);
     m_btnCopy->setStyleSheet(
@@ -98,32 +98,32 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
     mainLayout->addLayout(btnLayout);
     setLayout(mainLayout);
 
-    EmailLogger::logEvent("DebugLogDialog", "constructor: complete, showing dialog");
+    DebugLogger::logEvent("DebugLogDialog", "constructor: complete, showing dialog");
 }
 
 DebugLogDialog::~DebugLogDialog()
 {
-    EmailLogger::logEvent("DebugLogDialog", "destructor: entered");
-    EmailLogger::logEvent("DebugLogDialog", "destructor: about to return");
+    DebugLogger::logEvent("DebugLogDialog", "destructor: entered");
+    DebugLogger::logEvent("DebugLogDialog", "destructor: about to return");
 }
 
 void DebugLogDialog::onCopyToClipboard()
 {
-    EmailLogger::logEvent("DebugLogDialog", "copy button: clicked");
-    QString logs = EmailLogger::getAllLogs();
+    DebugLogger::logEvent("DebugLogDialog", "copy button: clicked");
+    QString logs = DebugLogger::getAllLogs();
     QGuiApplication::clipboard()->setText(logs);
-    EmailLogger::logEvent("DebugLogDialog", "copy button: logs copied to clipboard (" + QString::number(logs.length()) + " chars)");
+    DebugLogger::logEvent("DebugLogDialog", "copy button: logs copied to clipboard (" + QString::number(logs.length()) + " chars)");
 
     // Update the text to show it was copied
     m_logText->setPlainText("✓ Logs copied to clipboard!\n\n" + logs);
-    EmailLogger::logEvent("DebugLogDialog", "copy button: display updated");
+    DebugLogger::logEvent("DebugLogDialog", "copy button: display updated");
 }
 
 void DebugLogDialog::onClear()
 {
-    EmailLogger::logEvent("DebugLogDialog", "clear button: clicked");
-    EmailLogger::clearLogs();
-    EmailLogger::logEvent("DebugLogDialog", "clear button: logs cleared from memory and QSettings");
+    DebugLogger::logEvent("DebugLogDialog", "clear button: clicked");
+    DebugLogger::clearLogs();
+    DebugLogger::logEvent("DebugLogDialog", "clear button: logs cleared from memory and QSettings");
     m_logText->setPlainText("✓ All logs cleared!");
-    EmailLogger::logEvent("DebugLogDialog", "clear button: display updated");
+    DebugLogger::logEvent("DebugLogDialog", "clear button: display updated");
 }

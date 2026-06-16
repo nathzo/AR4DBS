@@ -1,5 +1,5 @@
 #include "ConfirmPlanDialog.h"
-#include "EmailLogger.h"
+#include "DebugLogger.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -280,8 +280,8 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
                                      QWidget *parent)
     : QDialog(parent), m_scanMode(mode == Mode::Scan)
 {
-    EmailLogger::logEvent("ConfirmPlanDialog", "constructor: started, mode=" + QString(m_scanMode ? "SCAN" : "EDIT"));
-    EmailLogger::logEvent("ConfirmPlanDialog", "constructor: setting window flags and attributes");
+    DebugLogger::logEvent("ConfirmPlanDialog", "constructor: started, mode=" + QString(m_scanMode ? "SCAN" : "EDIT"));
+    DebugLogger::logEvent("ConfirmPlanDialog", "constructor: setting window flags and attributes");
     setWindowTitle(tr("Confirmer le plan chirurgical"));
     setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -360,10 +360,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         "  font-size: 15pt; font-weight: bold; }"
         "QPushButton:disabled { background: #5a2e2f; color: #888; }");
     connect(m_confirmBtn, &QPushButton::clicked, this, [this]() {
-        EmailLogger::logEvent("ConfirmPlanDialog", "confirm button: clicked");
-        EmailLogger::logEvent("ConfirmPlanDialog", "confirm button: calling accept()");
+        DebugLogger::logEvent("ConfirmPlanDialog", "confirm button: clicked");
+        DebugLogger::logEvent("ConfirmPlanDialog", "confirm button: calling accept()");
         accept();
-        EmailLogger::logEvent("ConfirmPlanDialog", "confirm button: returned from accept()");
+        DebugLogger::logEvent("ConfirmPlanDialog", "confirm button: returned from accept()");
     });
 
     // ── Scan mode: Annuler top-left so it stays reachable above the keyboard ──
@@ -373,10 +373,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
         connect(cancelBtn, &QPushButton::clicked, this, [this]() {
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): clicked");
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): calling reject()");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): clicked");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): calling reject()");
             reject();
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): returned from reject()");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (scan mode): returned from reject()");
         });
 
         auto *topRow = new QHBoxLayout();
@@ -451,10 +451,10 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
         cancelBtn->setAutoDefault(false);
         cancelBtn->setDefault(false);
         connect(cancelBtn, &QPushButton::clicked, this, [this]() {
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): clicked");
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): calling reject()");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): clicked");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): calling reject()");
             reject();
-            EmailLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): returned from reject()");
+            DebugLogger::logEvent("ConfirmPlanDialog", "cancel button (edit mode): returned from reject()");
         });
 
         auto *bottomRow = new QHBoxLayout();
@@ -466,18 +466,18 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 
     // Set initial Confirmer state based on flagged count.
     updateConfirmButton();
-    EmailLogger::logEvent("ConfirmPlanDialog", "constructor: layout complete, dialog ready");
+    DebugLogger::logEvent("ConfirmPlanDialog", "constructor: layout complete, dialog ready");
 }
 
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
-    EmailLogger::logEvent("ConfirmPlanDialog", "destructor: entered");
-    EmailLogger::logEvent("ConfirmPlanDialog", "destructor: about to call disconnect() to remove all signals");
+    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: entered");
+    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: about to call disconnect() to remove all signals");
     // Disconnect all connections to prevent crashes on newer iOS devices
     // when pending signals reference deleted widgets
     disconnect();
-    EmailLogger::logEvent("ConfirmPlanDialog", "destructor: disconnect() completed");
-    EmailLogger::logEvent("ConfirmPlanDialog", "destructor: about to return (full destruction starting)");
+    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: disconnect() completed");
+    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: about to return (full destruction starting)");
 }
 
 // ── Flag management ───────────────────────────────────────────────────────────

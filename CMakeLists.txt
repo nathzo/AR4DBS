@@ -192,8 +192,8 @@ set(APP_SOURCES
     app/MainWindow.cpp
     app/SettingsDialog.h
     app/SettingsDialog.cpp
-    app/EmailLogger.h
-    app/EmailLogger.cpp
+    app/DebugLogger.h
+    app/DebugLogger.cpp
     app/DebugLogDialog.h
     app/DebugLogDialog.cpp
 )

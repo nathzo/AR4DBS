@@ -1,22 +1,22 @@
-#include "EmailLogger.h"
+#include "DebugLogger.h"
 #include <QDateTime>
 #include <QDebug>
 #include <QSettings>
 
 // Static member initialization
-QStringList EmailLogger::s_logQueue;
-QMutex EmailLogger::s_mutex;
-const char *EmailLogger::SETTINGS_KEY = "debugLogs/queue";
-const int EmailLogger::MAX_LOG_LINES = 10000;
+QStringList DebugLogger::s_logQueue;
+QMutex DebugLogger::s_mutex;
+const char *DebugLogger::SETTINGS_KEY = "debugLogs/queue";
+const int DebugLogger::MAX_LOG_LINES = 10000;
 
-void EmailLogger::initialize()
+void DebugLogger::initialize()
 {
     QMutexLocker lock(&s_mutex);
     loadLogs();
     addLog("[" + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz") + "] APP STARTED");
 }
 
-void EmailLogger::logEvent(const QString &dialog, const QString &event)
+void DebugLogger::logEvent(const QString &dialog, const QString &event)
 {
     QMutexLocker lock(&s_mutex);
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
@@ -24,7 +24,7 @@ void EmailLogger::logEvent(const QString &dialog, const QString &event)
     addLog(logLine);
 }
 
-void EmailLogger::addLog(const QString &logLine)
+void DebugLogger::addLog(const QString &logLine)
 {
     // When logs reach the limit, trim the oldest 20% to make room for new logs
     // This is more efficient than removing one line at a time
@@ -47,7 +47,7 @@ void EmailLogger::addLog(const QString &logLine)
         // Add a marker so we can see in the logs when rotation happened
         s_logQueue.append(clearMarker);
 
-        qDebug() << "EmailLogger: LOG ROTATION - removed" << linesToRemove << "oldest lines,"
+        qDebug() << "DebugLogger: LOG ROTATION - removed" << linesToRemove << "oldest lines,"
                  << "current size:" << s_logQueue.size() << "/" << MAX_LOG_LINES;
     }
 
@@ -56,37 +56,37 @@ void EmailLogger::addLog(const QString &logLine)
     persistLogs();
 }
 
-void EmailLogger::persistLogs()
+void DebugLogger::persistLogs()
 {
     // Save logs to QSettings (called after each log addition)
     QSettings settings;
     settings.setValue(SETTINGS_KEY, s_logQueue);
 }
 
-void EmailLogger::loadLogs()
+void DebugLogger::loadLogs()
 {
     // Load logs from QSettings on app start
     QSettings settings;
     s_logQueue = settings.value(SETTINGS_KEY, QStringList()).toStringList();
 }
 
-QString EmailLogger::getAllLogs()
+QString DebugLogger::getAllLogs()
 {
     QMutexLocker lock(&s_mutex);
     return s_logQueue.join("\n");
 }
 
-int EmailLogger::getLogLineCount()
+int DebugLogger::getLogLineCount()
 {
     QMutexLocker lock(&s_mutex);
     return s_logQueue.size();
 }
 
-void EmailLogger::clearLogs()
+void DebugLogger::clearLogs()
 {
     QMutexLocker lock(&s_mutex);
     s_logQueue.clear();
     QSettings settings;
     settings.remove(SETTINGS_KEY);
-    qDebug() << "EmailLogger: logs cleared";
+    qDebug() << "DebugLogger: logs cleared";
 }
