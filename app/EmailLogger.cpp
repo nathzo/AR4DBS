@@ -26,10 +26,31 @@ void EmailLogger::logEvent(const QString &dialog, const QString &event)
 
 void EmailLogger::addLog(const QString &logLine)
 {
-    // Keep only the last MAX_LOG_LINES to avoid unbounded growth
+    // When logs reach the limit, trim the oldest 20% to make room for new logs
+    // This is more efficient than removing one line at a time
     if (s_logQueue.size() >= MAX_LOG_LINES) {
-        s_logQueue.removeFirst();
+        const int linesToRemove = MAX_LOG_LINES / 5;  // Remove oldest 20% (2000 lines)
+        const QString clearMarker = QString(
+            "[%1] ════════════════════════════════════════════════════════════════"
+            "[%2] ╔══ LOGS ROTATED: Removed %3 oldest lines (buffer at capacity) ══╗"
+            "[%4] ╚════════════════════════════════════════════════════════════════╝")
+            .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"))
+            .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"))
+            .arg(linesToRemove)
+            .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"));
+
+        // Remove oldest lines in batch
+        for (int i = 0; i < linesToRemove && !s_logQueue.isEmpty(); ++i) {
+            s_logQueue.removeFirst();
+        }
+
+        // Add a marker so we can see in the logs when rotation happened
+        s_logQueue.append(clearMarker);
+
+        qDebug() << "EmailLogger: LOG ROTATION - removed" << linesToRemove << "oldest lines,"
+                 << "current size:" << s_logQueue.size() << "/" << MAX_LOG_LINES;
     }
+
     s_logQueue.append(logLine);
     qDebug() << logLine;  // Also print to debug console
     persistLogs();
@@ -53,6 +74,12 @@ QString EmailLogger::getAllLogs()
 {
     QMutexLocker lock(&s_mutex);
     return s_logQueue.join("\n");
+}
+
+int EmailLogger::getLogLineCount()
+{
+    QMutexLocker lock(&s_mutex);
+    return s_logQueue.size();
 }
 
 void EmailLogger::clearLogs()

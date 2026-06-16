@@ -28,10 +28,14 @@ static constexpr double DEPTH_TOLERANCE = 0.25;
 static constexpr int    DEPTH_SAMPLE_R  = 5;
 
 AppController::AppController(QObject *parent) : QObject(parent) {
-    EmailLogger::logEvent("AppController", "constructor started");
+    EmailLogger::logEvent("AppController",
+        QString("constructor started, thread=0x%1")
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 }
 AppController::~AppController() {
-    EmailLogger::logEvent("AppController", "destructor started");
+    EmailLogger::logEvent("AppController",
+        QString("destructor started, thread=0x%1")
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 }
 
 bool AppController::init(const QString &calibPath,
@@ -39,32 +43,42 @@ bool AppController::init(const QString &calibPath,
                          const QString &planPath,
                          const QString &depthModelPath)
 {
+    EmailLogger::logEvent("AppController::init", "starting initialization");
+
     m_K = loadCalibration(calibPath); // also populates m_dist
     if (m_K.empty()) {
+        EmailLogger::logEvent("AppController::init", "ERROR: calibration load failed");
         qWarning() << "AppController: could not load calibration from" << calibPath;
         return false;
     }
+    EmailLogger::logEvent("AppController::init", "calibration loaded");
 
     m_tagConfigs = loadTagConfigs(tagConfigPath);
     if (m_tagConfigs.empty()) {
+        EmailLogger::logEvent("AppController::init", "ERROR: tag config load failed");
         qWarning() << "AppController: could not load tag config from" << tagConfigPath;
         return false;
     }
+    EmailLogger::logEvent("AppController::init", QString("tag configs loaded, count=%1").arg(m_tagConfigs.size()));
 
     m_tracker  = std::make_unique<AprilTagTracker>(m_K, m_dist, m_markerSize);
     m_renderer = std::make_unique<OverlayRenderer>();
     m_renderer->setDistortion(m_dist);
+    EmailLogger::logEvent("AppController::init", "tracker and renderer created");
 
     if (!depthModelPath.isEmpty()) {
         m_depth = std::make_unique<DepthEstimator>(depthModelPath.toStdString());
         if (!m_depth->isLoaded()) {
+            EmailLogger::logEvent("AppController::init", "depth model load failed (ignored)");
             qWarning() << "AppController: depth model not loaded from" << depthModelPath;
             m_depth.reset();
         } else {
+            EmailLogger::logEvent("AppController::init", "depth estimation enabled");
             qDebug() << "AppController: depth estimation enabled";
         }
     }
 
+    EmailLogger::logEvent("AppController::init", "initialization complete");
     return true;
 }
 
@@ -111,7 +125,10 @@ void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double t
 
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
-    EmailLogger::logEvent("AppController", "setSurgicalPlan called");
+    EmailLogger::logEvent("AppController::setSurgicalPlan",
+        QString("called with left=%1, right=%2")
+        .arg(plan.hasLeft() ? 1 : 0)
+        .arg(plan.hasRight() ? 1 : 0));
     m_lines[0] = plan.hasLeft()
         ? std::make_unique<IncisionLine>(IncisionLine::fromLeksell(plan.left))
         : nullptr;
@@ -123,7 +140,9 @@ void AppController::setSurgicalPlan(const SurgicalPlan &plan)
         std::lock_guard<std::mutex> lk(m_depthMutex);
         for (auto &lock : m_lockedIncision) lock = LockedIncision{};
     }
+    EmailLogger::logEvent("AppController::setSurgicalPlan", "incision locks cleared");
 #endif
+    EmailLogger::logEvent("AppController::setSurgicalPlan", "plan set successfully");
 }
 
 void AppController::onNewFrame(const cv::Mat &frame)
@@ -591,7 +610,13 @@ static const cv::Mat kARKitFlip = (cv::Mat_<double>(4, 4)
 
 void AppController::resetARRegistration()
 {
-    EmailLogger::logEvent("AppController", "resetARRegistration called");
+    const bool wasLocked = !m_T_world_leksell.empty();
+    const int streakSize = m_streakPoses.size();
+    EmailLogger::logEvent("AppController::resetARRegistration",
+        QString("CALLED: wasLocked=%1, streakSize=%2/10, thread=0x%3")
+        .arg(wasLocked ? 1 : 0).arg(streakSize)
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
+
     m_T_world_leksell     = cv::Mat();
     m_anchorTrackingState = 2;
     m_depthAnchor         = m_usingLiDAR ? 1.0 : 0.0;
@@ -603,13 +628,18 @@ void AppController::resetARRegistration()
     }
     if (!m_streakPoses.empty()) {
         m_streakPoses.clear();
+        EmailLogger::logEvent("AppController::resetARRegistration", "STREAK CLEARED: emitting calibrationProgressChanged(false)");
         emit calibrationProgressChanged(false);
     }
+    EmailLogger::logEvent("AppController::resetARRegistration", "RESET COMPLETE: emitting lockStateChanged(false)");
     emit lockStateChanged(false);
+    EmailLogger::logEvent("AppController::resetARRegistration", "ALL SIGNALS EMITTED");
 }
 
 void AppController::onLidarAvailable(bool available)
 {
+    EmailLogger::logEvent("AppController::onLidarAvailable",
+        QString("Depth source changed: %1").arg(available ? "LiDAR" : "none"));
     m_usingLiDAR  = available;
     m_depthAnchor = available ? 1.0 : 0.0;
     qDebug() << "AppController: depth source ="
@@ -618,12 +648,26 @@ void AppController::onLidarAvailable(bool available)
 
 void AppController::onTrackingQualityChanged(int state)
 {
+    const QString stateNames[] = {"Unavailable", "Limited", "Normal"};
+    const QString stateName = (state >= 0 && state <= 2) ? stateNames[state] : "Unknown";
+    const QString anchorName = (m_anchorTrackingState >= 0 && m_anchorTrackingState <= 2)
+        ? stateNames[m_anchorTrackingState] : "Unknown";
+
+    EmailLogger::logEvent("AppController::onTrackingQualityChanged",
+        QString("state=%1 (%2), locked=%3, anchorState=%4 (%5)")
+        .arg(state).arg(stateName)
+        .arg(m_T_world_leksell.empty() ? 0 : 1)
+        .arg(m_anchorTrackingState).arg(anchorName));
+
     m_trackingState = state;
     // Trigger re-calibration only once locked, and only when quality drops below
     // the level recorded at anchor time (so a lock done at "limited" quality won't
     // immediately reset on the next frame).
-    if (!m_T_world_leksell.empty() && state < m_anchorTrackingState)
+    if (!m_T_world_leksell.empty() && state < m_anchorTrackingState) {
+        EmailLogger::logEvent("AppController::onTrackingQualityChanged",
+            QString("TRIGGERING RESET: quality dropped from %1 to %2").arg(anchorName).arg(stateName));
         resetARRegistration();
+    }
 }
 
 void AppController::onLidarDepth(const cv::Mat &depthMetric, const cv::Mat &confidence)
@@ -637,6 +681,18 @@ void AppController::onARFrame(const cv::Mat &frame,
                                const cv::Mat &world_T_camera,
                                int featurePoints)
 {
+    // Log AR frame state at entry (sample every 30 frames to avoid spam)
+    static int s_frameCounter = 0;
+    if (++s_frameCounter % 30 == 0) {
+        EmailLogger::logEvent("AppController::onARFrame",
+            QString("frame #%1: locked=%2, streak=%3/%4, features=%5")
+            .arg(s_frameCounter)
+            .arg(m_T_world_leksell.empty() ? 0 : 1)
+            .arg(m_streakPoses.size())
+            .arg(10)
+            .arg(featurePoints));
+    }
+
     m_featurePointCount = featurePoints;
     m_frameTimer.restart();
     const bool anyLine = m_lines[0] || m_lines[1];
@@ -671,9 +727,14 @@ void AppController::onARFrame(const cv::Mat &frame,
 
         if (meetsInitConditions(detections, T_from_tags)) {
             // Accumulate qualifying frames; lock only after 10 consecutive successes.
-            if (m_streakPoses.empty())
+            if (m_streakPoses.empty()) {
+                EmailLogger::logEvent("AppController::onARFrame", "STREAK STARTED: first qualifying frame");
                 emit calibrationProgressChanged(true); // streak just started
+            }
             m_streakPoses.push_back(world_T_camera_cv * T_from_tags);
+            EmailLogger::logEvent("AppController::onARFrame",
+                QString("STREAK PROGRESS: %1/10 frames (corners=%2, angle=%.1f°, reproj=%.2fpx)")
+                .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
 
             if (static_cast<int>(m_streakPoses.size()) >= 10) {
                 // SO(3)-average the 10 world_T_leksell candidates.
@@ -695,12 +756,17 @@ void AppController::onARFrame(const cv::Mat &frame,
 
                 m_anchorTrackingState = m_trackingState;
                 m_streakPoses.clear();
+                EmailLogger::logEvent("AppController::onARFrame", "LOCKED: emitting calibrationProgressChanged(false) and lockStateChanged(true)");
                 emit calibrationProgressChanged(false);
                 emit lockStateChanged(true);
+                EmailLogger::logEvent("AppController::onARFrame", "LOCKED: signals emitted successfully");
             }
         } else {
             // Streak broken — reset accumulator.
             if (!m_streakPoses.empty()) {
+                EmailLogger::logEvent("AppController::onARFrame",
+                    QString("STREAK BROKEN at frame %1/10: conditions not met (corners=%2, angle=%.1f°, reproj=%.2fpx)")
+                    .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
                 m_streakPoses.clear();
                 emit calibrationProgressChanged(false);
             }
@@ -764,10 +830,17 @@ void AppController::onARFrame(const cv::Mat &frame,
         static int fontId = QFontDatabase::addApplicationFont(":/resources/Diagramm-Regular.ttf");
         static QString fontFamily = fontId != -1 ? QFontDatabase::applicationFontFamilies(fontId).first() : "Arial";
 
-        auto dbg = [&](const std::string &msg, bool ok) {
+        // Brand colors for angle indication
+        const QColor IMPULSE_RED(222, 95, 94, 255);    // #DE5F5E
+        const QColor ARC_BLUE(117, 208, 197, 255);     // #75D0C5
+
+        auto dbg = [&](const std::string &msg, bool ok, bool isAngle = false) {
             // Render using Qt with Diagramm-Regular font
-            QColor textColor = ok ? QColor(50, 220, 50) : QColor(255, 50, 50);
-            QFont font(fontFamily, 28, QFont::Bold);
+            // Use brand colors for angle indication, standard colors for others
+            QColor textColor = isAngle ? (ok ? ARC_BLUE : IMPULSE_RED)
+                                       : (ok ? QColor(50, 220, 50, 255) : QColor(255, 50, 50, 255));
+            QColor shadowColor(0, 0, 0, 255);
+            QFont font(fontFamily, 28);
             QFontMetrics fm(font);
             QString qmsg = QString::fromStdString(msg);
 
@@ -775,19 +848,20 @@ void AppController::onARFrame(const cv::Mat &frame,
             int textW = fm.horizontalAdvance(qmsg) + 8;
             int textH = fm.height() + 8;
 
-            // Create image for text
+            // Create image for text with explicit RGBA format
             QImage textImg(textW, textH, QImage::Format_ARGB32);
             textImg.fill(Qt::transparent);
 
             QPainter p(&textImg);
             p.setFont(font);
             p.setRenderHint(QPainter::Antialiasing, true);
+            p.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
             // Draw shadow (black, offset)
-            p.setPen(QColor(0, 0, 0));
+            p.setPen(shadowColor);
             p.drawText(3, fm.ascent() + 3, qmsg);
 
-            // Draw text
+            // Draw text with full opacity
             p.setPen(textColor);
             p.drawText(1, fm.ascent() + 1, qmsg);
             p.end();
@@ -883,11 +957,11 @@ void AppController::onARFrame(const cv::Mat &frame,
                 dbg(buf, dbgCorners >= 8);
                 if (dbgAngleDeg >= 0.0) {
                     std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
-                    dbg(buf, dbgAngleDeg >= 175.0);
+                    dbg(buf, dbgAngleDeg >= 175.0, true);
                     std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=%.2f)", dbgReprojPx, m_maxInitReprojPx);
                     dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= m_maxInitReprojPx);
                 } else {
-                    dbg("angle:  -- (no pose)", false);
+                    dbg("angle:  -- (no pose)", false, true);
                     dbg("reproj: -- (no pose)", false);
                 }
             }

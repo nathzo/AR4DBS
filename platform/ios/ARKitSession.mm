@@ -40,6 +40,14 @@ struct ARKitSession::Impl {
         return;
     impl->frameTimer.restart();
 
+    // Log ARKit frame delivery (sample rate to avoid spam)
+    static int s_frameCount = 0;
+    if (++s_frameCount % 30 == 0) {
+        const int features = frame.rawFeaturePoints ? static_cast<int>(frame.rawFeaturePoints.count) : 0;
+        const int trackState = static_cast<int>(frame.camera.trackingState);
+        qDebug() << "ARKit: frame" << s_frameCount << "features=" << features << "tracking=" << trackState;
+    }
+
     CVPixelBufferRef pb = frame.capturedImage;
     CVPixelBufferLockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
 

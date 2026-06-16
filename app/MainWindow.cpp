@@ -232,6 +232,16 @@ MainWindow::MainWindow(QWidget *parent)
     EmailLogger::initialize();
     EmailLogger::logEvent("MainWindow", "Application started");
 
+    // Log system and locale information
+    EmailLogger::logEvent("MainWindow", QString("Locale: %1, Language: %2")
+        .arg(QLocale().name())
+        .arg(QLocale().languageToString(QLocale().language())));
+    EmailLogger::logEvent("MainWindow", QString("Qt version: %1, Platform: %2")
+        .arg(QT_VERSION_STR)
+        .arg(QSysInfo::prettyProductName()));
+    EmailLogger::logEvent("MainWindow", QString("Thread ID at startup: 0x%1")
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
+
     // Force dark background on the root window so nothing system-coloured shows
     // through during transitions or around safe-area insets on iOS.
     setStyleSheet("QMainWindow { background-color: #000000; }");
@@ -239,12 +249,19 @@ MainWindow::MainWindow(QWidget *parent)
     // ── Controller — runs on a dedicated thread so detect+blend never block UI ─
     m_controller       = new AppController;   // no parent — will be moved to thread
     m_controllerThread = new QThread(this);
+    EmailLogger::logEvent("MainWindow", QString("Created controller thread, ptr=0x%1")
+        .arg(reinterpret_cast<quintptr>(m_controllerThread), 0, 16));
+
     m_controller->moveToThread(m_controllerThread);
+    EmailLogger::logEvent("MainWindow", QString("Moved controller to thread, controller=0x%1")
+        .arg(reinterpret_cast<quintptr>(m_controller), 0, 16));
+
     // Destroy the controller when the thread finishes, and quit the thread when
     // the window closes (see closeEvent).
     connect(m_controllerThread, &QThread::finished,
             m_controller,       &QObject::deleteLater);
     m_controllerThread->start();
+    EmailLogger::logEvent("MainWindow", "Started controller thread");
 
 #ifndef Q_OS_IOS
     const QString depthModel = QCoreApplication::applicationDirPath() + "/model-small.onnx";
@@ -256,6 +273,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
 #ifdef Q_OS_IOS
     m_hasLidar = ARKitSession::isLidarAvailable();
+    EmailLogger::logEvent("MainWindow", QString("Platform: iOS, LiDAR available: %1")
+        .arg(m_hasLidar ? "YES" : "NO"));
+#else
+    EmailLogger::logEvent("MainWindow", "Platform: Desktop");
 #endif
 
 #ifdef FEATURE_PLAN_SCANNER
@@ -565,6 +586,11 @@ void MainWindow::editPlan()
 #ifdef Q_OS_IOS
 void MainWindow::setArLocked(bool locked)
 {
+    EmailLogger::logEvent("MainWindow::setArLocked",
+        QString("SIGNAL RECEIVED: locked=%1, thread=0x%2")
+        .arg(locked ? 1 : 0)
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
+
     m_arLocked = locked;
     if (locked) {
         m_arCalibrating = false;
@@ -573,6 +599,7 @@ void MainWindow::setArLocked(bool locked)
             "color: #75D0C5; background: rgba(117,208,197,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText(tr("Recalibrer"));
+        EmailLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: locked state displayed");
     } else {
         m_arCalibrating = false;
         m_calibLabel->setText(tr("Calibration requise : placez la caméra face aux repères"));
@@ -580,13 +607,23 @@ void MainWindow::setArLocked(bool locked)
             "color: #DE5F5E; background: rgba(222,95,94,50);"
             "padding: 6px; font-size: 12pt;");
         m_btnBackToMenu->setText(tr("← Menu"));
+        EmailLogger::logEvent("MainWindow::setArLocked", "UI UPDATED: unlocked state displayed");
     }
     if (m_arStrip) m_arStrip->update();
 }
 
 void MainWindow::setArCalibrating(bool calibrating)
 {
-    if (m_arLocked) return; // locked state takes priority
+    EmailLogger::logEvent("MainWindow::setArCalibrating",
+        QString("SIGNAL RECEIVED: calibrating=%1, arLocked=%2, thread=0x%3")
+        .arg(calibrating ? 1 : 0)
+        .arg(m_arLocked ? 1 : 0)
+        .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
+
+    if (m_arLocked) {
+        EmailLogger::logEvent("MainWindow::setArCalibrating", "IGNORED: locked state takes priority");
+        return; // locked state takes priority
+    }
     m_arCalibrating = calibrating;
     m_calibLabel->setText(calibrating
         ? tr("Calibration en cours...")
@@ -595,6 +632,7 @@ void MainWindow::setArCalibrating(bool calibrating)
         "color: #DE5F5E; background: rgba(222,95,94,50);"
         "padding: 6px; font-size: 12pt;");
     if (m_arStrip) m_arStrip->update();
+    EmailLogger::logEvent("MainWindow::setArCalibrating", "UI UPDATED");
 }
 #endif
 
@@ -661,12 +699,19 @@ void MainWindow::openSettings()
     // This allows pending queued events to drain before the dialog is destroyed,
     // preventing a crash on LiDAR iPhones where pending accessibility/widget events
     // could trigger during dialog destruction.
-    connect(dlg, &QDialog::finished, dlg, [this]() {
-        EmailLogger::logEvent("MainWindow", "openSettings: SettingsDialog finished");
+    connect(dlg, &QDialog::finished, dlg, [this, dlg]() {
+        EmailLogger::logEvent("MainWindow", QString("openSettings: SettingsDialog finished signal, result=%1, thread=0x%2")
+            .arg(dlg->result())
+            .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
     });
-    connect(dlg, &QDialog::finished, dlg, &QObject::deleteLater);
-    EmailLogger::logEvent("MainWindow", "openSettings: showing SettingsDialog");
+    connect(dlg, &QDialog::finished, dlg, [dlg]() {
+        EmailLogger::logEvent("MainWindow", "openSettings: calling deleteLater() on SettingsDialog");
+        dlg->deleteLater();
+    });
+    EmailLogger::logEvent("MainWindow", QString("openSettings: showing SettingsDialog (non-modal), ptr=0x%1")
+        .arg(reinterpret_cast<quintptr>(dlg), 0, 16));
     dlg->show();
+    EmailLogger::logEvent("MainWindow", "openSettings: show() returned successfully");
 }
 
 #include "MainWindow.moc"

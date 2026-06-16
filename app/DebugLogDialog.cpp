@@ -30,7 +30,8 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
 
     // ── Header with title and close button ──────────────────────────────────
     auto *headerLayout = new QHBoxLayout;
-    auto *titleLabel = new QLabel(tr("Debug Logs"));
+    int lineCount = EmailLogger::getLogLineCount();
+    auto *titleLabel = new QLabel(tr("Debug Logs (%1 lines)").arg(lineCount));
     titleLabel->setStyleSheet("color: white; font-weight: bold; font-size: 14pt;");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
