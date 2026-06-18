@@ -3,6 +3,9 @@
 #include "DebugLogDialog.h"
 
 #include <QVBoxLayout>
+#include <QApplication>
+#include <QSysInfo>
+#include <sys/resource.h>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QFormLayout>
@@ -24,6 +27,21 @@
 #include <QKeyEvent>
 #include <QCoreApplication>
 #include <QScreen>
+
+// ── Memory logging helper ────────────────────────────────────────────────────
+
+static void logMemoryState(const QString &context)
+{
+#ifdef Q_OS_IOS
+    // Log memory information for iOS
+    // Note: On iOS, we can access memory info through system calls
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) == 0) {
+        long maxRss = usage.ru_maxrss;  // Peak memory in bytes
+        DebugLogger::logEvent("Memory", context + ": peak_rss=" + QString::number(maxRss / 1024 / 1024) + "MB");
+    }
+#endif
+}
 
 // ── Shared palette ────────────────────────────────────────────────────────────
 
@@ -692,7 +710,8 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     , m_hasLidar(hasLidar)
     , m_arTestDepthOverlay(arTestDepthOverlay)
 {
-    DebugLogger::logEvent("SettingsDialog", "constructor started");
+    logMemoryState("SettingsDialog::constructor");
+    DebugLogger::logEvent("SettingsDialog", "constructor started, parent=" + QString::number((quint64)parent) + ", thread=" + QString::number((quint64)QThread::currentThreadId()));
     setWindowFlags(Qt::Dialog);
     setAttribute(Qt::WA_TranslucentBackground);
     const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
@@ -893,7 +912,8 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     connect(btnGraphics, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnGraphics clicked: creating GraphicsSettingsDialog");
         auto *dlg = new GraphicsSettingsDialog(m_style, m_hasLidar, m_arTestDepthOverlay, nullptr);
-        DebugLogger::logEvent("SettingsDialog", "btnGraphics: connecting signals");
+        DebugLogger::logEvent("SettingsDialog", "btnGraphics: created dialog ptr=" + QString::number((quint64)dlg) + ", connecting signals");
+        int signalCount = 0;
         connect(dlg, &GraphicsSettingsDialog::styleApplied, this,
                 [this](OverlayRenderer::Style s) {
             DebugLogger::logEvent("SettingsDialog", "btnGraphics: styleApplied signal received");
@@ -917,7 +937,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
         DebugLogger::logEvent("SettingsDialog", "btnCalib clicked: creating CalibrationSettingsDialog");
         auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
                                                   m_tagPositions, nullptr);
-        DebugLogger::logEvent("SettingsDialog", "btnCalib: connecting signals");
+        DebugLogger::logEvent("SettingsDialog", "btnCalib: created dialog ptr=" + QString::number((quint64)dlg) + ", connecting signals");
         connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
                 [this](double px) {
             DebugLogger::logEvent("SettingsDialog", "btnCalib: reprojThresholdApplied signal received");
@@ -950,7 +970,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     connect(btnDebugLogs, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs clicked: creating DebugLogDialog");
         auto *dlg = new DebugLogDialog(nullptr);
-        DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: showing dialog via exec()");
+        DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: created dialog ptr=" + QString::number((quint64)dlg) + ", showing via exec()");
         dlg->exec();
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: dialog closed, calling deleteLater()");
         dlg->deleteLater();
@@ -960,12 +980,22 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
 SettingsDialog::~SettingsDialog()
 {
-    DebugLogger::logEvent("SettingsDialog", "destructor: entered");
+    logMemoryState("SettingsDialog::destructor");
+    DebugLogger::logEvent("SettingsDialog", "destructor: entered, thread=" + QString::number((quint64)QThread::currentThreadId()));
+
+    // Log widget count and memory state
+    int childCount = findChildren<QObject*>().count();
+    DebugLogger::logEvent("SettingsDialog", "destructor: found " + QString::number(childCount) + " child objects");
+
     // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    int widgetCount = 0;
     for (QObject *child : findChildren<QObject*>()) {
-        if (QWidget *w = qobject_cast<QWidget*>(child))
+        if (QWidget *w = qobject_cast<QWidget*>(child)) {
             w->setAccessibleDescription(QString());
+            widgetCount++;
+        }
     }
+    DebugLogger::logEvent("SettingsDialog", "destructor: cleared accessibility on " + QString::number(widgetCount) + " widgets");
     DebugLogger::logEvent("SettingsDialog", "destructor: about to return (destruction complete)");
 }
 
@@ -976,7 +1006,11 @@ bool SettingsDialog::event(QEvent *event)
     // Block all accessibility events to prevent iOS crash during widget destruction
     // Accessibility events are in the range 1000-1030
     if (event->type() >= 1000 && event->type() <= 1030) {
-        return true;  // Consume the event, don't process it
+        static int accessibilityEventCount = 0;
+        if (++accessibilityEventCount % 10 == 0) {
+            DebugLogger::logEvent("SettingsDialog", "event: blocked accessibility type=" + QString::number(event->type()) + " (count=" + QString::number(accessibilityEventCount) + ")");
+        }
+        return true;
     }
     return QDialog::event(event);
 }
