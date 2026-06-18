@@ -350,7 +350,6 @@ public:
 
     ~GraphicsSettingsDialog() {
         DebugLogger::logEvent("GraphicsSettingsDialog", "destructor starting");
-        disconnect();
         DebugLogger::logEvent("GraphicsSettingsDialog", "destructor completed");
     }
 
@@ -610,7 +609,6 @@ public:
     ~CalibrationSettingsDialog()
     {
         DebugLogger::logEvent("CalibrationSettingsDialog", "destructor starting");
-        disconnect();
         DebugLogger::logEvent("CalibrationSettingsDialog", "destructor completed");
     }
 
@@ -935,9 +933,6 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 SettingsDialog::~SettingsDialog()
 {
     DebugLogger::logEvent("SettingsDialog", "destructor: entered");
-    DebugLogger::logEvent("SettingsDialog", "destructor: calling disconnect() to remove all signal handlers");
-    disconnect();
-    DebugLogger::logEvent("SettingsDialog", "destructor: disconnect() completed");
     DebugLogger::logEvent("SettingsDialog", "destructor: about to return (destruction complete)");
 }
 
