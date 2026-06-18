@@ -9,6 +9,7 @@ class StartScreen : public QWidget
     Q_OBJECT
 public:
     explicit StartScreen(QWidget *parent = nullptr);
+    ~StartScreen();
 
 signals:
     void newSurgeryRequested();

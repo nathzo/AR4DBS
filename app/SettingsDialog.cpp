@@ -350,6 +350,11 @@ public:
 
     ~GraphicsSettingsDialog() {
         DebugLogger::logEvent("GraphicsSettingsDialog", "destructor starting");
+        // Disable accessibility on all children to prevent iOS crash when destroying buttons
+        for (QObject *child : findChildren<QObject*>()) {
+            if (QWidget *w = qobject_cast<QWidget*>(child))
+                w->setAccessibleDescription(QString());
+        }
         DebugLogger::logEvent("GraphicsSettingsDialog", "destructor completed");
     }
 
@@ -359,6 +364,15 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }
+
+    bool event(QEvent *ev) override {
+        // Block all accessibility events to prevent iOS crash during widget destruction
+        if (ev->type() >= QEvent::AccessibilityDescription &&
+            ev->type() <= QEvent::AccessibilityHelp) {
+            return true;
+        }
+        return QDialog::event(ev);
+    }
 
 private:
     int          m_lineIdx            = 0;
@@ -609,6 +623,11 @@ public:
     ~CalibrationSettingsDialog()
     {
         DebugLogger::logEvent("CalibrationSettingsDialog", "destructor starting");
+        // Disable accessibility on all children to prevent iOS crash when destroying buttons
+        for (QObject *child : findChildren<QObject*>()) {
+            if (QWidget *w = qobject_cast<QWidget*>(child))
+                w->setAccessibleDescription(QString());
+        }
         DebugLogger::logEvent("CalibrationSettingsDialog", "destructor completed");
     }
 
@@ -634,6 +653,15 @@ protected:
         if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)
             return; // handled per-spinbox; dialog-level Enter does nothing
         QDialog::keyPressEvent(e);
+    }
+
+    bool event(QEvent *ev) override {
+        // Block all accessibility events to prevent iOS crash during widget destruction
+        if (ev->type() >= QEvent::AccessibilityDescription &&
+            ev->type() <= QEvent::AccessibilityHelp) {
+            return true;
+        }
+        return QDialog::event(ev);
     }
 
 private:
@@ -933,9 +961,24 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 SettingsDialog::~SettingsDialog()
 {
     DebugLogger::logEvent("SettingsDialog", "destructor: entered");
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
     DebugLogger::logEvent("SettingsDialog", "destructor: about to return (destruction complete)");
 }
 
 void SettingsDialog::paintEvent(QPaintEvent *e) { paintBlack(this, e); }
+
+bool SettingsDialog::event(QEvent *event)
+{
+    // Block all accessibility events to prevent iOS crash during widget destruction
+    if (event->type() >= QEvent::AccessibilityDescription &&
+        event->type() <= QEvent::AccessibilityHelp) {
+        return true;  // Consume the event, don't process it
+    }
+    return QDialog::event(event);
+}
 
 #include "SettingsDialog.moc"

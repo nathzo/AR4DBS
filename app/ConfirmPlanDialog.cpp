@@ -472,11 +472,11 @@ ConfirmPlanDialog::ConfirmPlanDialog(const SurgicalPlan &initial, Mode mode,
 ConfirmPlanDialog::~ConfirmPlanDialog()
 {
     DebugLogger::logEvent("ConfirmPlanDialog", "destructor: entered");
-    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: about to call disconnect() to remove all signals");
-    // Disconnect all connections to prevent crashes on newer iOS devices
-    // when pending signals reference deleted widgets
-    disconnect();
-    DebugLogger::logEvent("ConfirmPlanDialog", "destructor: disconnect() completed");
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
     DebugLogger::logEvent("ConfirmPlanDialog", "destructor: about to return (full destruction starting)");
 }
 
@@ -540,6 +540,16 @@ void ConfirmPlanDialog::paintEvent(QPaintEvent *)
     p.setPen(Qt::NoPen);
     p.setBrush(Qt::black);
     p.drawRect(rect());
+}
+
+bool ConfirmPlanDialog::event(QEvent *event)
+{
+    // Block all accessibility events to prevent iOS crash during widget destruction
+    if (event->type() >= QEvent::AccessibilityDescription &&
+        event->type() <= QEvent::AccessibilityHelp) {
+        return true;  // Consume the event, don't process it
+    }
+    return QDialog::event(event);
 }
 
 void ConfirmPlanDialog::showEvent(QShowEvent *e)

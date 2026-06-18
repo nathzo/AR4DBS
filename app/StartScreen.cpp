@@ -155,3 +155,12 @@ StartScreen::StartScreen(QWidget *parent) : QWidget(parent)
     connect(btnNew,  &QPushButton::clicked, this, &StartScreen::newSurgeryRequested);
     connect(btnTest, &QPushButton::clicked, this, &StartScreen::directARRequested);
 }
+
+StartScreen::~StartScreen()
+{
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
+}

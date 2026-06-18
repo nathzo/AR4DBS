@@ -31,6 +31,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    bool event(QEvent *event) override;
 
 private:
     OverlayRenderer::Style m_style;

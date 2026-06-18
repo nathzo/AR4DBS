@@ -227,6 +227,11 @@ ScanScreen::~ScanScreen()
 {
     stopCamera();
     delete m_impl;
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
 }
 
 void ScanScreen::startCamera()

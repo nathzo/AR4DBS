@@ -104,7 +104,22 @@ DebugLogDialog::DebugLogDialog(QWidget *parent)
 DebugLogDialog::~DebugLogDialog()
 {
     DebugLogger::logEvent("DebugLogDialog", "destructor: entered");
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
     DebugLogger::logEvent("DebugLogDialog", "destructor: about to return");
+}
+
+bool DebugLogDialog::event(QEvent *event)
+{
+    // Block all accessibility events to prevent iOS crash during widget destruction
+    if (event->type() >= QEvent::AccessibilityDescription &&
+        event->type() <= QEvent::AccessibilityHelp) {
+        return true;  // Consume the event, don't process it
+    }
+    return QDialog::event(event);
 }
 
 void DebugLogDialog::onCopyToClipboard()

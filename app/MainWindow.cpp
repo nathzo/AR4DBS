@@ -489,7 +489,14 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow()
+{
+    // Disable accessibility on all children to prevent iOS crash when destroying buttons
+    for (QObject *child : findChildren<QObject*>()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child))
+            w->setAccessibleDescription(QString());
+    }
+}
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {

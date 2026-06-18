@@ -10,6 +10,9 @@ public:
     explicit DebugLogDialog(QWidget *parent = nullptr);
     ~DebugLogDialog();
 
+protected:
+    bool event(QEvent *event) override;
+
 private:
     void onCopyToClipboard();
     void onClear();
