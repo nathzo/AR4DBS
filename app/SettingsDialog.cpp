@@ -866,7 +866,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     // ── Open sub-dialogs ──────────────────────────────────────────────────────
     connect(btnGraphics, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnGraphics clicked: creating GraphicsSettingsDialog");
-        auto *dlg = new GraphicsSettingsDialog(m_style, m_hasLidar, m_arTestDepthOverlay, this);
+        auto *dlg = new GraphicsSettingsDialog(m_style, m_hasLidar, m_arTestDepthOverlay, nullptr);
         DebugLogger::logEvent("SettingsDialog", "btnGraphics: connecting signals");
         connect(dlg, &GraphicsSettingsDialog::styleApplied, this,
                 [this](OverlayRenderer::Style s) {
@@ -890,7 +890,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     connect(btnCalib, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnCalib clicked: creating CalibrationSettingsDialog");
         auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
-                                                  m_tagPositions, this);
+                                                  m_tagPositions, nullptr);
         DebugLogger::logEvent("SettingsDialog", "btnCalib: connecting signals");
         connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
                 [this](double px) {
@@ -923,7 +923,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     // ── Debug Logs dialog ─────────────────────────────────────────────────────
     connect(btnDebugLogs, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs clicked: creating DebugLogDialog");
-        auto *dlg = new DebugLogDialog(this);
+        auto *dlg = new DebugLogDialog(nullptr);
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: showing dialog via exec()");
         dlg->exec();
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: dialog closed, calling deleteLater()");
