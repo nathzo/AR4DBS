@@ -545,8 +545,8 @@ void ConfirmPlanDialog::paintEvent(QPaintEvent *)
 bool ConfirmPlanDialog::event(QEvent *event)
 {
     // Block all accessibility events to prevent iOS crash during widget destruction
-    if (event->type() >= QEvent::AccessibilityDescription &&
-        event->type() <= QEvent::AccessibilityHelp) {
+    // Accessibility events are in the range 1000-1030
+    if (event->type() >= 1000 && event->type() <= 1030) {
         return true;  // Consume the event, don't process it
     }
     return QDialog::event(event);

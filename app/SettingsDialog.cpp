@@ -367,8 +367,8 @@ protected:
 
     bool event(QEvent *ev) override {
         // Block all accessibility events to prevent iOS crash during widget destruction
-        if (ev->type() >= QEvent::AccessibilityDescription &&
-            ev->type() <= QEvent::AccessibilityHelp) {
+        // Accessibility events are in the range 1000-1030
+        if (ev->type() >= 1000 && ev->type() <= 1030) {
             return true;
         }
         return QDialog::event(ev);
@@ -657,8 +657,8 @@ protected:
 
     bool event(QEvent *ev) override {
         // Block all accessibility events to prevent iOS crash during widget destruction
-        if (ev->type() >= QEvent::AccessibilityDescription &&
-            ev->type() <= QEvent::AccessibilityHelp) {
+        // Accessibility events are in the range 1000-1030
+        if (ev->type() >= 1000 && ev->type() <= 1030) {
             return true;
         }
         return QDialog::event(ev);
