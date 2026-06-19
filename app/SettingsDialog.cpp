@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QApplication>
 #include <QSysInfo>
+#include <QThread>
 #include <sys/resource.h>
 #include <QHBoxLayout>
 #include <QGridLayout>

@@ -2,6 +2,7 @@
 #include "DebugLogger.h"
 
 #include <QVBoxLayout>
+#include <QThread>
 #include <sys/resource.h>
 #include <QHBoxLayout>
 #include <QFormLayout>
