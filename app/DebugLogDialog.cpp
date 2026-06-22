@@ -2,6 +2,8 @@
 #include "DebugLogger.h"
 #include <QVBoxLayout>
 #include <QThread>
+#include <QSysInfo>
+#include <QDateTime>
 #include <sys/resource.h>
 #include <QHBoxLayout>
 #include <QTextEdit>
@@ -12,7 +14,7 @@
 #include <QScreen>
 #include <QDateTime>
 
-// ── Memory logging helper ────────────────────────────────────────────────────
+// ── Comprehensive memory and system logging helper ────────────────────────────
 
 static void logMemoryState(const QString &context)
 {
@@ -20,7 +22,39 @@ static void logMemoryState(const QString &context)
     struct rusage usage;
     if (getrusage(RUSAGE_SELF, &usage) == 0) {
         long maxRss = usage.ru_maxrss;
-        DebugLogger::logEvent("Memory", context + ": peak_rss=" + QString::number(maxRss / 1024 / 1024) + "MB");
+        long ixRss = usage.ru_ixrss;
+        long idrss = usage.ru_idrss;
+        long isrss = usage.ru_isrss;
+        long majFlt = usage.ru_majflt;
+        long minFlt = usage.ru_minflt;
+        long userSec = usage.ru_utime.tv_sec;
+        long userUsec = usage.ru_utime.tv_usec;
+        long sysSec = usage.ru_stime.tv_sec;
+        long sysUsec = usage.ru_stime.tv_usec;
+        long volCtx = usage.ru_nvcsw;
+        long invCtx = usage.ru_nivcsw;
+
+        QString memLog = context + ": "
+            "peak_rss=" + QString::number(maxRss / 1024 / 1024) + "MB, "
+            "shared=" + QString::number(ixRss / 1024 / 1024) + "MB, "
+            "unshared_data=" + QString::number(idrss / 1024 / 1024) + "MB, "
+            "unshared_stack=" + QString::number(isrss / 1024 / 1024) + "MB, "
+            "majflt=" + QString::number(majFlt) + ", "
+            "minflt=" + QString::number(minFlt) + ", "
+            "user_cpu=" + QString::number(userSec) + "." + QString::number(userUsec / 100000) + "s, "
+            "sys_cpu=" + QString::number(sysSec) + "." + QString::number(sysUsec / 100000) + "s, "
+            "vol_ctx=" + QString::number(volCtx) + ", "
+            "inv_ctx=" + QString::number(invCtx);
+
+        DebugLogger::logEvent("Memory", memLog);
+
+        QString sysInfo = context + ": "
+            "ios=" + QSysInfo::productVersion() + ", "
+            "device=" + QSysInfo::machineHostName() + ", "
+            "thread_id=0x" + QString::number((quint64)QThread::currentThreadId(), 16) + ", "
+            "timestamp=" + QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+
+        DebugLogger::logEvent("System", sysInfo);
     }
 #endif
 }
