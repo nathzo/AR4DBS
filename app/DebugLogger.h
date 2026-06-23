@@ -21,6 +21,10 @@ public:
     // Clear the log queue and QSettings
     static void clearLogs();
 
+    // Force immediate persistence of all pending logs to storage
+    // Call this before app shutdown to ensure no logs are lost
+    static void flushLogs();
+
 private:
     static QStringList s_logQueue;
     static QMutex s_mutex;

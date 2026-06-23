@@ -158,7 +158,6 @@ DebugLogDialog::~DebugLogDialog()
     int childCount = findChildren<QObject*>().count();
     DebugLogger::logEvent("DebugLogDialog", "destructor: found " + QString::number(childCount) + " child objects");
 
-    // Disable accessibility on all children to prevent iOS crash when destroying buttons
     int widgetCount = 0;
     for (QObject *child : findChildren<QObject*>()) {
         if (QWidget *w = qobject_cast<QWidget*>(child)) {
@@ -184,11 +183,19 @@ void DebugLogDialog::onCopyToClipboard()
 {
     DebugLogger::logEvent("DebugLogDialog", "copy button: clicked");
     QString logs = DebugLogger::getAllLogs();
-    QGuiApplication::clipboard()->setText(logs);
-    DebugLogger::logEvent("DebugLogDialog", "copy button: logs copied to clipboard (" + QString::number(logs.length()) + " chars)");
 
-    // Update the text to show it was copied
-    m_logText->setPlainText("✓ Logs copied to clipboard!\n\n" + logs);
+    if (!logs.isEmpty()) {
+        QGuiApplication::clipboard()->setText(logs);
+        DebugLogger::logEvent("DebugLogDialog", "copy button: logs copied to clipboard (" + QString::number(logs.length()) + " chars)");
+
+        // Show brief confirmation message instead of re-displaying all logs
+        // This prevents memory issues on older iOS devices when dealing with large text
+        m_logText->setPlainText("✓ " + QString::number(logs.length()) + " characters copied to clipboard!");
+    } else {
+        DebugLogger::logEvent("DebugLogDialog", "copy button: no logs to copy");
+        m_logText->setPlainText("(No logs to copy)");
+    }
+
     DebugLogger::logEvent("DebugLogDialog", "copy button: display updated");
 }
 

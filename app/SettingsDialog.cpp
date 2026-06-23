@@ -1008,7 +1008,7 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
     // ── Debug Logs dialog ─────────────────────────────────────────────────────
     connect(btnDebugLogs, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs clicked: creating DebugLogDialog");
-        auto *dlg = new DebugLogDialog(nullptr);
+        auto *dlg = new DebugLogDialog(this);
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: created dialog ptr=" + QString::number((quint64)dlg) + ", showing via exec()");
         dlg->exec();
         DebugLogger::logEvent("SettingsDialog", "btnDebugLogs: dialog closed, calling deleteLater()");

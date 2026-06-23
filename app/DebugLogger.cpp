@@ -24,6 +24,9 @@ void DebugLogger::logEvent(const QString &dialog, const QString &event)
     addLog(logLine);
 }
 
+static int s_logsSinceLastPersist = 0;
+static const int PERSIST_BATCH_SIZE = 50;  // Only persist to storage every 50 logs
+
 void DebugLogger::addLog(const QString &logLine)
 {
     // When logs reach the limit, trim the oldest 20% to make room for new logs
@@ -49,11 +52,23 @@ void DebugLogger::addLog(const QString &logLine)
 
         qDebug() << "DebugLogger: LOG ROTATION - removed" << linesToRemove << "oldest lines,"
                  << "current size:" << s_logQueue.size() << "/" << MAX_LOG_LINES;
+
+        // Force persist on rotation to ensure it's saved
+        persistLogs();
+        s_logsSinceLastPersist = 0;
+        return;
     }
 
     s_logQueue.append(logLine);
     qDebug() << logLine;  // Also print to debug console
-    persistLogs();
+
+    // Only persist to storage in batches to reduce I/O pressure
+    // This prevents storage bottleneck on devices with limited I/O bandwidth
+    ++s_logsSinceLastPersist;
+    if (s_logsSinceLastPersist >= PERSIST_BATCH_SIZE) {
+        persistLogs();
+        s_logsSinceLastPersist = 0;
+    }
 }
 
 void DebugLogger::persistLogs()
@@ -86,7 +101,17 @@ void DebugLogger::clearLogs()
 {
     QMutexLocker lock(&s_mutex);
     s_logQueue.clear();
+    s_logsSinceLastPersist = 0;
     QSettings settings;
     settings.remove(SETTINGS_KEY);
     qDebug() << "DebugLogger: logs cleared";
+}
+
+void DebugLogger::flushLogs()
+{
+    QMutexLocker lock(&s_mutex);
+    if (s_logsSinceLastPersist > 0) {
+        persistLogs();
+        s_logsSinceLastPersist = 0;
+    }
 }
