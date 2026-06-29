@@ -20,12 +20,13 @@ jobs:
             -scheme StAR \
             -configuration Release \
             -destination generic/platform=iOS \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
 
       - name: Verify app bundle
         run: |
-          APP_BIN="build/Release-iphoneos/StAR.app/StAR"
+          APP_BIN="build/Build/Products/Release-iphoneos/StAR.app/StAR"
           if [ ! -f "$APP_BIN" ]; then
             echo "ERROR: binary not found at $APP_BIN"
             exit 1
@@ -33,7 +34,7 @@ jobs:
           echo "✓ StAR binary built successfully"
 
           # Verify Info.plist has required permissions
-          PLIST="build/Release-iphoneos/StAR.app/Info.plist"
+          PLIST="build/Build/Products/Release-iphoneos/StAR.app/Info.plist"
           if /usr/libexec/PlistBuddy -c "Print NSCameraUsageDescription" "$PLIST" 2>/dev/null; then
             echo "✓ Camera permission declared"
           else
@@ -44,7 +45,7 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r build/Release-iphoneos/StAR.app Payload/
+          cp -r build/Build/Products/Release-iphoneos/StAR.app Payload/
           zip -r StAR.ipa Payload/
           rm -rf Payload
 
