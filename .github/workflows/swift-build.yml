@@ -15,12 +15,13 @@ jobs:
 
       - name: Build StAR
         run: |
-          xcodebuild build-for-ipa \
+          xcodebuild \
             -project StAR/StAR.xcodeproj \
             -scheme StAR \
-            -destination generic/platform=iOS \
             -configuration Release \
-            CODE_SIGNING_ALLOWED=NO
+            -destination generic/platform=iOS \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
       - name: Verify app bundle
         run: |
