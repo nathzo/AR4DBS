@@ -1,8 +1,6 @@
 name: iOS Build
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:   # lets you trigger manually from the GitHub website
 
 jobs:

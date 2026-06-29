@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>StAR</string>
+    <key>CFBundleDisplayName</key>
+    <string>StAR</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- iOS 26 / LiDAR Pro only: ARKit + Metal + 64-bit required. -->
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>arkit</string>
+        <string>metal</string>
+    </array>
+
+    <!-- Camera permission — required or the app is rejected by the OS. -->
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is required to scan the surgical plan and overlay it on the patient.</string>
+
+    <!-- ARKit uses the accelerometer and gyroscope for world tracking. -->
+    <key>NSMotionUsageDescription</key>
+    <string>Motion sensors are used by ARKit to stabilise the surgical overlay.</string>
+
+    <!-- Lock to portrait so the UI never rotates during a procedure. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+
+    <!-- Custom font shipped in Resources/Fonts. -->
+    <key>UIAppFonts</key>
+    <array>
+        <string>Diagramm-Bold.ttf</string>
+    </array>
+
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+</dict>
+</plist>

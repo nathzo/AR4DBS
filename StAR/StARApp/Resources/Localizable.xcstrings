@@ -1,0 +1,485 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "—" : {
+
+    },
+    "%.1f %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.1f %2$@"
+          }
+        }
+      }
+    },
+    "%@  id=%lld  %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@  id=%2$lld  %3$@"
+          }
+        }
+      }
+    },
+    "← Menu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "← Menu"
+          }
+        }
+      }
+    },
+    "⚠︎ Groupe 'LeksellMarkers' introuvable dans le bundle" : {
+
+    },
+    "Activer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable"
+          }
+        }
+      }
+    },
+    "Analyse en cours…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanning…"
+          }
+        }
+      }
+    },
+    "Annuler" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "AR non disponible sur simulateur" : {
+
+    },
+    "Arc" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arc"
+          }
+        }
+      }
+    },
+    "Aucun marqueur détecté" : {
+
+    },
+    "Awaiting" : {
+
+    },
+    "Cadrez l'écran de planification" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frame the planning monitor"
+          }
+        }
+      }
+    },
+    "Calibrating" : {
+
+    },
+    "Calibration en cours…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibrating…"
+          }
+        }
+      }
+    },
+    "Calibration requise : placez la caméra face aux repères" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration required: point the camera at the markers"
+          }
+        }
+      }
+    },
+    "Calibration réussie, repères verrouillés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration successful, markers locked"
+          }
+        }
+      }
+    },
+    "Capturer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capture"
+          }
+        }
+      }
+    },
+    "Capturer échantillon" : {
+
+    },
+    "Cible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Target"
+          }
+        }
+      }
+    },
+    "Confirmer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm"
+          }
+        }
+      }
+    },
+    "Confirmer le plan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm the plan"
+          }
+        }
+      }
+    },
+    "Coordonnées détectées. Vérifiez chaque champ avant de confirmer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coordinates detected. Check each field before confirming."
+          }
+        }
+      }
+    },
+    "Coordonnées non détectées. Saisissez les valeurs manuellement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coordinates not detected. Enter the values manually."
+          }
+        }
+      }
+    },
+    "Désaccord max. des repères" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max marker disagreement"
+          }
+        }
+      }
+    },
+    "Droite" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Right"
+          }
+        }
+      }
+    },
+    "Exporter CSV" : {
+
+    },
+    "Fermer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Gauche" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left"
+          }
+        }
+      }
+    },
+    "Images de verrouillage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock frames"
+          }
+        }
+      }
+    },
+    "La langue suit les réglages du système iOS." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language follows the iOS system settings."
+          }
+        }
+      }
+    },
+    "Lancer sur un iPhone Pro (LiDAR) avec le gabarit Leksell physique." : {
+
+    },
+    "Langue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "Locked" : {
+
+    },
+    "Marqueur d'incision" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incision marker"
+          }
+        }
+      }
+    },
+    "Mode test AR" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AR test mode"
+          }
+        }
+      }
+    },
+    "Modifier le plan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit the plan"
+          }
+        }
+      }
+    },
+    "NeuroRestore · Stereotactic AR" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NeuroRestore · Stereotactic AR"
+          }
+        }
+      }
+    },
+    "Note / point de vue" : {
+
+    },
+    "Nouvelle chirurgie" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New surgery"
+          }
+        }
+      }
+    },
+    "Paramètres de calibration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration settings"
+          }
+        }
+      }
+    },
+    "Paramètres graphiques" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graphics settings"
+          }
+        }
+      }
+    },
+    "Position des repères" : {
+
+    },
+    "Position physique des repères dans le cadre de Leksell (mm). À corriger uniquement si l'impression diffère de la disposition de référence." : {
+
+    },
+    "Recalibrer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recalibrate"
+          }
+        }
+      }
+    },
+    "Réglages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "Repères verrouillés" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markers locked"
+          }
+        }
+      }
+    },
+    "Ring" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ring"
+          }
+        }
+      }
+    },
+    "Rotation candidate" : {
+
+    },
+    "Seuil de rotation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotation threshold"
+          }
+        }
+      }
+    },
+    "Seuil de translation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation threshold"
+          }
+        }
+      }
+    },
+    "StAR" : {
+
+    },
+    "state" : {
+
+    },
+    "Suivant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        }
+      }
+    },
+    "Terminé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "Test AR" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AR test"
+          }
+        }
+      }
+    },
+    "Trajectoire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trajectory"
+          }
+        }
+      }
+    },
+    "Vérifiez les valeurs avant de confirmer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the values before confirming."
+          }
+        }
+      }
+    },
+    "Visualisation profondeur test AR" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AR test depth visualization"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

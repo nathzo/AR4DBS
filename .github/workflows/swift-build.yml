@@ -1,0 +1,55 @@
+name: StAR Swift Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # lets you trigger manually from the GitHub website
+
+jobs:
+  build-star:
+    runs-on: macos-15   # latest macOS with Xcode 17, supports iOS 26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build StAR
+        run: |
+          xcodebuild build-for-ipa \
+            -project StAR/StAR.xcodeproj \
+            -scheme StAR \
+            -destination generic/platform=iOS \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify app bundle
+        run: |
+          APP_BIN="build/Release-iphoneos/StAR.app/StAR"
+          if [ ! -f "$APP_BIN" ]; then
+            echo "ERROR: binary not found at $APP_BIN"
+            exit 1
+          fi
+          echo "✓ StAR binary built successfully"
+
+          # Verify Info.plist has required permissions
+          PLIST="build/Release-iphoneos/StAR.app/Info.plist"
+          if /usr/libexec/PlistBuddy -c "Print NSCameraUsageDescription" "$PLIST" 2>/dev/null; then
+            echo "✓ Camera permission declared"
+          else
+            echo "ERROR: NSCameraUsageDescription missing from Info.plist"
+            exit 1
+          fi
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/StAR.app Payload/
+          zip -r StAR.ipa Payload/
+          rm -rf Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: StAR-ios
+          path: StAR.ipa
+          retention-days: 7
