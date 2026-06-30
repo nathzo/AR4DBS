@@ -123,6 +123,8 @@ private:
                               const cv::Mat               &tvec) const;
 #endif
 
+    cv::Point3d applyTagFrameRotation(const cv::Point3d &point_leksell) const;
+
     cv::Mat m_K;
     cv::Mat m_dist;
     float   m_markerSize = 0.05f; // overwritten from tag_config.json marker_size_m

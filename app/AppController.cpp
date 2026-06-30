@@ -225,8 +225,8 @@ std::optional<cv::Point3d> AppController::findIncisionPoint(
     cv::Mat R;
     cv::Rodrigues(rvec, R);
 
-    const cv::Point3d &tgt = line.target();
-    const cv::Point3d &end = line.lineEnd();
+    const cv::Point3d tgt = applyTagFrameRotation(line.target());
+    const cv::Point3d end = applyTagFrameRotation(line.lineEnd());
 
     for (int i = 0; i <= RAY_SAMPLES; ++i) {
         const double t = static_cast<double>(i) / RAY_SAMPLES;
@@ -411,8 +411,8 @@ void AppController::renderOverlayOnto(cv::Mat &out,
     for (int i = 0; i < 2; ++i) {
         if (!m_lines[i]) continue;
         const auto &line = *m_lines[i];
-        const cv::Point3d &tgt = line.target();
-        const cv::Point3d &end = line.lineEnd();
+        const cv::Point3d tgt = applyTagFrameRotation(line.target());
+        const cv::Point3d end = applyTagFrameRotation(line.lineEnd());
 
         const cv::Point3d diff = { tgt.x-end.x, tgt.y-end.y, tgt.z-end.z };
         std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
@@ -480,8 +480,8 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     for (int i = 0; i < 2; ++i) {
         if (!m_lines[i]) continue;
         const auto &line = *m_lines[i];
-        const cv::Point3d &tgt = line.target();
-        const cv::Point3d &end = line.lineEnd();
+        const cv::Point3d tgt = applyTagFrameRotation(line.target());
+        const cv::Point3d end = applyTagFrameRotation(line.lineEnd());
 
         // Pre-compute all RAY_SAMPLES+1 points and test visibility once each.
         // Adjacent segments share endpoints, so the naive per-segment approach
@@ -752,18 +752,10 @@ void AppController::onARFrame(const cv::Mat &frame,
                 const cv::Mat R_avg = U * Vt;
                 const cv::Mat t_avg = tSum / static_cast<double>(m_streakPoses.size());
 
-                // Apply +45° tilt around X axis to the rotation, then apply translation
-                const double tiltAngle = 0.7853981633974483; // +45° in radians
-                cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
-                double c = cos(tiltAngle), s = sin(tiltAngle);
-                R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
-                R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
-
-                // Compose: rotation first, then translation
-                cv::Mat R_final = R_tilt * R_avg;
-
+                // Build the world-to-Leksell transformation (without tag-frame tilt;
+                // tilt is applied per-object using tag coordinates from tag_config.json)
                 m_T_world_leksell = cv::Mat::eye(4, 4, CV_64F);
-                R_final.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
+                R_avg.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
                 t_avg.copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
 
                 m_anchorTrackingState = m_trackingState;
@@ -1275,4 +1267,49 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
         configs.push_back(std::move(cfg));
     }
     return configs;
+}
+
+cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksell) const
+{
+    if (m_tagConfigs.empty()) return point_leksell;
+
+    const TagConfig &tag = m_tagConfigs[0]; // use first tag as reference frame
+
+    // T_frame_tag transforms from tag frame to Leksell frame
+    // We need the inverse: from Leksell to tag frame
+    cv::Mat T_inv = cv::Mat::zeros(4, 4, CV_64F);
+    T_inv.at<double>(3, 3) = 1.0;
+
+    // Invert: R_inv = R^T, t_inv = -R^T * t
+    cv::Mat R = tag.T_frame_tag.rowRange(0, 3).colRange(0, 3);
+    cv::Mat t = tag.T_frame_tag.rowRange(0, 3).col(3);
+    cv::Mat R_inv = R.t();
+    cv::Mat t_inv = -R_inv * t;
+
+    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
+    t_inv.copyTo(T_inv.rowRange(0, 3).col(3));
+
+    // Transform to tag frame
+    cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
+    cv::Mat p_tag = T_inv * p_leksell;
+
+    // Apply +45° rotation around X axis in tag frame
+    const double tiltAngle = 0.7853981633974483; // +45° in radians
+    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
+    double c = cos(tiltAngle), s = sin(tiltAngle);
+    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
+    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
+
+    cv::Mat p_tag_xyz = p_tag.rowRange(0, 3);
+    cv::Mat p_tag_rot = R_tilt * p_tag_xyz;
+
+    // Transform back to Leksell frame
+    cv::Mat p_tag_rot_4d = (cv::Mat_<double>(4, 1) << p_tag_rot.at<double>(0, 0),
+                                                       p_tag_rot.at<double>(1, 0),
+                                                       p_tag_rot.at<double>(2, 0), 1.0);
+    cv::Mat p_final = tag.T_frame_tag * p_tag_rot_4d;
+
+    return cv::Point3d(p_final.at<double>(0, 0),
+                       p_final.at<double>(1, 0),
+                       p_final.at<double>(2, 0));
 }
