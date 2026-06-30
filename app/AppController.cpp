@@ -1177,7 +1177,15 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
         corners += static_cast<int>(d.corners.size());
     if (corners < 8) return false;
 
-    return true;
+    cv::Mat rvec, tvec, R;
+    PoseUtils::fromTransform(T_from_tags, rvec, tvec);
+    cv::Rodrigues(rvec, R);
+    const double cosA = std::max(-1.0, std::min(1.0, -R.at<double>(2, 2)));
+    const double angleDeg = std::acos(cosA) * 180.0 / M_PI;
+
+    if (angleDeg < 175.0) return false;
+
+    return computeReprojError(detections, rvec, tvec) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
