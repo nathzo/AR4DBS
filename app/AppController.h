@@ -52,6 +52,9 @@ public slots:
     void setMovementThresholds(double transMm, double rotDeg);
     void setTagPosition(int tagId, double tx_m, double ty_m, double tz_m);
 
+    // Trajectory tilt to account for tilted tags (public for helper functions)
+    static constexpr double kTrajectoryTiltAngle = -0.7853981633974483; // -45° in radians
+
 #ifdef Q_OS_IOS
     // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
     // onARFrame is called from MainWindow's busy-guard lambda on the worker thread.
@@ -78,9 +81,6 @@ private:
     std::vector<TagConfig>         loadTagConfigs(const QString &path);
 
     cv::Mat fusePoses(const std::vector<TagPose> &detections) const;
-
-    // Trajectory tilt to account for tilted tags (publicly accessible for helper functions)
-    static constexpr double kTrajectoryTiltAngle = -0.7853981633974483; // -45° in radians
 
     // Apply trajectory tilt rotation (-45° around X axis) to a point in camera space
     cv::Point3d applyTrajectoryTilt(const cv::Point3d &pt) const;
