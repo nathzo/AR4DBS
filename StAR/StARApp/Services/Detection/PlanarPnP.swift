@@ -278,23 +278,23 @@ public enum PlanarPnP {
 
         var jobu: Int8 = 0x41   // 'A' — full U (m×m).
         var jobvt: Int8 = 0x41  // 'A' — full Vᵀ (n×n).
-        var M = __LAPACK_int(m)
-        var N = __LAPACK_int(n)
-        var lda = __LAPACK_int(m)
-        var ldu = __LAPACK_int(m)
-        var ldvt = __LAPACK_int(n)
+        var M = Int32(m)
+        var N = Int32(n)
+        var lda = Int32(m)
+        var ldu = Int32(m)
+        var ldvt = Int32(n)
         var s = [Double](repeating: 0, count: min(m, n))
         var u = [Double](repeating: 0, count: m * m)
         var vt = [Double](repeating: 0, count: n * n)   // column-major Vᵀ (n×n)
-        var info = __LAPACK_int(0)
+        var info = Int32(0)
 
         // Workspace query.
         var wkopt = 0.0
-        var lwork = __LAPACK_int(-1)
+        var lwork = Int32(-1)
         dgesvd_(&jobu, &jobvt, &M, &N, &a, &lda, &s, &u, &ldu, &vt, &ldvt,
                 &wkopt, &lwork, &info)
         guard info == 0 else { return nil }
-        lwork = __LAPACK_int(wkopt)
+        lwork = Int32(wkopt)
         var work = [Double](repeating: 0, count: max(1, Int(lwork)))
         dgesvd_(&jobu, &jobvt, &M, &N, &a, &lda, &s, &u, &ldu, &vt, &ldvt,
                 &work, &lwork, &info)
@@ -317,22 +317,22 @@ public enum PlanarPnP {
 
         var jobu: Int8 = 0x41   // 'A'
         var jobvt: Int8 = 0x41  // 'A'
-        var rows = __LAPACK_int(3)   // M and N held separately to avoid &n aliasing.
-        var cols = __LAPACK_int(3)
-        var lda = __LAPACK_int(3)
-        var ldu = __LAPACK_int(3)
-        var ldvt = __LAPACK_int(3)
+        var rows = Int32(3)   // M and N held separately to avoid &n aliasing.
+        var cols = Int32(3)
+        var lda = Int32(3)
+        var ldu = Int32(3)
+        var ldvt = Int32(3)
         var s = [Double](repeating: 0, count: 3)
         var u = [Double](repeating: 0, count: 9)
         var vt = [Double](repeating: 0, count: 9)
-        var info = __LAPACK_int(0)
+        var info = Int32(0)
 
         var wkopt = 0.0
-        var lwork = __LAPACK_int(-1)
+        var lwork = Int32(-1)
         dgesvd_(&jobu, &jobvt, &rows, &cols, &a, &lda, &s, &u, &ldu, &vt, &ldvt,
                 &wkopt, &lwork, &info)
         guard info == 0 else { return nil }
-        lwork = __LAPACK_int(wkopt)
+        lwork = Int32(wkopt)
         var work = [Double](repeating: 0, count: max(1, Int(lwork)))
         dgesvd_(&jobu, &jobvt, &rows, &cols, &a, &lda, &s, &u, &ldu, &vt, &ldvt,
                 &work, &lwork, &info)
