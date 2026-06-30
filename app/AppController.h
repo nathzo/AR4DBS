@@ -124,6 +124,7 @@ private:
 #endif
 
     cv::Point3d applyTagFrameRotation(const cv::Point3d &point_leksell) const;
+    void applyTagFrameRotationToPose(cv::Mat &rvec, cv::Mat &tvec) const;
 
     cv::Mat m_K;
     cv::Mat m_dist;
