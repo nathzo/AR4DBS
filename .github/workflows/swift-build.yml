@@ -7,11 +7,14 @@ on:
 
 jobs:
   build-star:
-    runs-on: macos-15   # macOS 15 with Xcode 17 (supports iOS 26)
+    runs-on: macos-latest   # Latest macOS with Xcode 17+ for iOS 26 support
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Display Xcode version
+        run: xcodebuild -version
 
       - name: Build StAR
         run: |

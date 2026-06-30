@@ -29,6 +29,7 @@ import ARKit
 import simd
 import Combine   // Cancellable (scene event subscription)
 
+#if DEBUG
 // MARK: - Screen
 
 public struct ValidationView: View {
@@ -372,3 +373,4 @@ private struct ShareSheet: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
+#endif

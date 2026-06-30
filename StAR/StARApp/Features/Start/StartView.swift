@@ -8,9 +8,11 @@ import SwiftUI
 /// default-test path).
 struct StartView: View {
     @Environment(AppModel.self) private var model
+#if DEBUG
     // Long-press the wordmark to open the on-device registration validation
     // harness (Features/Dev). Built-in for on-device testing.
     @State private var showValidation = false
+#endif
 
     var body: some View {
         ZStack {
@@ -28,8 +30,10 @@ struct StartView: View {
                     Text(verbatim: "StAR")
                         .font(Brand.display(64))
                         .foregroundStyle(.white)
+#if DEBUG
                         .onLongPressGesture(minimumDuration: 1.0) { showValidation = true }
                         .fullScreenCover(isPresented: $showValidation) { ValidationView() }
+#endif
                     Text("NeuroRestore · Stereotactic AR")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.6))
