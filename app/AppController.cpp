@@ -401,6 +401,27 @@ cv::Point3d AppController::applyTrajectoryTilt(const cv::Point3d &pt) const
     );
 }
 
+// Helper to compose trajectory tilt with an existing rotation vector
+cv::Mat applyTiltToRvec(const cv::Mat &rvec)
+{
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+
+    // Create tilt rotation matrix for -45° around X
+    double c = cos(AppController::kTrajectoryTiltAngle);
+    double s = sin(AppController::kTrajectoryTiltAngle);
+    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
+    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
+    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
+
+    // Compose: R_tilted = R_tilt * R
+    cv::Mat R_tilted = R_tilt * R;
+
+    cv::Mat rvec_tilted;
+    cv::Rodrigues(R_tilted, rvec_tilted);
+    return rvec_tilted;
+}
+
 // Rotate a point around an X axis passing through a center point
 static cv::Point3d rotateAroundCenter(const cv::Point3d &pt, const cv::Point3d &center, double angle)
 {
