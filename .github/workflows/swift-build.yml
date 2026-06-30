@@ -7,11 +7,23 @@ on:
 
 jobs:
   build-star:
-    runs-on: macos-latest   # Latest macOS with Xcode 17+ for iOS 26 support
+    runs-on: macos-latest   # Latest macOS with Xcode 17+
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Select Xcode 17+
+        run: |
+          # Find and use the latest Xcode available
+          XCODE_PATH=$(ls -dt /Applications/Xcode*.app 2>/dev/null | head -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "ERROR: No Xcode installation found"
+            exit 1
+          fi
+          echo "Using Xcode at: $XCODE_PATH"
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
 
       - name: Build StAR
         run: |
