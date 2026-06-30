@@ -755,6 +755,15 @@ void AppController::onARFrame(const cv::Mat &frame,
                 R_avg.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
                 t_avg.copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
 
+                // Apply 45° tilt around X axis to account for tilted tags
+                const double tiltAngle = 0.7853981633974483; // 45° in radians
+                cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
+                double c = cos(tiltAngle), s = sin(tiltAngle);
+                R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
+                R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
+                cv::Mat R_tilted = R_avg * R_tilt;
+                R_tilted.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
+
                 m_anchorTrackingState = m_trackingState;
                 m_streakPoses.clear();
                 DebugLogger::logEvent("AppController::onARFrame", "LOCKED: emitting calibrationProgressChanged(false) and lockStateChanged(true)");
@@ -1168,16 +1177,7 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
         corners += static_cast<int>(d.corners.size());
     if (corners < 8) return false;
 
-    cv::Mat rvec, tvec;
-    PoseUtils::fromTransform(T_from_tags, rvec, tvec);
-
-    cv::Mat R;
-    cv::Rodrigues(rvec, R);
-    // cosA = -R(2,2). Face-on gives cosA ≈ -1 (angle ≈ 180°).
-    // Valid when angle ≥ 175°, i.e. cosA ≤ -kMaxInitAngleCos ≈ -0.9962.
-    if (-R.at<double>(2, 2) > -kMaxInitAngleCos) return false;
-
-    return computeReprojError(detections, rvec, tvec) <= m_maxInitReprojPx;
+    return true;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
