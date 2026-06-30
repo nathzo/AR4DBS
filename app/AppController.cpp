@@ -752,8 +752,8 @@ void AppController::onARFrame(const cv::Mat &frame,
                 const cv::Mat R_avg = U * Vt;
                 const cv::Mat t_avg = tSum / static_cast<double>(m_streakPoses.size());
 
-                // Apply -45° tilt around X axis to the rotation, then apply translation
-                const double tiltAngle = -0.7853981633974483; // -45° in radians
+                // Apply +45° tilt around X axis to the rotation, then apply translation
+                const double tiltAngle = 0.7853981633974483; // +45° in radians
                 cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
                 double c = cos(tiltAngle), s = sin(tiltAngle);
                 R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
