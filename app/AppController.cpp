@@ -186,10 +186,7 @@ void AppController::onNewFrame(const cv::Mat &frame)
     }
 
     m_renderer->beginFrame(out);
-    cv::Mat rvec_axes = rvec.clone();
-    cv::Mat tvec_axes = tvec.clone();
-    applyTagFrameRotationToPose(rvec_axes, tvec_axes);
-    cv::drawFrameAxes(out, m_K, m_dist, rvec_axes, tvec_axes, 0.03f); //  3 cm frame origin axes
+    cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.03f); //  3 cm frame origin axes
 
     if (depthAnchor < 1e-9) {
         renderOverlayOnto(out, rvec, tvec);
@@ -1078,12 +1075,8 @@ void AppController::onARFrame(const cv::Mat &frame,
     PoseUtils::fromTransform(T_cam_leksell, rvec, tvec);
 
     m_renderer->beginFrame(out);
-    if (m_showDepthOverlay) {
-        cv::Mat rvec_axes = rvec.clone();
-        cv::Mat tvec_axes = tvec.clone();
-        applyTagFrameRotationToPose(rvec_axes, tvec_axes);
-        cv::drawFrameAxes(out, m_K, m_dist, rvec_axes, tvec_axes, 0.05f);
-    }
+    if (m_showDepthOverlay)
+        cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f);
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
         renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor, confidenceMap);
@@ -1319,42 +1312,4 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
     return cv::Point3d(p_final.at<double>(0, 0),
                        p_final.at<double>(1, 0),
                        p_final.at<double>(2, 0));
-}
-
-void AppController::applyTagFrameRotationToPose(cv::Mat &rvec, cv::Mat &tvec) const
-{
-    if (m_tagConfigs.empty()) return;
-
-    const TagConfig &tag = m_tagConfigs[0];
-
-    // Convert rvec to rotation matrix
-    cv::Mat R_cam;
-    cv::Rodrigues(rvec, R_cam);
-
-    // Invert T_frame_tag to get T_tag_leksell
-    cv::Mat R = tag.T_frame_tag.rowRange(0, 3).colRange(0, 3);
-    cv::Mat t = tag.T_frame_tag.rowRange(0, 3).col(3);
-    cv::Mat R_inv = R.t();
-    cv::Mat t_inv = -R_inv * t;
-
-    // Transform tvec to tag frame
-    cv::Mat tvec_tag = R_inv * tvec.reshape(3, 1) + t_inv;
-
-    // Apply +45° rotation around X axis in tag frame
-    const double tiltAngle = 0.7853981633974483; // +45° in radians
-    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
-    double c = cos(tiltAngle), s = sin(tiltAngle);
-    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
-    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
-
-    // Compose rotations in tag frame
-    cv::Mat R_cam_rot = R_tilt * R_cam;
-
-    // Transform back to Leksell frame
-    cv::Mat R_final = R * R_cam_rot;
-    cv::Mat tvec_final = R * tvec_tag;
-
-    // Convert back to rvec
-    cv::Rodrigues(R_final, rvec);
-    tvec = tvec_final;
 }
