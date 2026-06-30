@@ -35,13 +35,6 @@ public final class SurgicalSessionImpl: SurgicalSession {
     // MARK: - Collaborators / configuration
 
     private let fusion = MarkerFusion()
-    /// B2: native ArUco detection + solvePnP on the camera frame (replaces ARKit
-    /// image anchors). Produces [MarkerID: world_T_marker] from each ARFrame.
-    private let arucoTracker = ArucoMarkerTracker()
-    /// Throttle for the (heavy) per-frame CV during calibration; detection is skipped
-    /// entirely once locked (world tracking carries the overlay).
-    private static let detectEveryNFrames = 2
-    private var frameCounter = 0
     private var parameters: RegistrationParameters
     private var planGeometry: PlanGeometry?
 
@@ -60,6 +53,11 @@ public final class SurgicalSessionImpl: SurgicalSession {
     /// The drift guard only re-calibrates when current quality drops below this.
     private var anchorQuality: TrackingQuality = .normal
 
+    /// Reference-image name → MarkerID. Matches the WP8 "LeksellMarkers" group.
+    private static let markerNameMap: [String: CoordinateConventions.MarkerID] = [
+        "LeksellMarkerLeft": .left,
+        "LeksellMarkerRight": .right
+    ]
 
     // MARK: - Init
 
@@ -122,9 +120,10 @@ public final class SurgicalSessionImpl: SurgicalSession {
     private static func makeConfiguration() -> ARWorldTrackingConfiguration? {
         guard ARWorldTrackingConfiguration.isSupported else { return nil }
         let config = ARWorldTrackingConfiguration()
-        // B2 detects ArUco tags on the camera frame (ArucoMarkerTracker), so no ARKit
-        // detectionImages are configured. World tracking + LiDAR mesh + scene depth
-        // are still needed (world anchor, occlusion, incision raycast).
+        config.detectionImages = ARReferenceImage.referenceImages(
+            inGroupNamed: "LeksellMarkers", bundle: .main)
+        config.maximumNumberOfTrackedImages = 2
+        config.automaticImageScaleEstimationEnabled = true
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             config.sceneReconstruction = .mesh
         }
@@ -138,31 +137,34 @@ public final class SurgicalSessionImpl: SurgicalSession {
     // MARK: - Per-frame state machine (ported from AppController::onARFrame)
 
     /// Called from the delegate on the main thread for every ARFrame.
-    fileprivate func handleFrame(_ frame: ARFrame) {
+    fileprivate func handleFrame(camera: ARCamera, anchors: [ARAnchor]) {
         // 1. Tracking quality from the camera state.
-        let quality = Self.quality(from: frame.camera.trackingState)
+        let quality = Self.quality(from: camera.trackingState)
         trackingQuality = quality
 
-        // 2. Already locked: world tracking maintains the overlay — skip the (heavy)
-        // per-frame detection entirely. Drift guard (ported onTrackingQualityChanged,
-        // adapted to prefer trackingState): drop the lock if quality falls below the
-        // level recorded at lock time.
+        // 2. Currently-tracked image anchors → [MarkerID: world_T_marker].
+        var markers: [CoordinateConventions.MarkerID: simd_float4x4] = [:]
+        for case let image as ARImageAnchor in anchors where image.isTracked {
+            // Skip anchors whose estimated scale is far from 1 (mis-detection / wrong
+            // physical size) — guards against a bad world_T_marker poisoning fusion.
+            if abs(image.estimatedScaleFactor - 1.0) > 0.1 { continue }
+            guard let id = Self.markerNameMap[image.referenceImage.name ?? ""] else { continue }
+            markers[id] = image.transform
+        }
+
+        // 3 & 4: branch on whether we are already locked.
         if case .locked = registration {
+            // Locked: keep the frozen transform; world tracking maintains the overlay.
+            // Drift guard (ported onTrackingQualityChanged, adapted to prefer
+            // trackingState over feature counts): if quality drops below the level
+            // recorded at lock time, drop the lock and re-calibrate.
             if quality < anchorQuality {
                 resetRegistration()
             }
             return
         }
 
-        // 3. Calibrating: detect the ArUco markers (B2), throttled so the main actor
-        // doesn't hitch. (Offloading detection to a background queue is a future perf
-        // step; during calibration the surgeon holds steady and detection stops once
-        // locked, so synchronous main-actor CV is acceptable for now.)
-        frameCounter &+= 1
-        guard frameCounter % Self.detectEveryNFrames == 0 else { return }
-        let markers = arucoTracker.markers(in: frame)
-
-        // 4. Fuse and advance/break the streak.
+        // Not locked: try to fuse and advance/break the streak.
         guard let result = fusion.fuse(anchors: markers, parameters: parameters),
               result.qualifies else {
             // Streak broken — reset accumulator (legacy: m_streakPoses.clear()).
@@ -213,7 +215,7 @@ private final class SessionCoordinator: NSObject, ARSessionDelegate, @unchecked 
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         MainActor.assumeIsolated {
-            owner?.handleFrame(frame)
+            owner?.handleFrame(camera: frame.camera, anchors: frame.anchors)
         }
     }
 }

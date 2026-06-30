@@ -1,6 +1,6 @@
 import Foundation
 import Vision
-@preconcurrency import CoreImage
+import CoreImage
 
 /// `PlanScanning` implementation using Apple Vision (no OpenCV). Ported from
 /// `IOSOCREngine.mm` (Vision request config) + `PlanScanner.cpp` (screen

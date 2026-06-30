@@ -51,10 +51,7 @@ public enum CoordinateConventions {
     /// `leksell_T_marker`: the fixed transform placing each marker in the
     /// Leksell frame.
     ///
-    /// ── SUPERSEDED (history) — ARImageAnchor-basis derivation (WP8) ──────────────
-    /// B2 detects the real ArUco tags via solvePnP, so the marker frame is now the
-    /// proven v1 ArUco frame and the rotation below is v1's Ry(π), NOT this Rz(π).
-    /// This block is kept only as the record of the former ARImageAnchor guess.
+    /// ── Derivation of the rotation for the ARKit `ARImageAnchor` basis (WP8) ──
     ///
     /// We re-derive `leksell_T_marker`'s rotation for the ARKit image-anchor axis
     /// convention. (Ported/re-derived from `resources/tag_config.json` — the
@@ -101,12 +98,10 @@ public enum CoordinateConventions {
     /// an iPhone Pro before clinical trust. The two suspect signs are the z-flip
     /// (ARKit +z out-of-surface vs. Leksell inferior) and the overall handedness;
     /// any correction is a fixed re-orthonormal rotation premultiplying the result.
-    /// The marker→Leksell ROTATION, shared by every marker. With the B2 ArUco +
-    /// solvePnP path the marker frame is the standard ArUco/OpenCV solvePnP frame
-    /// (identical to v1's object points), so this uses v1's PROVEN value
-    /// Ry(π) = diag(-1, 1, -1) (orthonormal, det = +1) — NOT the superseded
-    /// ARImageAnchor Rz(π) guess above. v1 validated Ry(π) clinically (resolves S1-01).
-    public static let markerRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+    /// The marker→Leksell ROTATION, shared by every marker. Rz(π): diag(-1,-1,1),
+    /// orthonormal, det = +1. See the derivation above. ⚠️ analytic, unvalidated —
+    /// see the TODO(WP8 on-device) note.
+    public static let markerRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 0, 1))
 
     /// Default (baked) Leksell-frame translation of each marker (metres), from the
     /// fixed physical measurements in `tag_config.json`. These are the defaults for
