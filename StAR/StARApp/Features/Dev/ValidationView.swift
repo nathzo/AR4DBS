@@ -23,7 +23,6 @@
 //
 //  Single module "StAR": Core/* / Services/* types are visible.
 
-#if DEBUG
 import SwiftUI
 import RealityKit
 import ARKit
@@ -373,4 +372,3 @@ private struct ShareSheet: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
-#endif
