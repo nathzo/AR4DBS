@@ -79,6 +79,9 @@ private:
 
     cv::Mat fusePoses(const std::vector<TagPose> &detections) const;
 
+    // Apply trajectory tilt rotation (-45° around X axis) to a point in camera space
+    cv::Point3d applyTrajectoryTilt(const cv::Point3d &pt) const;
+
     // Full overlay without occlusion (fallback when no depth is available).
     void renderOverlayOnto(cv::Mat &out,
                            const cv::Mat &rvec,
@@ -163,6 +166,9 @@ private:
     // Once set, the overlay runs purely from ARKit world tracking.
     // Cleared by resetARRegistration() to re-enter the init phase.
     cv::Mat m_T_world_leksell;
+
+    // Trajectory tilt to account for tilted tags
+    static constexpr double kTrajectoryTiltAngle = -0.7853981633974483; // -45° in radians
 
     // Strict thresholds: both conditions must hold simultaneously for the lock
     // to be accepted, ensuring the established coordinates are reliable.

@@ -186,7 +186,8 @@ void AppController::onNewFrame(const cv::Mat &frame)
     }
 
     m_renderer->beginFrame(out);
-    cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.03f); //  3 cm frame origin axes
+    cv::Mat rvec_tilted = applyTiltToRvec(rvec);
+    cv::drawFrameAxes(out, m_K, m_dist, rvec_tilted, tvec, 0.03f); //  3 cm frame origin axes (tilted)
 
     if (depthAnchor < 1e-9) {
         renderOverlayOnto(out, rvec, tvec);
@@ -388,6 +389,59 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
     return T_initial;
 }
 
+cv::Point3d AppController::applyTrajectoryTilt(const cv::Point3d &pt) const
+{
+    // Rotate around origin
+    double c = cos(kTrajectoryTiltAngle);
+    double s = sin(kTrajectoryTiltAngle);
+    return cv::Point3d(
+        pt.x,
+        pt.y * c - pt.z * s,
+        pt.y * s + pt.z * c
+    );
+}
+
+// Rotate a point around an X axis passing through a center point
+static cv::Point3d rotateAroundCenter(const cv::Point3d &pt, const cv::Point3d &center, double angle)
+{
+    double c = cos(angle);
+    double s = sin(angle);
+
+    // Translate to center
+    cv::Point3d rel = { pt.x - center.x, pt.y - center.y, pt.z - center.z };
+
+    // Rotate around X axis
+    cv::Point3d rotated = {
+        rel.x,
+        rel.y * c - rel.z * s,
+        rel.y * s + rel.z * c
+    };
+
+    // Translate back
+    return { rotated.x + center.x, rotated.y + center.y, rotated.z + center.z };
+}
+
+// Helper to compose trajectory tilt with an existing rotation vector
+static cv::Mat applyTiltToRvec(const cv::Mat &rvec)
+{
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+
+    // Create tilt rotation matrix for -45° around X
+    double c = cos(AppController::kTrajectoryTiltAngle);
+    double s = sin(AppController::kTrajectoryTiltAngle);
+    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
+    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
+    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
+
+    // Compose: R_tilted = R_tilt * R
+    cv::Mat R_tilted = R_tilt * R;
+
+    cv::Mat rvec_tilted;
+    cv::Rodrigues(R_tilted, rvec_tilted);
+    return rvec_tilted;
+}
+
 // ── Simple overlay renderer (shared by both AprilTag and ARKit paths) ─────────
 
 // Draws both trajectory lines onto `out`. Caller must wrap with beginFrame/endFrame.
@@ -411,8 +465,8 @@ void AppController::renderOverlayOnto(cv::Mat &out,
     for (int i = 0; i < 2; ++i) {
         if (!m_lines[i]) continue;
         const auto &line = *m_lines[i];
-        const cv::Point3d &tgt = line.target();
-        const cv::Point3d &end = line.lineEnd();
+        const cv::Point3d tgt = line.target();  // Target stays fixed
+        const cv::Point3d end = rotateAroundCenter(line.lineEnd(), tgt, kTrajectoryTiltAngle);  // End rotates around target
 
         const cv::Point3d diff = { tgt.x-end.x, tgt.y-end.y, tgt.z-end.z };
         std::array<cv::Point3d, RAY_SAMPLES + 1> pts;
@@ -480,8 +534,8 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
     for (int i = 0; i < 2; ++i) {
         if (!m_lines[i]) continue;
         const auto &line = *m_lines[i];
-        const cv::Point3d &tgt = line.target();
-        const cv::Point3d &end = line.lineEnd();
+        const cv::Point3d tgt = line.target();  // Target stays fixed
+        const cv::Point3d end = rotateAroundCenter(line.lineEnd(), tgt, kTrajectoryTiltAngle);  // End rotates around target
 
         // Pre-compute all RAY_SAMPLES+1 points and test visibility once each.
         // Adjacent segments share endpoints, so the naive per-segment approach
@@ -544,8 +598,9 @@ void AppController::renderWithOcclusion(cv::Mat       &out,
             if (lock.locked) {
                 // Fill the gap from the last full sample to the exact incision point.
                 const int s_last = std::max(0, std::min(RAY_SAMPLES, static_cast<int>(t_inc * RAY_SAMPLES)));
-                m_renderer->drawSegment(pts[s_last], lock.leksellPt, m_K, rvec, tvec);
-                m_renderer->drawIncisionMarker(lock.leksellPt, m_K, rvec, tvec);
+                const cv::Point3d tiltedIncision = rotateAroundCenter(lock.leksellPt, tgt, kTrajectoryTiltAngle);
+                m_renderer->drawSegment(pts[s_last], tiltedIncision, m_K, rvec, tvec);
+                m_renderer->drawIncisionMarker(tiltedIncision, m_K, rvec, tvec);
             } else {
                 auto hit = findIncisionPoint(depthMap, rvec, tvec, depthAnchor, line);
                 if (hit.has_value()) {
@@ -754,15 +809,6 @@ void AppController::onARFrame(const cv::Mat &frame,
                 m_T_world_leksell = cv::Mat::eye(4, 4, CV_64F);
                 R_avg.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
                 t_avg.copyTo(m_T_world_leksell.rowRange(0, 3).col(3));
-
-                // Apply -45° tilt around X axis to account for tilted tags
-                const double tiltAngle = -0.7853981633974483; // -45° in radians
-                cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
-                double c = cos(tiltAngle), s = sin(tiltAngle);
-                R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
-                R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
-                cv::Mat R_tilted = R_avg * R_tilt;
-                R_tilted.copyTo(m_T_world_leksell.rowRange(0, 3).colRange(0, 3));
 
                 m_anchorTrackingState = m_trackingState;
                 m_streakPoses.clear();
@@ -1081,8 +1127,10 @@ void AppController::onARFrame(const cv::Mat &frame,
     PoseUtils::fromTransform(T_cam_leksell, rvec, tvec);
 
     m_renderer->beginFrame(out);
-    if (m_showDepthOverlay)
-        cv::drawFrameAxes(out, m_K, m_dist, rvec, tvec, 0.05f);
+    if (m_showDepthOverlay) {
+        cv::Mat rvec_tilted = applyTiltToRvec(rvec);
+        cv::drawFrameAxes(out, m_K, m_dist, rvec_tilted, tvec, 0.05f);
+    }
 
     if (!depthMap.empty() && m_depthAnchor > 1e-9) {
         renderWithOcclusion(out, rvec, tvec, depthMap, m_depthAnchor, confidenceMap);
