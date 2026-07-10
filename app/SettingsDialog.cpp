@@ -824,6 +824,7 @@ signals:
     void reprojThresholdApplied(double px);
     void movementThresholdsApplied(double transMm, double rotDeg);
     void tagPositionApplied(int tagId, double tx_m, double ty_m, double tz_m);
+    void tagRotationApplied(int tagId, double rx_rad, double ry_rad, double rz_rad);
 
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }
@@ -1131,6 +1132,11 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
             m_tagPositions.ty_m[tagId] = ty;
             m_tagPositions.tz_m[tagId] = tz;
             emit tagPositionChanged(tagId, tx, ty, tz);
+        });
+        connect(dlg, &CalibrationSettingsDialog::tagRotationApplied, this,
+                [this](int tagId, double rx, double ry, double rz) {
+            DebugLogger::logEvent("SettingsDialog", "btnCalib: tagRotationApplied signal received");
+            emit tagRotationChanged(tagId, rx, ry, rz);
         });
         DebugLogger::logEvent("SettingsDialog", "btnCalib: showing dialog via exec()");
         dlg->exec();

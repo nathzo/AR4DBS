@@ -711,7 +711,7 @@ void MainWindow::openSettings()
             Qt::QueuedConnection);
     });
 
-    connect(dlg, QOverload<int, double, double, double>::of(&SettingsDialog::tagRotationApplied), this,
+    connect(dlg, QOverload<int, double, double, double>::of(&SettingsDialog::tagRotationChanged), this,
             [this](int tagId, double rx, double ry, double rz) {
         saveTagRotation(tagId, rx, ry, rz);
         QMetaObject::invokeMethod(m_controller,
