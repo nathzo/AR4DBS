@@ -664,7 +664,7 @@ public:
 
         scrollVBox->addWidget(moveBox);
 
-        // ── Tag positions ──────────────────────────────────────────────────────
+        // ── Tag positions and rotations ────────────────────────────────────────
         const QString tagLabels[] = { tr("Tag 0 — gauche"), tr("Tag 1 — droit") };
         for (int t = 0; t < 2; ++t) {
             auto *box  = new QGroupBox(tagLabels[t], scrollContent);
@@ -674,21 +674,39 @@ public:
             form->setHorizontalSpacing(16);
             form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
+            // Position spinboxes (tx, ty, tz in mm)
             for (int ax = 0; ax < 3; ++ax) {
-                m_tagSB[t][ax] = new CalibSpinBox(box);
-                m_tagSB[t][ax]->setRange(-500.0, 500.0);
-                m_tagSB[t][ax]->setDecimals(1);
-                m_tagSB[t][ax]->setSingleStep(1.0);
-                m_tagSB[t][ax]->setSuffix(" mm");
+                m_tagPosSB[t][ax] = new CalibSpinBox(box);
+                m_tagPosSB[t][ax]->setRange(-500.0, 500.0);
+                m_tagPosSB[t][ax]->setDecimals(1);
+                m_tagPosSB[t][ax]->setSingleStep(1.0);
+                m_tagPosSB[t][ax]->setSuffix(" mm");
             }
             // Values are stored in meters; display in mm
-            m_tagSB[t][0]->setValue(tagPos.tx_m[t] * 1000.0);
-            m_tagSB[t][1]->setValue(tagPos.ty_m[t] * 1000.0);
-            m_tagSB[t][2]->setValue(tagPos.tz_m[t] * 1000.0);
+            m_tagPosSB[t][0]->setValue(tagPos.tx_m[t] * 1000.0);
+            m_tagPosSB[t][1]->setValue(tagPos.ty_m[t] * 1000.0);
+            m_tagPosSB[t][2]->setValue(tagPos.tz_m[t] * 1000.0);
 
-            form->addRow(tr("tx (mm) :"), m_tagSB[t][0]);
-            form->addRow(tr("ty (mm) :"), m_tagSB[t][1]);
-            form->addRow(tr("tz (mm) :"), m_tagSB[t][2]);
+            form->addRow(tr("tx (mm) :"), m_tagPosSB[t][0]);
+            form->addRow(tr("ty (mm) :"), m_tagPosSB[t][1]);
+            form->addRow(tr("tz (mm) :"), m_tagPosSB[t][2]);
+
+            // Rotation spinboxes (rx, ry, rz in radians)
+            for (int ax = 0; ax < 3; ++ax) {
+                m_tagRotSB[t][ax] = new CalibSpinBox(box);
+                m_tagRotSB[t][ax]->setRange(-3.14159, 3.14159);
+                m_tagRotSB[t][ax]->setDecimals(6);
+                m_tagRotSB[t][ax]->setSingleStep(0.017453); // ~1°
+                m_tagRotSB[t][ax]->setSuffix(" rad");
+            }
+            // Initialize with flat configuration defaults (will be updated by preset)
+            m_tagRotSB[t][0]->setValue(0.0);           // rx
+            m_tagRotSB[t][1]->setValue(3.141592653589793); // ry = π
+            m_tagRotSB[t][2]->setValue(0.0);           // rz
+
+            form->addRow(tr("rx (rad) :"), m_tagRotSB[t][0]);
+            form->addRow(tr("ry (rad) :"), m_tagRotSB[t][1]);
+            form->addRow(tr("rz (rad) :"), m_tagRotSB[t][2]);
             scrollVBox->addWidget(box);
         }
 
@@ -713,6 +731,15 @@ public:
         btnRow->addWidget(btnApply);
         vbox->addLayout(btnRow);
 
+        // Load saved configuration preference and apply it
+        const QString savedConfig = QSettings().value("tagFrameConfiguration", "Flat (v9)").toString();
+        int savedIndex = m_configCombo->findText(savedConfig);
+        if (savedIndex >= 0) {
+            m_configCombo->setCurrentIndex(savedIndex);
+        } else {
+            applyConfigurationPreset(0); // Default to flat if saved config not found
+        }
+
         // ── Connect configuration selector ──────────────────────────────────────
         connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                 this, [this](int index) {
@@ -726,10 +753,16 @@ public:
             emit movementThresholdsApplied(m_moveTransSB->value(), m_moveRotSB->value());
             for (int t = 0; t < 2; ++t) {
                 emit tagPositionApplied(t,
-                    m_tagSB[t][0]->value() / 1000.0,
-                    m_tagSB[t][1]->value() / 1000.0,
-                    m_tagSB[t][2]->value() / 1000.0);
+                    m_tagPosSB[t][0]->value() / 1000.0,
+                    m_tagPosSB[t][1]->value() / 1000.0,
+                    m_tagPosSB[t][2]->value() / 1000.0);
+                emit tagRotationApplied(t,
+                    m_tagRotSB[t][0]->value(),
+                    m_tagRotSB[t][1]->value(),
+                    m_tagRotSB[t][2]->value());
             }
+            // Save selected configuration
+            QSettings().setValue("tagFrameConfiguration", m_configCombo->currentText());
             accept();
         });
 
@@ -745,10 +778,16 @@ private:
             const double flat_tx[] = {0.2325, -0.0325};
             const double flat_ty[] = {0.100,  0.100};
             const double flat_tz[] = {0.171,  0.171};
+            const double flat_rx[] = {0.0, 0.0};
+            const double flat_ry[] = {3.141592653589793, 3.141592653589793}; // π
+            const double flat_rz[] = {0.0, 0.0};
             for (int t = 0; t < 2; ++t) {
-                m_tagSB[t][0]->setValue(flat_tx[t] * 1000.0);
-                m_tagSB[t][1]->setValue(flat_ty[t] * 1000.0);
-                m_tagSB[t][2]->setValue(flat_tz[t] * 1000.0);
+                m_tagPosSB[t][0]->setValue(flat_tx[t] * 1000.0);
+                m_tagPosSB[t][1]->setValue(flat_ty[t] * 1000.0);
+                m_tagPosSB[t][2]->setValue(flat_tz[t] * 1000.0);
+                m_tagRotSB[t][0]->setValue(flat_rx[t]);
+                m_tagRotSB[t][1]->setValue(flat_ry[t]);
+                m_tagRotSB[t][2]->setValue(flat_rz[t]);
             }
         }
         // Tilted configuration (v10) — 45° around X axis
@@ -756,10 +795,16 @@ private:
             const double tilted_tx[] = {0.2475, -0.0475};
             const double tilted_ty[] = {0.1077,  0.1077};
             const double tilted_tz[] = {0.1671,  0.1671};
+            const double tilted_rx[] = {0.785398163397448, 0.785398163397448}; // π/4 (45°)
+            const double tilted_ry[] = {3.141592653589793, 3.141592653589793}; // π
+            const double tilted_rz[] = {0.0, 0.0};
             for (int t = 0; t < 2; ++t) {
-                m_tagSB[t][0]->setValue(tilted_tx[t] * 1000.0);
-                m_tagSB[t][1]->setValue(tilted_ty[t] * 1000.0);
-                m_tagSB[t][2]->setValue(tilted_tz[t] * 1000.0);
+                m_tagPosSB[t][0]->setValue(tilted_tx[t] * 1000.0);
+                m_tagPosSB[t][1]->setValue(tilted_ty[t] * 1000.0);
+                m_tagPosSB[t][2]->setValue(tilted_tz[t] * 1000.0);
+                m_tagRotSB[t][0]->setValue(tilted_rx[t]);
+                m_tagRotSB[t][1]->setValue(tilted_ry[t]);
+                m_tagRotSB[t][2]->setValue(tilted_rz[t]);
             }
         }
     }
@@ -779,6 +824,7 @@ signals:
     void reprojThresholdApplied(double px);
     void movementThresholdsApplied(double transMm, double rotDeg);
     void tagPositionApplied(int tagId, double tx_m, double ty_m, double tz_m);
+    void tagRotationApplied(int tagId, double rx_rad, double ry_rad, double rz_rad);
 
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }
@@ -812,7 +858,8 @@ private:
     CalibSpinBox *m_reprojSB     = nullptr;
     CalibSpinBox *m_moveTransSB  = nullptr;
     CalibSpinBox *m_moveRotSB    = nullptr;
-    CalibSpinBox *m_tagSB[2][3] = {};
+    CalibSpinBox *m_tagPosSB[2][3] = {};
+    CalibSpinBox *m_tagRotSB[2][3] = {};
     QComboBox    *m_configCombo  = nullptr;
 };
 

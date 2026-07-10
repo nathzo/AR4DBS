@@ -79,6 +79,14 @@ static void saveTagPosition(int id, double tx, double ty, double tz)
     s.setValue(QString("tags/%1/tz").arg(id), tz);
 }
 
+static void saveTagRotation(int id, double rx, double ry, double rz)
+{
+    QSettings s;
+    s.setValue(QString("tags/%1/rx").arg(id), rx);
+    s.setValue(QString("tags/%1/ry").arg(id), ry);
+    s.setValue(QString("tags/%1/rz").arg(id), rz);
+}
+
 // Default DBS targets in Leksell frame coordinates (mm / degrees).
 static SurgicalPlan defaultTestPlan()
 {
@@ -699,6 +707,16 @@ void MainWindow::openSettings()
         QMetaObject::invokeMethod(m_controller,
             [this, tagId, tx, ty, tz]() {
                 m_controller->setTagPosition(tagId, tx, ty, tz);
+            },
+            Qt::QueuedConnection);
+    });
+
+    connect(dlg, QOverload<int, double, double, double>::of(&SettingsDialog::tagRotationApplied), this,
+            [this](int tagId, double rx, double ry, double rz) {
+        saveTagRotation(tagId, rx, ry, rz);
+        QMetaObject::invokeMethod(m_controller,
+            [this, tagId, rx, ry, rz]() {
+                m_controller->setTagRotation(tagId, rx, ry, rz);
             },
             Qt::QueuedConnection);
     });

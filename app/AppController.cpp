@@ -124,6 +124,21 @@ void AppController::setTagPosition(int tagId, double tx_m, double ty_m, double t
     }
 }
 
+void AppController::setTagRotation(int tagId, double rx_rad, double ry_rad, double rz_rad)
+{
+    for (auto &cfg : m_tagConfigs) {
+        if (cfg.id != tagId) continue;
+        // Convert Euler angles to rotation matrix
+        cv::Mat rvec = (cv::Mat_<double>(3, 1) << rx_rad, ry_rad, rz_rad);
+        cv::Mat tvec = cfg.t_frame_tag.clone();
+        cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
+        cv::Mat r_tmp;
+        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
+        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
+        break;
+    }
+}
+
 void AppController::setSurgicalPlan(const SurgicalPlan &plan)
 {
     DebugLogger::logEvent("AppController::setSurgicalPlan",

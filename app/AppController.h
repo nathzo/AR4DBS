@@ -51,6 +51,7 @@ public slots:
     void setReprojThreshold(double px);
     void setMovementThresholds(double transMm, double rotDeg);
     void setTagPosition(int tagId, double tx_m, double ty_m, double tz_m);
+    void setTagRotation(int tagId, double rx_rad, double ry_rad, double rz_rad);
 
 #ifdef Q_OS_IOS
     // ARKit path: pose is provided by ARKit instead of solvePnP every frame.
