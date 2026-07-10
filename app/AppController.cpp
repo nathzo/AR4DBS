@@ -1308,21 +1308,9 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
     cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
     cv::Mat p_tag = T_inv * p_leksell;
 
-    // Apply +45° rotation around X axis in tag frame
-    const double tiltAngle = 0.7853981633974483; // +45° in radians
-    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
-    double c = cos(tiltAngle), s = sin(tiltAngle);
-    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
-    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
-
-    cv::Mat p_tag_xyz = p_tag.rowRange(0, 3);
-    cv::Mat p_tag_rot = R_tilt * p_tag_xyz;
-
-    // Transform back to Leksell frame
-    cv::Mat p_tag_rot_4d = (cv::Mat_<double>(4, 1) << p_tag_rot.at<double>(0, 0),
-                                                       p_tag_rot.at<double>(1, 0),
-                                                       p_tag_rot.at<double>(2, 0), 1.0);
-    cv::Mat p_final = tag.T_frame_tag * p_tag_rot_4d;
+    // Transform back to Leksell frame using T_frame_tag which includes all rotation/translation
+    // from the calibrated tag configuration (rx, ry, rz, tx, ty, tz)
+    cv::Mat p_final = tag.T_frame_tag * p_tag;
 
     return cv::Point3d(p_final.at<double>(0, 0),
                        p_final.at<double>(1, 0),
