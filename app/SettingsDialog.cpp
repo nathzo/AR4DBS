@@ -28,6 +28,7 @@
 #include <QKeyEvent>
 #include <QCoreApplication>
 #include <QScreen>
+#include <QComboBox>
 
 // ── Comprehensive memory and system logging helper ────────────────────────────
 
@@ -541,6 +542,14 @@ class CalibrationSettingsDialog : public QDialog
 {
     Q_OBJECT
 public:
+    // Predefined configurations: flat and tilted
+    struct Configuration {
+        QString name;
+        double  tx_m[2];
+        double  ty_m[2];
+        double  tz_m[2];
+    };
+
     explicit CalibrationSettingsDialog(double             reprojThresh,
                                        double             moveTransMm,
                                        double             moveRotDeg,
@@ -561,7 +570,7 @@ public:
 
         auto *vbox = new QVBoxLayout(root);
         vbox->setContentsMargins(20, 60, 20, 30);
-        vbox->setSpacing(16);
+        vbox->setSpacing(0);
 
         auto *title = new QLabel(tr("Paramètres de calibration"), root);
         title->setAlignment(Qt::AlignCenter);
@@ -569,10 +578,51 @@ public:
             "color:white; font-size:18pt; font-weight:bold;");
         vbox->addWidget(title);
         vbox->addWidget(makeSeparator(root));
-        vbox->addSpacing(8);
+        vbox->addSpacing(16);
+
+        // ── Configuration selector ─────────────────────────────────────────────
+        auto *configRow = new QHBoxLayout;
+        configRow->setSpacing(12);
+        auto *configLbl = new QLabel(tr("Configuration :"), root);
+        configLbl->setStyleSheet(
+            "color:#e0e0e0; font-size:13pt;");
+
+        m_configCombo = new QComboBox(root);
+        m_configCombo->setStyleSheet(
+            "QComboBox { background:#2a2b2d; border:1px solid #444; border-radius:6px;"
+            "            color:#e0e0e0; font-size:13pt; padding:8px 10px; min-height:36px; }"
+            "QComboBox::drop-down { border:none; width:0; }"
+            "QComboBox QAbstractItemView { background:#2a2b2d; color:#e0e0e0;"
+            "                             border:1px solid #444; border-radius:6px; }");
+        m_configCombo->addItem("Flat (v9)");
+        m_configCombo->addItem("Tilted 45° (v10)");
+        m_configCombo->setCurrentIndex(0);
+
+        configRow->addWidget(configLbl);
+        configRow->addStretch(1);
+        configRow->addWidget(m_configCombo, 2);
+        vbox->addLayout(configRow);
+        vbox->addSpacing(16);
+
+        // ── Scrollable area for settings ────────────────────────────────────────
+        auto *scrollArea = new QScrollArea(root);
+        scrollArea->setStyleSheet(
+            "QScrollArea { border:none; background:transparent; }"
+            "QScrollBar:vertical { background:#0d0d0d; width:10px; }"
+            "QScrollBar::handle:vertical { background:#3a3a3c; border-radius:5px; min-height:30px; }"
+            "QScrollBar::handle:vertical:hover { background:#4a4a4c; }"
+            "QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical { border:none; }");
+        scrollArea->setWidgetResizable(true);
+
+        auto *scrollContent = new QWidget(scrollArea);
+        scrollContent->setObjectName("innerContent");
+        scrollContent->setStyleSheet("QWidget#innerContent { background:#0d0d0d; }");
+        auto *scrollVBox = new QVBoxLayout(scrollContent);
+        scrollVBox->setContentsMargins(0, 0, 0, 0);
+        scrollVBox->setSpacing(16);
 
         // ── Reprojection threshold ─────────────────────────────────────────────
-        auto *reprojBox = new QGroupBox(tr("Seuil d'erreur de reprojection"), root);
+        auto *reprojBox = new QGroupBox(tr("Seuil d'erreur de reprojection"), scrollContent);
         auto *reprojForm = new QFormLayout(reprojBox);
         reprojForm->setContentsMargins(16, 20, 16, 16);
         reprojForm->setVerticalSpacing(8);
@@ -586,10 +636,10 @@ public:
         m_reprojSB->setSuffix(" px");
         m_reprojSB->setValue(reprojThresh);
         reprojForm->addRow(tr("Seuil (px) :"), m_reprojSB);
-        vbox->addWidget(reprojBox);
+        scrollVBox->addWidget(reprojBox);
 
         // ── Movement thresholds (non-LiDAR recalibration trigger) ─────────────
-        auto *moveBox  = new QGroupBox(tr("Seuils de mouvement (recalibration)"), root);
+        auto *moveBox  = new QGroupBox(tr("Seuils de mouvement (recalibration)"), scrollContent);
         auto *moveForm = new QFormLayout(moveBox);
         moveForm->setContentsMargins(16, 20, 16, 16);
         moveForm->setVerticalSpacing(8);
@@ -612,12 +662,12 @@ public:
         m_moveRotSB->setValue(moveRotDeg);
         moveForm->addRow(tr("Rotation (°) :"), m_moveRotSB);
 
-        vbox->addWidget(moveBox);
+        scrollVBox->addWidget(moveBox);
 
         // ── Tag positions ──────────────────────────────────────────────────────
         const QString tagLabels[] = { tr("Tag 0 — gauche"), tr("Tag 1 — droit") };
         for (int t = 0; t < 2; ++t) {
-            auto *box  = new QGroupBox(tagLabels[t], root);
+            auto *box  = new QGroupBox(tagLabels[t], scrollContent);
             auto *form = new QFormLayout(box);
             form->setContentsMargins(16, 20, 16, 16);
             form->setVerticalSpacing(8);
@@ -639,10 +689,14 @@ public:
             form->addRow(tr("tx (mm) :"), m_tagSB[t][0]);
             form->addRow(tr("ty (mm) :"), m_tagSB[t][1]);
             form->addRow(tr("tz (mm) :"), m_tagSB[t][2]);
-            vbox->addWidget(box);
+            scrollVBox->addWidget(box);
         }
 
-        vbox->addStretch(1);
+        scrollVBox->addStretch(1);
+        scrollArea->setWidget(scrollContent);
+        vbox->addWidget(scrollArea, 1);
+
+        vbox->addSpacing(8);
         vbox->addWidget(makeSeparator(root));
         vbox->addSpacing(8);
 
@@ -658,6 +712,12 @@ public:
         btnRow->addWidget(btnCancel);
         btnRow->addWidget(btnApply);
         vbox->addLayout(btnRow);
+
+        // ── Connect configuration selector ──────────────────────────────────────
+        connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, [this](int index) {
+            applyConfigurationPreset(index);
+        });
 
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         connect(btnApply,  &QPushButton::clicked, this, [this]() {
@@ -675,6 +735,33 @@ public:
 
         // Prevent auto-focus of first spinbox on open
         btnCancel->setFocus();
+    }
+
+private:
+    void applyConfigurationPreset(int index)
+    {
+        // Flat configuration (v9)
+        if (index == 0) {
+            const double flat_tx[] = {0.2325, -0.0325};
+            const double flat_ty[] = {0.100,  0.100};
+            const double flat_tz[] = {0.171,  0.171};
+            for (int t = 0; t < 2; ++t) {
+                m_tagSB[t][0]->setValue(flat_tx[t] * 1000.0);
+                m_tagSB[t][1]->setValue(flat_ty[t] * 1000.0);
+                m_tagSB[t][2]->setValue(flat_tz[t] * 1000.0);
+            }
+        }
+        // Tilted configuration (v10) — 45° around X axis
+        else if (index == 1) {
+            const double tilted_tx[] = {0.2475, -0.0475};
+            const double tilted_ty[] = {0.1077,  0.1077};
+            const double tilted_tz[] = {0.1671,  0.1671};
+            for (int t = 0; t < 2; ++t) {
+                m_tagSB[t][0]->setValue(tilted_tx[t] * 1000.0);
+                m_tagSB[t][1]->setValue(tilted_ty[t] * 1000.0);
+                m_tagSB[t][2]->setValue(tilted_tz[t] * 1000.0);
+            }
+        }
     }
 
     ~CalibrationSettingsDialog()
@@ -726,6 +813,7 @@ private:
     CalibSpinBox *m_moveTransSB  = nullptr;
     CalibSpinBox *m_moveRotSB    = nullptr;
     CalibSpinBox *m_tagSB[2][3] = {};
+    QComboBox    *m_configCombo  = nullptr;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
