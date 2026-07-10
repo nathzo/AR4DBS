@@ -824,7 +824,6 @@ signals:
     void reprojThresholdApplied(double px);
     void movementThresholdsApplied(double transMm, double rotDeg);
     void tagPositionApplied(int tagId, double tx_m, double ty_m, double tz_m);
-    void tagRotationApplied(int tagId, double rx_rad, double ry_rad, double rz_rad);
 
 protected:
     void paintEvent(QPaintEvent *e) override { paintBlack(this, e); }

@@ -27,6 +27,7 @@ signals:
     void reprojThresholdChanged(double px);
     void movementThresholdsChanged(double transMm, double rotDeg);
     void tagPositionChanged(int tagId, double tx_m, double ty_m, double tz_m);
+    void tagRotationApplied(int tagId, double rx_rad, double ry_rad, double rz_rad);
     void arTestDepthOverlayChanged(bool enabled);
 
 protected:
