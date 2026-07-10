@@ -736,8 +736,15 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat rvec, tvec, R;
             PoseUtils::fromTransform(T_from_tags, rvec, tvec);
             cv::Rodrigues(rvec, R);
-            const double cosA = std::max(-1.0, std::min(1.0, -R.at<double>(2, 2)));
+
+            // Compute angle to the tag plane normal (accounting for rx, ry, rz rotations)
+            const TagConfig &cfg = m_tagConfigs[0];
+            cv::Mat tag_normal_leksell = (cv::Mat_<double>(3, 1) << 0, 0, 1);
+            cv::Mat tag_normal_leksell_rotated = cfg.R_frame_tag * tag_normal_leksell;
+            cv::Mat tag_normal_cam = R.t() * tag_normal_leksell_rotated;
+            const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
             dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
+
             dbgReprojPx = computeReprojError(detections, rvec, tvec);
         }
 
@@ -1189,7 +1196,13 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     cv::Mat rvec, tvec, R;
     PoseUtils::fromTransform(T_from_tags, rvec, tvec);
     cv::Rodrigues(rvec, R);
-    const double cosA = std::max(-1.0, std::min(1.0, -R.at<double>(2, 2)));
+
+    // Compute angle to the tag plane normal (accounting for rx, ry, rz rotations)
+    const TagConfig &cfg = m_tagConfigs[0];
+    cv::Mat tag_normal_leksell = (cv::Mat_<double>(3, 1) << 0, 0, 1);
+    cv::Mat tag_normal_leksell_rotated = cfg.R_frame_tag * tag_normal_leksell;
+    cv::Mat tag_normal_cam = R.t() * tag_normal_leksell_rotated;
+    const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
     const double angleDeg = std::acos(cosA) * 180.0 / M_PI;
 
     if (angleDeg < 175.0) return false;
