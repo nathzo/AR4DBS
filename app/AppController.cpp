@@ -739,39 +739,36 @@ void AppController::onARFrame(const cv::Mat &frame,
             dbgReprojPx = computeReprojError(detections, rvec, tvec);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
-            // Separate PnP using fixed marker-frame coordinates, no configuration involved
-            std::vector<cv::Point3f> objPts_marker;
-            std::vector<cv::Point2f> imgPts_marker;
-            {
-                const float h = m_markerSize / 2.f;
-                const cv::Point3f local[4] = {
-                    {-h,  h, 0.f}, { h,  h, 0.f},
-                    { h, -h, 0.f}, {-h, -h, 0.f}
-                };
-                for (const auto &det : detections) {
-                    if (det.corners.size() == 4) {
-                        for (int c = 0; c < 4; ++c) {
-                            objPts_marker.push_back(local[c]);
-                            imgPts_marker.push_back(det.corners[c]);
-                        }
-                    }
+            // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
+            std::vector<cv::Mat> rotations_marker;
+            for (const auto &det : detections) {
+                if (det.corners.size() == 4) {
+                    cv::Mat R_det;
+                    cv::Rodrigues(det.rvec, R_det);
+                    rotations_marker.push_back(R_det);
                 }
             }
 
-            if (objPts_marker.size() >= 4) {
-                cv::Mat rvec_angle, tvec_angle;
-                const bool ok = cv::solvePnP(
-                    objPts_marker, imgPts_marker, m_K, m_dist,
-                    rvec_angle, tvec_angle, false,
-                    cv::SOLVEPNP_IPPE_SQUARE);
-                if (ok) {
-                    cv::Mat R_cam_tag;
-                    cv::Rodrigues(rvec_angle, R_cam_tag);
-                    cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-                    cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal;
-                    const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
-                    dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
+            if (!rotations_marker.empty()) {
+                cv::Mat R_fused;
+                if (rotations_marker.size() == 1) {
+                    R_fused = rotations_marker[0].clone();
+                } else {
+                    // SO(3) averaging: sum rotation matrices and compute mean via SVD
+                    cv::Mat RSum = cv::Mat::zeros(3, 3, CV_64F);
+                    for (const auto &R : rotations_marker)
+                        RSum += R;
+                    cv::Mat U, S, Vt;
+                    cv::SVD::compute(RSum, S, U, Vt);
+                    if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+                    R_fused = U * Vt;
                 }
+
+                // Compute angle from fused camera-to-tag-marker rotation
+                cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
+                cv::Mat tag_normal_cam = R_fused.t() * tag_normal;
+                const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
+                dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
             }
         }
 
@@ -1225,40 +1222,37 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     cv::Rodrigues(rvec, R);
 
     // Compute angle to the tag plane normal (completely configuration-independent)
-    // Separate PnP using fixed marker-frame coordinates, no configuration involved
-    std::vector<cv::Point3f> objPts_marker;
-    std::vector<cv::Point2f> imgPts_marker;
-    {
-        const float h = m_markerSize / 2.f;
-        const cv::Point3f local[4] = {
-            {-h,  h, 0.f}, { h,  h, 0.f},
-            { h, -h, 0.f}, {-h, -h, 0.f}
-        };
-        for (const auto &det : detections) {
-            if (det.corners.size() == 4) {
-                for (int c = 0; c < 4; ++c) {
-                    objPts_marker.push_back(local[c]);
-                    imgPts_marker.push_back(det.corners[c]);
-                }
-            }
+    // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
+    std::vector<cv::Mat> rotations_marker;
+    for (const auto &det : detections) {
+        if (det.corners.size() == 4) {
+            cv::Mat R_det;
+            cv::Rodrigues(det.rvec, R_det);
+            rotations_marker.push_back(R_det);
         }
     }
 
     double angleDeg = 0.0;
-    if (objPts_marker.size() >= 4) {
-        cv::Mat rvec_angle, tvec_angle;
-        const bool ok = cv::solvePnP(
-            objPts_marker, imgPts_marker, m_K, m_dist,
-            rvec_angle, tvec_angle, false,
-            cv::SOLVEPNP_IPPE_SQUARE);
-        if (ok) {
-            cv::Mat R_cam_tag;
-            cv::Rodrigues(rvec_angle, R_cam_tag);
-            cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-            cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal;
-            const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
-            angleDeg = std::acos(cosA) * 180.0 / M_PI;
+    if (!rotations_marker.empty()) {
+        cv::Mat R_fused;
+        if (rotations_marker.size() == 1) {
+            R_fused = rotations_marker[0].clone();
+        } else {
+            // SO(3) averaging: sum rotation matrices and compute mean via SVD
+            cv::Mat RSum = cv::Mat::zeros(3, 3, CV_64F);
+            for (const auto &R : rotations_marker)
+                RSum += R;
+            cv::Mat U, S, Vt;
+            cv::SVD::compute(RSum, S, U, Vt);
+            if (cv::determinant(U * Vt) < 0) U.col(2) *= -1;
+            R_fused = U * Vt;
         }
+
+        // Compute angle from fused camera-to-tag-marker rotation
+        cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
+        cv::Mat tag_normal_cam = R_fused.t() * tag_normal;
+        const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
+        angleDeg = std::acos(cosA) * 180.0 / M_PI;
     }
 
     if (angleDeg < 175.0) return false;
