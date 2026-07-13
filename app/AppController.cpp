@@ -736,23 +736,43 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat rvec, tvec, R;
             PoseUtils::fromTransform(T_from_tags, rvec, tvec);
             cv::Rodrigues(rvec, R);
-
-            // Compute angle to the tag plane normal (configuration-independent)
-            // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
-            const TagConfig &cfg = m_tagConfigs[0];
-            cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-            cv::Mat r_cam_tag, t_cam_tag;
-            PoseUtils::fromTransform(T_cam_tag, r_cam_tag, t_cam_tag);
-            cv::Mat R_cam_tag;
-            cv::Rodrigues(r_cam_tag, R_cam_tag);
-
-            // Measure perpendicularity to physical tag markers, not to configured Leksell frame
-            cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-            cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal_tag;
-            const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
-            dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
-
             dbgReprojPx = computeReprojError(detections, rvec, tvec);
+
+            // Compute angle to the tag plane normal (completely configuration-independent)
+            // Separate PnP using fixed marker-frame coordinates, no configuration involved
+            std::vector<cv::Point3f> objPts_marker;
+            std::vector<cv::Point2f> imgPts_marker;
+            {
+                const float h = m_markerSize / 2.f;
+                const cv::Point3f local[4] = {
+                    {-h,  h, 0.f}, { h,  h, 0.f},
+                    { h, -h, 0.f}, {-h, -h, 0.f}
+                };
+                for (const auto &det : detections) {
+                    if (det.corners.size() == 4) {
+                        for (int c = 0; c < 4; ++c) {
+                            objPts_marker.push_back(local[c]);
+                            imgPts_marker.push_back(det.corners[c]);
+                        }
+                    }
+                }
+            }
+
+            if (objPts_marker.size() >= 4) {
+                cv::Mat rvec_angle, tvec_angle;
+                const bool ok = cv::solvePnP(
+                    objPts_marker, imgPts_marker, m_K, m_dist,
+                    rvec_angle, tvec_angle, false,
+                    cv::SOLVEPNP_IPPE_SQUARE);
+                if (ok) {
+                    cv::Mat R_cam_tag;
+                    cv::Rodrigues(rvec_angle, R_cam_tag);
+                    cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
+                    cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal;
+                    const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
+                    dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
+                }
+            }
         }
 
         if (meetsInitConditions(detections, T_from_tags)) {
@@ -1204,20 +1224,42 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     PoseUtils::fromTransform(T_from_tags, rvec, tvec);
     cv::Rodrigues(rvec, R);
 
-    // Compute angle to the tag plane normal (configuration-independent)
-    // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
-    const TagConfig &cfg = m_tagConfigs[0];
-    cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-    cv::Mat r_cam_tag, t_cam_tag;
-    PoseUtils::fromTransform(T_cam_tag, r_cam_tag, t_cam_tag);
-    cv::Mat R_cam_tag;
-    cv::Rodrigues(r_cam_tag, R_cam_tag);
+    // Compute angle to the tag plane normal (completely configuration-independent)
+    // Separate PnP using fixed marker-frame coordinates, no configuration involved
+    std::vector<cv::Point3f> objPts_marker;
+    std::vector<cv::Point2f> imgPts_marker;
+    {
+        const float h = m_markerSize / 2.f;
+        const cv::Point3f local[4] = {
+            {-h,  h, 0.f}, { h,  h, 0.f},
+            { h, -h, 0.f}, {-h, -h, 0.f}
+        };
+        for (const auto &det : detections) {
+            if (det.corners.size() == 4) {
+                for (int c = 0; c < 4; ++c) {
+                    objPts_marker.push_back(local[c]);
+                    imgPts_marker.push_back(det.corners[c]);
+                }
+            }
+        }
+    }
 
-    // Measure perpendicularity to physical tag markers, not to configured Leksell frame
-    cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-    cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal_tag;
-    const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
-    const double angleDeg = std::acos(cosA) * 180.0 / M_PI;
+    double angleDeg = 0.0;
+    if (objPts_marker.size() >= 4) {
+        cv::Mat rvec_angle, tvec_angle;
+        const bool ok = cv::solvePnP(
+            objPts_marker, imgPts_marker, m_K, m_dist,
+            rvec_angle, tvec_angle, false,
+            cv::SOLVEPNP_IPPE_SQUARE);
+        if (ok) {
+            cv::Mat R_cam_tag;
+            cv::Rodrigues(rvec_angle, R_cam_tag);
+            cv::Mat tag_normal = (cv::Mat_<double>(3, 1) << 0, 0, -1);
+            cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal;
+            const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
+            angleDeg = std::acos(cosA) * 180.0 / M_PI;
+        }
+    }
 
     if (angleDeg < 175.0) return false;
 
