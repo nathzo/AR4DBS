@@ -739,11 +739,11 @@ void AppController::onARFrame(const cv::Mat &frame,
 
             // Compute reproj error using UNROTATED tag positions (without frame rotation)
             // This verifies position accuracy independent of rotation calibration
-            const TagConfig &cfg = m_tagConfigs[0];
-            cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-            cv::Mat rvec_tag, tvec_tag;
-            PoseUtils::fromTransform(T_cam_tag, rvec_tag, tvec_tag);
-            dbgReprojPx = computeReprojErrorNoFrameRotation(detections, rvec_tag, tvec_tag);
+            cv::Mat T_cam_unrotated = cv::Mat::eye(4, 4, CV_64F);
+            T_from_tags(cv::Rect(3, 0, 1, 3)).copyTo(T_cam_unrotated(cv::Rect(3, 0, 1, 3)));
+            cv::Mat rvec_unrotated, tvec_unrotated;
+            PoseUtils::fromTransform(T_cam_unrotated, rvec_unrotated, tvec_unrotated);
+            dbgReprojPx = computeReprojErrorNoFrameRotation(detections, rvec_unrotated, tvec_unrotated);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
             // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
@@ -1266,12 +1266,12 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
 
     // Compute reproj error using UNROTATED tag positions (without frame rotation)
     // This verifies position accuracy independent of rotation calibration
-    const TagConfig &cfg = m_tagConfigs[0];
-    cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-    cv::Mat rvec_tag, tvec_tag;
-    PoseUtils::fromTransform(T_cam_tag, rvec_tag, tvec_tag);
+    cv::Mat T_cam_unrotated = cv::Mat::eye(4, 4, CV_64F);
+    T_from_tags(cv::Rect(3, 0, 1, 3)).copyTo(T_cam_unrotated(cv::Rect(3, 0, 1, 3)));
+    cv::Mat rvec_unrotated, tvec_unrotated;
+    PoseUtils::fromTransform(T_cam_unrotated, rvec_unrotated, tvec_unrotated);
 
-    return computeReprojErrorNoFrameRotation(detections, rvec_tag, tvec_tag) <= m_maxInitReprojPx;
+    return computeReprojErrorNoFrameRotation(detections, rvec_unrotated, tvec_unrotated) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
@@ -1339,7 +1339,9 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
         for (int c = 0; c < 4; ++c) {
             const cv::Mat p = (cv::Mat_<double>(3,1)
                 << local[c].x, local[c].y, local[c].z);
-            // DIFFERENCE: use marker frame coordinates directly (no R_frame_tag rotation)
+            // DIFFERENCE: apply TRANSLATION ONLY (no R_frame_tag rotation)
+            // Original: pf = cfg->R_frame_tag * p + cfg->t_frame_tag (with rotation)
+            // This version: pf = p + cfg->t_frame_tag (translation only)
             const cv::Mat pf = p + cfg->t_frame_tag.reshape(1, 3);
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
