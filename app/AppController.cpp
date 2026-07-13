@@ -737,13 +737,10 @@ void AppController::onARFrame(const cv::Mat &frame,
             PoseUtils::fromTransform(T_from_tags, rvec, tvec);
             cv::Rodrigues(rvec, R);
 
-            // Compute angle to the tag plane normal (accounting for rx, ry, rz rotations)
-            // R_cam_to_lek = R * R_frame_tag, so R_cam_to_lek.t() = R_frame_tag.t() * R.t()
-            const TagConfig &cfg = m_tagConfigs[0];
+            // Compute angle to the tag plane normal (configuration-independent)
+            // Measure perpendicularity to physical tag markers, not to configured Leksell frame
             cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-            cv::Mat tag_normal_leksell = cfg.R_frame_tag * tag_normal_tag;
-            cv::Mat R_cam_to_lek_t = cfg.R_frame_tag.t() * R.t();
-            cv::Mat tag_normal_cam = R_cam_to_lek_t * tag_normal_leksell;
+            cv::Mat tag_normal_cam = R.t() * tag_normal_tag;
             const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
             dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
 
@@ -1199,13 +1196,10 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     PoseUtils::fromTransform(T_from_tags, rvec, tvec);
     cv::Rodrigues(rvec, R);
 
-    // Compute angle to the tag plane normal (accounting for rx, ry, rz rotations)
-    // R_cam_to_lek = R * R_frame_tag, so R_cam_to_lek.t() = R_frame_tag.t() * R.t()
-    const TagConfig &cfg = m_tagConfigs[0];
+    // Compute angle to the tag plane normal (configuration-independent)
+    // Measure perpendicularity to physical tag markers, not to configured Leksell frame
     cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-    cv::Mat tag_normal_leksell = cfg.R_frame_tag * tag_normal_tag;
-    cv::Mat R_cam_to_lek_t = cfg.R_frame_tag.t() * R.t();
-    cv::Mat tag_normal_cam = R_cam_to_lek_t * tag_normal_leksell;
+    cv::Mat tag_normal_cam = R.t() * tag_normal_tag;
     const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
     const double angleDeg = std::acos(cosA) * 180.0 / M_PI;
 
