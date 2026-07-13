@@ -738,9 +738,17 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Rodrigues(rvec, R);
 
             // Compute angle to the tag plane normal (configuration-independent)
+            // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
+            const TagConfig &cfg = m_tagConfigs[0];
+            cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
+            cv::Mat r_cam_tag;
+            PoseUtils::fromTransform(T_cam_tag, r_cam_tag, tvec);
+            cv::Mat R_cam_tag;
+            cv::Rodrigues(r_cam_tag, R_cam_tag);
+
             // Measure perpendicularity to physical tag markers, not to configured Leksell frame
             cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-            cv::Mat tag_normal_cam = R.t() * tag_normal_tag;
+            cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal_tag;
             const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
             dbgAngleDeg = std::acos(cosA) * 180.0 / M_PI;
 
@@ -1197,9 +1205,17 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     cv::Rodrigues(rvec, R);
 
     // Compute angle to the tag plane normal (configuration-independent)
+    // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
+    const TagConfig &cfg = m_tagConfigs[0];
+    cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
+    cv::Mat r_cam_tag;
+    PoseUtils::fromTransform(T_cam_tag, r_cam_tag, tvec);
+    cv::Mat R_cam_tag;
+    cv::Rodrigues(r_cam_tag, R_cam_tag);
+
     // Measure perpendicularity to physical tag markers, not to configured Leksell frame
     cv::Mat tag_normal_tag = (cv::Mat_<double>(3, 1) << 0, 0, -1);
-    cv::Mat tag_normal_cam = R.t() * tag_normal_tag;
+    cv::Mat tag_normal_cam = R_cam_tag.t() * tag_normal_tag;
     const double cosA = std::max(-1.0, std::min(1.0, -tag_normal_cam.at<double>(2, 0)));
     const double angleDeg = std::acos(cosA) * 180.0 / M_PI;
 
