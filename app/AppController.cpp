@@ -741,8 +741,8 @@ void AppController::onARFrame(const cv::Mat &frame,
             // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
             const TagConfig &cfg = m_tagConfigs[0];
             cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-            cv::Mat r_cam_tag;
-            PoseUtils::fromTransform(T_cam_tag, r_cam_tag, tvec);
+            cv::Mat r_cam_tag, t_cam_tag;
+            PoseUtils::fromTransform(T_cam_tag, r_cam_tag, t_cam_tag);
             cv::Mat R_cam_tag;
             cv::Rodrigues(r_cam_tag, R_cam_tag);
 
@@ -1208,8 +1208,8 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     // Transform camera-to-Leksell pose back to camera-to-tag-marker frame
     const TagConfig &cfg = m_tagConfigs[0];
     cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
-    cv::Mat r_cam_tag;
-    PoseUtils::fromTransform(T_cam_tag, r_cam_tag, tvec);
+    cv::Mat r_cam_tag, t_cam_tag;
+    PoseUtils::fromTransform(T_cam_tag, r_cam_tag, t_cam_tag);
     cv::Mat R_cam_tag;
     cv::Rodrigues(r_cam_tag, R_cam_tag);
 
