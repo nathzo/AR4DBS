@@ -122,6 +122,9 @@ private:
     double computeReprojError(const std::vector<TagPose>  &detections,
                               const cv::Mat               &rvec,
                               const cv::Mat               &tvec) const;
+    double computeReprojErrorNoFrameRotation(const std::vector<TagPose>  &detections,
+                                             const cv::Mat               &rvec,
+                                             const cv::Mat               &tvec) const;
 #endif
 
     cv::Point3d applyTagFrameRotation(const cv::Point3d &point_leksell) const;
