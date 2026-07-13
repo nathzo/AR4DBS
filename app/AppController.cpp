@@ -743,30 +743,7 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat T_cam_tag = cfg.T_frame_tag.inv() * T_from_tags;
             cv::Mat rvec_tag, tvec_tag;
             PoseUtils::fromTransform(T_cam_tag, rvec_tag, tvec_tag);
-
-            std::vector<cv::Point3f> marker_points;
-            std::vector<cv::Point2f> projected_2d;
-            const float h = m_markerSize / 2.f;
-            const cv::Point3f local[4] = {
-                {-h,  h, 0.f}, { h,  h, 0.f},
-                { h, -h, 0.f}, {-h, -h, 0.f}
-            };
-
-            double totalError = 0.0;
-            int pointCount = 0;
-            for (const auto &det : detections) {
-                if (det.corners.size() == 4) {
-                    marker_points.assign(local, local + 4);
-                    cv::projectPoints(marker_points, rvec_tag, tvec_tag, m_K, m_dist, projected_2d);
-                    for (int c = 0; c < 4; ++c) {
-                        double dx = projected_2d[c].x - det.corners[c].x;
-                        double dy = projected_2d[c].y - det.corners[c].y;
-                        totalError += std::sqrt(dx*dx + dy*dy);
-                        pointCount++;
-                    }
-                }
-            }
-            dbgReprojPx = (pointCount > 0) ? (totalError / pointCount) : 0.0;
+            dbgReprojPx = computeReprojError(detections, rvec_tag, tvec_tag);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
             // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
@@ -1294,31 +1271,7 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
     cv::Mat rvec_tag, tvec_tag;
     PoseUtils::fromTransform(T_cam_tag, rvec_tag, tvec_tag);
 
-    std::vector<cv::Point3f> marker_points;
-    std::vector<cv::Point2f> projected_2d;
-    const float h = m_markerSize / 2.f;
-    const cv::Point3f local[4] = {
-        {-h,  h, 0.f}, { h,  h, 0.f},
-        { h, -h, 0.f}, {-h, -h, 0.f}
-    };
-
-    double totalError = 0.0;
-    int pointCount = 0;
-    for (const auto &det : detections) {
-        if (det.corners.size() == 4) {
-            marker_points.assign(local, local + 4);
-            cv::projectPoints(marker_points, rvec_tag, tvec_tag, m_K, m_dist, projected_2d);
-            for (int c = 0; c < 4; ++c) {
-                double dx = projected_2d[c].x - det.corners[c].x;
-                double dy = projected_2d[c].y - det.corners[c].y;
-                totalError += std::sqrt(dx*dx + dy*dy);
-                pointCount++;
-            }
-        }
-    }
-    double reprojError = (pointCount > 0) ? (totalError / pointCount) : 0.0;
-
-    return reprojError <= m_maxInitReprojPx;
+    return computeReprojError(detections, rvec_tag, tvec_tag) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
