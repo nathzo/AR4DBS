@@ -130,11 +130,12 @@ void AppController::setTagRotation(int tagId, double rx_rad, double ry_rad, doub
         if (cfg.id != tagId) continue;
         // Convert Euler angles to rotation matrix
         cv::Mat rvec = (cv::Mat_<double>(3, 1) << rx_rad, ry_rad, rz_rad);
+        // Preserve current position: only update rotation, not translation
         cv::Mat tvec = cfg.t_frame_tag.clone();
         cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
-        cv::Mat r_tmp;
-        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
-        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
+        // Update rotation matrix directly without re-extracting position
+        cv::Rodrigues(rvec, cfg.R_frame_tag);
+        // Position remains unchanged — cfg.t_frame_tag is NOT re-extracted
         break;
     }
 }
