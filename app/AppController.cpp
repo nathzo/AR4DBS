@@ -737,9 +737,10 @@ void AppController::onARFrame(const cv::Mat &frame,
             PoseUtils::fromTransform(T_from_tags, rvec, tvec);
             cv::Rodrigues(rvec, R);
 
-            // Compute reproj error using individual camera-to-tag-marker poses (naturally unrotated)
-            // This verifies position accuracy independent of frame rotation calibration
-            dbgReprojPx = computeReprojErrorNoFrameRotation(detections);
+            // Compute reproj error without frame rotation: same as computeReprojError but uses
+            // only position (t_frame_tag), ignoring rotation (R_frame_tag). This verifies that
+            // tags are at correct positions, but isn't affected by rotation calibration errors.
+            dbgReprojPx = computeReprojErrorNoFrameRotation(detections, rvec, tvec);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
             // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
@@ -1260,9 +1261,10 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
 
     if (angleDeg < 175.0) return false;
 
-    // Compute reproj error using individual camera-to-tag-marker poses (naturally unrotated)
-    // This verifies position accuracy independent of frame rotation calibration
-    return computeReprojErrorNoFrameRotation(detections) <= m_maxInitReprojPx;
+    // Compute reproj error without frame rotation: same as computeReprojError but uses
+    // only position (t_frame_tag), ignoring rotation (R_frame_tag). This verifies that
+    // tags are at correct positions, but isn't affected by rotation calibration errors.
+    return computeReprojErrorNoFrameRotation(detections, rvec, tvec) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
@@ -1309,36 +1311,41 @@ double AppController::computeReprojError(const std::vector<TagPose> &detections,
     return std::sqrt(err / projected.size());
 }
 
-double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections) const
+double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections,
+                                                         const cv::Mat              &rvec,
+                                                         const cv::Mat              &tvec) const
 {
-    // Use individual camera-to-tag-marker poses (det.rvec, det.tvec) which are naturally unrotated
-    // Each detection has its own pose, so we compute error for each tag separately then combine
+    std::vector<cv::Point3f> objPts;
     std::vector<cv::Point2f> imgPts;
-    std::vector<cv::Point2f> projected;
-
-    const float h = m_markerSize / 2.f;
-    const cv::Point3f local[4] = {
-        {-h,  h, 0.f}, { h,  h, 0.f},
-        { h, -h, 0.f}, {-h, -h, 0.f}
-    };
 
     for (const auto &det : detections) {
-        if (det.corners.size() != 4) continue;
+        const TagConfig *cfg = nullptr;
+        for (const auto &c : m_tagConfigs)
+            if (c.id == det.id) { cfg = &c; break; }
+        if (!cfg || det.corners.size() != 4) continue;
 
-        // Use this detection's individual camera-to-tag-marker pose (already unrotated!)
-        std::vector<cv::Point3f> objPts_tag;
+        const float h = m_markerSize / 2.f;
+        const cv::Point3f local[4] = {
+            {-h,  h, 0.f}, { h,  h, 0.f},
+            { h, -h, 0.f}, {-h, -h, 0.f}
+        };
         for (int c = 0; c < 4; ++c) {
-            objPts_tag.push_back(local[c]);
+            const cv::Mat p = (cv::Mat_<double>(3,1)
+                << local[c].x, local[c].y, local[c].z);
+            // Same as computeReprojError but WITHOUT the rotation: no cfg->R_frame_tag multiplication
+            const cv::Mat pf = p + cfg->t_frame_tag.reshape(1, 3);
+            objPts.emplace_back(
+                static_cast<float>(pf.at<double>(0)),
+                static_cast<float>(pf.at<double>(1)),
+                static_cast<float>(pf.at<double>(2)));
             imgPts.push_back(det.corners[c]);
         }
-
-        std::vector<cv::Point2f> proj_tag;
-        cv::projectPoints(objPts_tag, det.rvec, det.tvec, m_K, m_dist, proj_tag);
-        for (const auto &p : proj_tag)
-            projected.push_back(p);
     }
 
-    if (projected.empty()) return 1e9;
+    if (objPts.empty()) return 1e9;
+
+    std::vector<cv::Point2f> projected;
+    cv::projectPoints(objPts, rvec, tvec, m_K, m_dist, projected);
 
     double err = 0.0;
     for (size_t i = 0; i < projected.size(); ++i) {
