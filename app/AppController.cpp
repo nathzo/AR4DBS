@@ -1340,19 +1340,14 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
         const auto obj = entry.toObject();
         TagConfig cfg;
         cfg.id = obj["id"].toInt();
-        cfg.rx_rad = obj["rx_rad"].toDouble(0);
-        cfg.ry_rad = obj["ry_rad"].toDouble(0);
-        cfg.rz_rad = obj["rz_rad"].toDouble(0);
-        // Subtract π from ry systematically to remove the 180° offset
-        double ry_adjusted = cfg.ry_rad - M_PI;
-        cv::Mat rvec = (cv::Mat_<double>(3,1) << cfg.rx_rad, ry_adjusted, cfg.rz_rad);
-        // Load position as independent (3, 1) directly from JSON — NOT derived from T_frame_tag
-        cfg.t_frame_tag = (cv::Mat_<double>(3,1)
+        cv::Mat rvec = (cv::Mat_<double>(3,1)
+            << obj["rx_rad"].toDouble(0), obj["ry_rad"].toDouble(0), obj["rz_rad"].toDouble(0));
+        cv::Mat tvec = (cv::Mat_<double>(3,1)
             << obj["tx_m"].toDouble(0), obj["ty_m"].toDouble(0), obj["tz_m"].toDouble(0));
-        // Create T_frame_tag from independent components (all rotations with ry offset by -π)
-        cfg.T_frame_tag = PoseUtils::toTransform(rvec, cfg.t_frame_tag);
-        // Rotation matrix directly from adjusted rvec — NOT derived from T_frame_tag decomposition
-        cv::Rodrigues(rvec, cfg.R_frame_tag);
+        cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
+        cv::Mat r_tmp;
+        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
+        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
         configs.push_back(std::move(cfg));
     }
     return configs;
@@ -1382,9 +1377,21 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
     cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
     cv::Mat p_tag = T_inv * p_leksell;
 
-    // Transform back to Leksell frame using T_frame_tag which includes all rotation/translation
-    // from the calibrated tag configuration (rx, ry-π, rz, tx, ty, tz)
-    cv::Mat p_final = tag.T_frame_tag * p_tag;
+    // Apply +45° rotation around X axis in tag frame
+    const double tiltAngle = 0.7853981633974483; // +45° in radians
+    cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
+    double c = cos(tiltAngle), s = sin(tiltAngle);
+    R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
+    R_tilt.at<double>(2, 1) = s;   R_tilt.at<double>(2, 2) = c;
+
+    cv::Mat p_tag_xyz = p_tag.rowRange(0, 3);
+    cv::Mat p_tag_rot = R_tilt * p_tag_xyz;
+
+    // Transform back to Leksell frame
+    cv::Mat p_tag_rot_4d = (cv::Mat_<double>(4, 1) << p_tag_rot.at<double>(0, 0),
+                                                       p_tag_rot.at<double>(1, 0),
+                                                       p_tag_rot.at<double>(2, 0), 1.0);
+    cv::Mat p_final = tag.T_frame_tag * p_tag_rot_4d;
 
     return cv::Point3d(p_final.at<double>(0, 0),
                        p_final.at<double>(1, 0),

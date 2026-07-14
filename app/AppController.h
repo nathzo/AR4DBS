@@ -22,10 +22,9 @@ struct TagPose;
 
 struct TagConfig {
     int     id;
-    cv::Mat T_frame_tag; // 4x4 CV_64F homogeneous transform (with all rx, ry-π, rz rotations)
+    cv::Mat T_frame_tag; // 4x4 CV_64F homogeneous transform
     cv::Mat R_frame_tag; // 3x3 rotation  (precomputed from T_frame_tag)
     cv::Mat t_frame_tag; // 3x1 translation (precomputed from T_frame_tag)
-    double  rx_rad = 0.0, ry_rad = 0.0, rz_rad = 0.0; // individual rotation angles (as specified in JSON)
 };
 
 class AppController : public QObject
