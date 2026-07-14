@@ -1354,29 +1354,30 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
 
     const TagConfig &tag = m_tagConfigs[0]; // use first tag as reference frame
 
-    // T_frame_tag transforms from tag frame to Leksell frame
-    // We need the inverse: from Leksell to tag frame
-    cv::Mat T_inv = cv::Mat::zeros(4, 4, CV_64F);
-    T_inv.at<double>(3, 3) = 1.0;
+    // Apply rotation around tag origin:
+    // 1. Translate point to tag frame origin (subtract tag position)
+    // 2. Apply rotation (R_frame_tag)
+    // 3. Translate back to Leksell (add tag position)
 
-    // Invert: R_inv = R^T, t_inv = -R^T * t
-    cv::Mat R = tag.T_frame_tag.rowRange(0, 3).colRange(0, 3);
-    cv::Mat t = tag.T_frame_tag.rowRange(0, 3).col(3);
-    cv::Mat R_inv = R.t();
-    cv::Mat t_inv = -R_inv * t;
+    // Extract tag position (t_frame_tag is a 3x1 matrix)
+    cv::Mat t_tag = tag.t_frame_tag;
+    if (t_tag.rows == 1 && t_tag.cols == 3) {
+        t_tag = t_tag.t();
+    }
 
-    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
-    t_inv.copyTo(T_inv.rowRange(0, 3).col(3));
+    // Point relative to tag origin
+    cv::Mat p_rel = (cv::Mat_<double>(3, 1)
+        << point_leksell.x - t_tag.at<double>(0),
+           point_leksell.y - t_tag.at<double>(1),
+           point_leksell.z - t_tag.at<double>(2));
 
-    // Transform to tag frame
-    cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
-    cv::Mat p_tag = T_inv * p_leksell;
+    // Apply rotation
+    cv::Mat p_rotated = tag.R_frame_tag * p_rel;
 
-    // Transform back to Leksell frame using T_frame_tag which includes all rotation/translation
-    // from the calibrated tag configuration (rx, ry, rz, tx, ty, tz)
-    cv::Mat p_final = tag.T_frame_tag * p_tag;
+    // Transform back to absolute Leksell coordinates
+    cv::Mat p_final = p_rotated + t_tag;
 
-    return cv::Point3d(p_final.at<double>(0, 0),
-                       p_final.at<double>(1, 0),
-                       p_final.at<double>(2, 0));
+    return cv::Point3d(p_final.at<double>(0),
+                       p_final.at<double>(1),
+                       p_final.at<double>(2));
 }
