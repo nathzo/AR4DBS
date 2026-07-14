@@ -1365,9 +1365,12 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
         // - Reproj error STILL verifies that tags are at configured positions ✓
         // - Reproj error is NOT affected by rotation calibration (uses detected rotation) ✓
 
-        // Derive marker-to-Leksell rotation: R_fused * R_det
-        // Chain: marker → camera (R_det) → Leksell (R_fused)
-        cv::Mat R_marker_leksell = R_fused * R_det;
+        // Derive marker-to-Leksell rotation
+        // R_det: marker-to-camera (from solvePnP)
+        // R_fused: Leksell-to-camera (from T_from_tags decomposition)
+        // R_fused.t(): camera-to-Leksell (inverse)
+        // Chain: marker → camera (R_det) → Leksell (R_fused.t())
+        cv::Mat R_marker_leksell = R_det * R_fused.t();
 
         // Use configured position directly (position is absolute, independent of rotation)
         cv::Mat t_col = cfg->t_frame_tag.clone();
