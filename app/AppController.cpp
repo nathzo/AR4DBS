@@ -1318,11 +1318,23 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
     std::vector<cv::Point3f> objPts;
     std::vector<cv::Point2f> imgPts;
 
+    // Extract fused camera-to-Leksell rotation
+    cv::Mat R_fused;
+    cv::Rodrigues(rvec, R_fused);
+
     for (const auto &det : detections) {
         const TagConfig *cfg = nullptr;
         for (const auto &c : m_tagConfigs)
             if (c.id == det.id) { cfg = &c; break; }
         if (!cfg || det.corners.size() != 4) continue;
+
+        // Extract detected camera-to-marker rotation
+        cv::Mat R_det;
+        cv::Rodrigues(det.rvec, R_det);
+
+        // Derive marker-to-Leksell rotation: R_fused.t() * R_det
+        // This correctly orients the marker in Leksell space without using cfg->R_frame_tag
+        cv::Mat R_marker_leksell = R_fused.t() * R_det;
 
         const float h = m_markerSize / 2.f;
         const cv::Point3f local[4] = {
@@ -1332,8 +1344,9 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
         for (int c = 0; c < 4; ++c) {
             const cv::Mat p = (cv::Mat_<double>(3,1)
                 << local[c].x, local[c].y, local[c].z);
-            // Same as computeReprojError but WITHOUT the rotation: no cfg->R_frame_tag multiplication
-            const cv::Mat pf = p + cfg->t_frame_tag.reshape(1, 3);
+            // Transform marker corner to Leksell using derived rotation + configured position
+            // This verifies inter-tag positions without being affected by configured rotation errors
+            const cv::Mat pf = R_marker_leksell * p + cfg->t_frame_tag.reshape(1, 3);
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
                 static_cast<float>(pf.at<double>(1)),
