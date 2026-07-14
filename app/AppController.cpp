@@ -1288,7 +1288,12 @@ double AppController::computeReprojError(const std::vector<TagPose> &detections,
         for (int c = 0; c < 4; ++c) {
             const cv::Mat p = (cv::Mat_<double>(3,1)
                 << local[c].x, local[c].y, local[c].z);
-            const cv::Mat pf = cfg->R_frame_tag * p + cfg->t_frame_tag.reshape(1, 3);
+            // Ensure proper shape for matrix addition
+            cv::Mat t_col = cfg->t_frame_tag.clone();
+            if (t_col.rows == 1 && t_col.cols == 3) {
+                t_col = t_col.t();  // Transpose (1, 3) to (3, 1)
+            }
+            const cv::Mat pf = cfg->R_frame_tag * p + t_col;
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
                 static_cast<float>(pf.at<double>(1)),
@@ -1346,7 +1351,12 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
                 << local[c].x, local[c].y, local[c].z);
             // Transform marker corner to Leksell using derived rotation + configured position
             // This verifies inter-tag positions without being affected by configured rotation errors
-            const cv::Mat pf = R_marker_leksell * p + cfg->t_frame_tag.reshape(3, 1);
+            // Ensure proper shape for matrix addition: both must be (3, 1)
+            cv::Mat t_col = cfg->t_frame_tag.clone();
+            if (t_col.rows == 1 && t_col.cols == 3) {
+                t_col = t_col.t();  // Transpose (1, 3) to (3, 1)
+            }
+            const cv::Mat pf = R_marker_leksell * p + t_col;
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
                 static_cast<float>(pf.at<double>(1)),
