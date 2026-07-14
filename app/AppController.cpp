@@ -1346,7 +1346,7 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
                 << local[c].x, local[c].y, local[c].z);
             // Transform marker corner to Leksell using derived rotation + configured position
             // This verifies inter-tag positions without being affected by configured rotation errors
-            const cv::Mat pf = R_marker_leksell * p + cfg->t_frame_tag.reshape(1, 3);
+            const cv::Mat pf = R_marker_leksell * p + cfg->t_frame_tag.reshape(3, 1);
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
                 static_cast<float>(pf.at<double>(1)),
