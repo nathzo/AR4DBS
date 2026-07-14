@@ -13,7 +13,6 @@ class SettingsDialog : public QDialog
     Q_OBJECT
 public:
     explicit SettingsDialog(const OverlayRenderer::Style &currentStyle,
-                            double                        currentReprojThreshold,
                             double                        currentMoveTransMm,
                             double                        currentMoveRotDeg,
                             const TagPositions           &currentTagPositions,
@@ -24,7 +23,6 @@ public:
 
 signals:
     void styleChanged(OverlayRenderer::Style style);
-    void reprojThresholdChanged(double px);
     void movementThresholdsChanged(double transMm, double rotDeg);
     void tagPositionChanged(int tagId, double tx_m, double ty_m, double tz_m);
     void tagRotationChanged(int tagId, double rx_rad, double ry_rad, double rz_rad);
@@ -36,7 +34,6 @@ protected:
 
 private:
     OverlayRenderer::Style m_style;
-    double                 m_reprojThreshold = 1.0;
     double                 m_moveTransMm     = 10.0;
     double                 m_moveRotDeg      = 1.0;
     TagPositions           m_tagPositions;

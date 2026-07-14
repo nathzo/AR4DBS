@@ -28,7 +28,6 @@
 // ── Persistent settings helpers ───────────────────────────────────────────────
 
 static void loadPersistedSettings(OverlayRenderer::Style &style,
-                                   double                 &reprojThreshold,
                                    double                 &moveTransMm,
                                    double                 &moveRotDeg,
                                    TagPositions           &tags)
@@ -40,7 +39,6 @@ static void loadPersistedSettings(OverlayRenderer::Style &style,
                                          style.incisionColor.name()).toString());
     style.targetColor   = QColor(s.value("style/targetColor",
                                          style.targetColor.name()).toString());
-    reprojThreshold = s.value("calib/reprojThreshold", reprojThreshold).toDouble();
     moveTransMm     = s.value("calib/moveTransMm",     moveTransMm).toDouble();
     moveRotDeg      = s.value("calib/moveRotDeg",      moveRotDeg).toDouble();
     for (int t = 0; t < 2; ++t) {
@@ -56,12 +54,6 @@ static void saveStyle(const OverlayRenderer::Style &style)
     s.setValue("style/lineColor",     style.lineColor.name());
     s.setValue("style/incisionColor", style.incisionColor.name());
     s.setValue("style/targetColor",   style.targetColor.name());
-}
-
-static void saveReprojThreshold(double px)
-{
-    QSettings s;
-    s.setValue("calib/reprojThreshold", px);
 }
 
 static void saveMovementThresholds(double transMm, double rotDeg)
@@ -278,7 +270,7 @@ MainWindow::MainWindow(QWidget *parent)
     const QString depthModel; // LiDAR provides depth natively on iOS
 #endif
 
-    loadPersistedSettings(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg, m_tagPositions);
+    loadPersistedSettings(m_renderStyle, m_moveTransMm, m_moveRotDeg, m_tagPositions);
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
 #ifdef Q_OS_IOS
     m_hasLidar = ARKitSession::isLidarAvailable();
@@ -312,7 +304,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Push persisted values over the JSON defaults that init() loaded
     m_controller->setRenderStyle(m_renderStyle);
-    m_controller->setReprojThreshold(m_reprojThreshold);
     m_controller->setMovementThresholds(m_moveTransMm, m_moveRotDeg);
     for (int t = 0; t < 2; ++t)
         m_controller->setTagPosition(t, m_tagPositions.tx_m[t],
@@ -658,7 +649,7 @@ void MainWindow::openSettings()
 {
     DebugLogger::logEvent("MainWindow", "openSettings: creating SettingsDialog");
     m_arTestDepthOverlay = QSettings().value("arTestDepthOverlay", true).toBool();
-    auto *dlg = new SettingsDialog(m_renderStyle, m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
+    auto *dlg = new SettingsDialog(m_renderStyle, m_moveTransMm, m_moveRotDeg,
                                    m_tagPositions, m_hasLidar, m_arTestDepthOverlay, this);
 
     connect(dlg, &SettingsDialog::styleChanged, this,
@@ -667,15 +658,6 @@ void MainWindow::openSettings()
         saveStyle(style);
         QMetaObject::invokeMethod(m_controller,
             [this, style]() { m_controller->setRenderStyle(style); },
-            Qt::QueuedConnection);
-    });
-
-    connect(dlg, &SettingsDialog::reprojThresholdChanged, this,
-            [this](double px) {
-        m_reprojThreshold = px;
-        saveReprojThreshold(px);
-        QMetaObject::invokeMethod(m_controller,
-            [this, px]() { m_controller->setReprojThreshold(px); },
             Qt::QueuedConnection);
     });
 

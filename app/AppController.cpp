@@ -99,11 +99,6 @@ void AppController::setRenderStyle(OverlayRenderer::Style style)
     if (m_renderer) m_renderer->setStyle(style);
 }
 
-void AppController::setReprojThreshold(double px)
-{
-    m_maxInitReprojPx = px;
-}
-
 void AppController::setMovementThresholds(double transMm, double rotDeg)
 {
     m_moveTransThresh = transMm / 1000.0;
@@ -727,7 +722,6 @@ void AppController::onARFrame(const cv::Mat &frame,
     // Debug metrics populated during init phase; displayed in depth-overlay panel.
     int    dbgCorners  = 0;
     double dbgAngleDeg = -1.0; // negative = not computable (no pose)
-    double dbgReprojPx = -1.0;
 
     if (m_T_world_leksell.empty()) {
         // Init phase: detect tags and test quality conditions for locking.
@@ -741,11 +735,6 @@ void AppController::onARFrame(const cv::Mat &frame,
             cv::Mat rvec, tvec, R;
             PoseUtils::fromTransform(T_from_tags, rvec, tvec);
             cv::Rodrigues(rvec, R);
-
-            // Compute reproj error without frame rotation: same as computeReprojError but uses
-            // only position (t_frame_tag), ignoring rotation (R_frame_tag). This verifies that
-            // tags are at correct positions, but isn't affected by rotation calibration errors.
-            dbgReprojPx = computeReprojErrorNoFrameRotation(detections, rvec, tvec);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
             // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
@@ -789,8 +778,8 @@ void AppController::onARFrame(const cv::Mat &frame,
             }
             m_streakPoses.push_back(world_T_camera_cv * T_from_tags);
             DebugLogger::logEvent("AppController::onARFrame",
-                QString("STREAK PROGRESS: %1/10 frames (corners=%2, angle=%.1f°, reproj=%.2fpx)")
-                .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
+                QString("STREAK PROGRESS: %1/10 frames (corners=%2, angle=%.1f°)")
+                .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg));
 
             if (static_cast<int>(m_streakPoses.size()) >= 10) {
                 // SO(3)-average the 10 world_T_leksell candidates.
@@ -824,8 +813,8 @@ void AppController::onARFrame(const cv::Mat &frame,
             // Streak broken — reset accumulator.
             if (!m_streakPoses.empty()) {
                 DebugLogger::logEvent("AppController::onARFrame",
-                    QString("STREAK BROKEN at frame %1/10: conditions not met (corners=%2, angle=%.1f°, reproj=%.2fpx)")
-                    .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg).arg(dbgReprojPx));
+                    QString("STREAK BROKEN at frame %1/10: conditions not met (corners=%2, angle=%.1f°)")
+                    .arg(m_streakPoses.size()).arg(dbgCorners).arg(dbgAngleDeg));
                 m_streakPoses.clear();
                 emit calibrationProgressChanged(false);
             }
@@ -1090,11 +1079,8 @@ void AppController::onARFrame(const cv::Mat &frame,
                 if (dbgAngleDeg >= 0.0) {
                     std::snprintf(buf, sizeof(buf), "angle:  %.1f deg  (need >=175)", dbgAngleDeg);
                     dbg(buf, dbgAngleDeg >= 175.0);
-                    std::snprintf(buf, sizeof(buf), "reproj: %.2f px  (need <=%.2f)", dbgReprojPx, m_maxInitReprojPx);
-                    dbg(buf, dbgReprojPx >= 0.0 && dbgReprojPx <= m_maxInitReprojPx);
                 } else {
                     dbg("angle:  -- (no pose)", false);
-                    dbg("reproj: -- (no pose)", false);
                 }
             }
         }
@@ -1266,10 +1252,7 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
 
     if (angleDeg < 175.0) return false;
 
-    // Compute reproj error without frame rotation: same as computeReprojError but uses
-    // only position (t_frame_tag), ignoring rotation (R_frame_tag). This verifies that
-    // tags are at correct positions, but isn't affected by rotation calibration errors.
-    return computeReprojErrorNoFrameRotation(detections, rvec, tvec) <= m_maxInitReprojPx;
+    return true;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
@@ -1299,96 +1282,6 @@ double AppController::computeReprojError(const std::vector<TagPose> &detections,
                 t_col = t_col.t();  // Transpose (1, 3) to (3, 1)
             }
             const cv::Mat pf = cfg->R_frame_tag * p + t_col;
-            objPts.emplace_back(
-                static_cast<float>(pf.at<double>(0)),
-                static_cast<float>(pf.at<double>(1)),
-                static_cast<float>(pf.at<double>(2)));
-            imgPts.push_back(det.corners[c]);
-        }
-    }
-
-    if (objPts.empty()) return 1e9;
-
-    std::vector<cv::Point2f> projected;
-    cv::projectPoints(objPts, rvec, tvec, m_K, m_dist, projected);
-
-    double err = 0.0;
-    for (size_t i = 0; i < projected.size(); ++i) {
-        const double dx = projected[i].x - imgPts[i].x;
-        const double dy = projected[i].y - imgPts[i].y;
-        err += dx * dx + dy * dy;
-    }
-    return std::sqrt(err / projected.size());
-}
-
-double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections,
-                                                         const cv::Mat              &rvec,
-                                                         const cv::Mat              &tvec) const
-{
-    std::vector<cv::Point3f> objPts;
-    std::vector<cv::Point2f> imgPts;
-
-    // CRITICAL TRANSFORMATION CHAIN (verify this is correct):
-    // - rvec, tvec: decomposed from T_from_tags via PoseUtils::fromTransform
-    // - T_from_tags: camera-to-Leksell transform (from fusePoses)
-    // - cv::projectPoints(pts, rvec, tvec): expects object->camera transform
-    //   So pts should be in Leksell frame, and [R|t] should transform Leksell->camera
-    //   But we have camera->Leksell from T_from_tags, so cv::projectPoints may need inversion!
-    // Extract fused camera-to-Leksell rotation
-    cv::Mat R_fused;
-    cv::Rodrigues(rvec, R_fused);
-
-    for (const auto &det : detections) {
-        const TagConfig *cfg = nullptr;
-        for (const auto &c : m_tagConfigs)
-            if (c.id == det.id) { cfg = &c; break; }
-        if (!cfg || det.corners.size() != 4) continue;
-
-        // Extract detected camera-to-marker rotation and position
-        cv::Mat R_det;
-        cv::Rodrigues(det.rvec, R_det);
-
-        // CRITICAL FIX: Use DETECTED rotation with CONFIGURED position
-        // But: configured position must be interpreted relative to DETECTED rotation, not configured rotation!
-        //
-        // The configured position (cfg->t_frame_tag) is the marker's origin position in Leksell.
-        // It's defined for the configured rotation (cfg->R_frame_tag).
-        // But the marker's ACTUAL rotation is different (R_det from detection).
-        //
-        // The marker corners in Leksell space are:
-        //   p_leksell = R_actual * p_marker + t_actual
-        //
-        // where R_actual is the detected rotation (via R_marker_leksell)
-        // and t_actual is cfg->t_frame_tag (the configured position is absolute, not rotation-dependent)
-        //
-        // This way:
-        // - Reproj error STILL verifies that tags are at configured positions ✓
-        // - Reproj error is NOT affected by rotation calibration (uses detected rotation) ✓
-
-        // Derive marker-to-Leksell rotation
-        // R_det: marker-to-camera (from solvePnP)
-        // R_fused: Leksell-to-camera (from T_from_tags decomposition)
-        // R_fused.t(): camera-to-Leksell (inverse)
-        // Chain: marker → camera (R_det) → Leksell (R_fused.t())
-        cv::Mat R_marker_leksell = R_det * R_fused.t();
-
-        // Use configured position directly (position is absolute, independent of rotation)
-        cv::Mat t_col = cfg->t_frame_tag.clone();
-        if (t_col.rows == 1 && t_col.cols == 3) {
-            t_col = t_col.t();
-        }
-
-        const float h = m_markerSize / 2.f;
-        const cv::Point3f local[4] = {
-            {-h,  h, 0.f}, { h,  h, 0.f},
-            { h, -h, 0.f}, {-h, -h, 0.f}
-        };
-        for (int c = 0; c < 4; ++c) {
-            const cv::Mat p = (cv::Mat_<double>(3,1)
-                << local[c].x, local[c].y, local[c].z);
-            // Transform using DETECTED rotation + CONFIGURED position
-            // This verifies position while being independent of rotation calibration errors
-            const cv::Mat pf = R_marker_leksell * p + t_col;
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
                 static_cast<float>(pf.at<double>(1)),

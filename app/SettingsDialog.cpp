@@ -550,8 +550,7 @@ public:
         double  tz_m[2];
     };
 
-    explicit CalibrationSettingsDialog(double             reprojThresh,
-                                       double             moveTransMm,
+    explicit CalibrationSettingsDialog(double             moveTransMm,
                                        double             moveRotDeg,
                                        const TagPositions &tagPos,
                                        QWidget            *parent = nullptr)
@@ -620,23 +619,6 @@ public:
         auto *scrollVBox = new QVBoxLayout(scrollContent);
         scrollVBox->setContentsMargins(0, 0, 0, 0);
         scrollVBox->setSpacing(16);
-
-        // ── Reprojection threshold ─────────────────────────────────────────────
-        auto *reprojBox = new QGroupBox(tr("Seuil d'erreur de reprojection"), scrollContent);
-        auto *reprojForm = new QFormLayout(reprojBox);
-        reprojForm->setContentsMargins(16, 20, 16, 16);
-        reprojForm->setVerticalSpacing(8);
-        reprojForm->setHorizontalSpacing(16);
-        reprojForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-
-        m_reprojSB = new CalibSpinBox(reprojBox);
-        m_reprojSB->setRange(0.1, 10.0);
-        m_reprojSB->setDecimals(2);
-        m_reprojSB->setSingleStep(0.1);
-        m_reprojSB->setSuffix(" px");
-        m_reprojSB->setValue(reprojThresh);
-        reprojForm->addRow(tr("Seuil (px) :"), m_reprojSB);
-        scrollVBox->addWidget(reprojBox);
 
         // ── Movement thresholds (non-LiDAR recalibration trigger) ─────────────
         auto *moveBox  = new QGroupBox(tr("Seuils de mouvement (recalibration)"), scrollContent);
@@ -749,7 +731,6 @@ public:
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         connect(btnApply,  &QPushButton::clicked, this, [this]() {
             DebugLogger::logEvent("CalibrationSettingsDialog", "apply clicked");
-            emit reprojThresholdApplied(m_reprojSB->value());
             emit movementThresholdsApplied(m_moveTransSB->value(), m_moveRotSB->value());
             for (int t = 0; t < 2; ++t) {
                 emit tagPositionApplied(t,
@@ -821,7 +802,6 @@ private:
     }
 
 signals:
-    void reprojThresholdApplied(double px);
     void movementThresholdsApplied(double transMm, double rotDeg);
     void tagPositionApplied(int tagId, double tx_m, double ty_m, double tz_m);
     void tagRotationApplied(int tagId, double rx_rad, double ry_rad, double rz_rad);
@@ -855,7 +835,6 @@ protected:
     }
 
 private:
-    CalibSpinBox *m_reprojSB     = nullptr;
     CalibSpinBox *m_moveTransSB  = nullptr;
     CalibSpinBox *m_moveRotSB    = nullptr;
     CalibSpinBox *m_tagPosSB[2][3] = {};
@@ -868,7 +847,6 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 
 SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
-                               double                        currentReprojThreshold,
                                double                        currentMoveTransMm,
                                double                        currentMoveRotDeg,
                                const TagPositions           &currentTagPositions,
@@ -877,7 +855,6 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
                                QWidget                      *parent)
     : QDialog(parent)
     , m_style(currentStyle)
-    , m_reprojThreshold(currentReprojThreshold)
     , m_moveTransMm(currentMoveTransMm)
     , m_moveRotDeg(currentMoveRotDeg)
     , m_tagPositions(currentTagPositions)
@@ -1109,15 +1086,9 @@ SettingsDialog::SettingsDialog(const OverlayRenderer::Style &currentStyle,
 
     connect(btnCalib, &QPushButton::clicked, this, [this]() {
         DebugLogger::logEvent("SettingsDialog", "btnCalib clicked: creating CalibrationSettingsDialog");
-        auto *dlg = new CalibrationSettingsDialog(m_reprojThreshold, m_moveTransMm, m_moveRotDeg,
+        auto *dlg = new CalibrationSettingsDialog(m_moveTransMm, m_moveRotDeg,
                                                   m_tagPositions, nullptr);
         DebugLogger::logEvent("SettingsDialog", "btnCalib: created dialog ptr=" + QString::number((quint64)dlg) + ", connecting signals");
-        connect(dlg, &CalibrationSettingsDialog::reprojThresholdApplied, this,
-                [this](double px) {
-            DebugLogger::logEvent("SettingsDialog", "btnCalib: reprojThresholdApplied signal received");
-            m_reprojThreshold = px;
-            emit reprojThresholdChanged(px);
-        });
         connect(dlg, &CalibrationSettingsDialog::movementThresholdsApplied, this,
                 [this](double transMm, double rotDeg) {
             DebugLogger::logEvent("SettingsDialog", "btnCalib: movementThresholdsApplied signal received");

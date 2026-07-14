@@ -57,7 +57,6 @@ private:
 
     // Local copies of current settings — passed to SettingsDialog on open
     OverlayRenderer::Style m_renderStyle;
-    double                 m_reprojThreshold    = 3.0;
     double                 m_moveTransMm        = 10.0; // mm
     double                 m_moveRotDeg         = 1.0;  // degrees
     TagPositions           m_tagPositions;

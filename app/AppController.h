@@ -48,7 +48,6 @@ public slots:
     void setShowDepthOverlay(bool show);
     void setShowDepthVisualization(bool show);
     void setRenderStyle(OverlayRenderer::Style style);
-    void setReprojThreshold(double px);
     void setMovementThresholds(double transMm, double rotDeg);
     void setTagPosition(int tagId, double tx_m, double ty_m, double tz_m);
     void setTagRotation(int tagId, double rx_rad, double ry_rad, double rz_rad);
@@ -122,9 +121,6 @@ private:
     double computeReprojError(const std::vector<TagPose>  &detections,
                               const cv::Mat               &rvec,
                               const cv::Mat               &tvec) const;
-    double computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections,
-                                            const cv::Mat               &rvec,
-                                            const cv::Mat               &tvec) const;
 #endif
 
     cv::Point3d applyTagFrameRotation(const cv::Point3d &point_leksell) const;
@@ -147,7 +143,6 @@ private:
 
     bool   m_showDepthOverlay       = false;
     bool   m_showDepthVisualization = true;
-    double m_maxInitReprojPx  = 3.0; // RMS reprojection error cap (px); used by iOS init
     double m_moveTransThresh  = 0.003; // translation delta (m) that counts as camera movement
     double m_moveRotThresh    = 0.3;   // rotation delta (°) that counts as camera movement
 
