@@ -1354,28 +1354,25 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
 
     const TagConfig &tag = m_tagConfigs[0]; // use first tag as reference frame
 
-    // Apply rotation around tag origin:
-    // 1. Translate point to tag frame origin (subtract tag position)
-    // 2. Apply rotation (R_frame_tag)
-    // 3. Translate back to Leksell (add tag position)
+    // Pipeline: Transform to tag frame → Apply rotation in tag frame → Transform back to Leksell
+    // This ensures rotation happens in the correct frame relative to the tag's position and orientation
 
-    // Extract tag position (t_frame_tag is a 3x1 matrix)
-    cv::Mat t_tag = tag.t_frame_tag;
-    if (t_tag.rows == 1 && t_tag.cols == 3) {
-        t_tag = t_tag.t();
-    }
+    // Step 1: Compute inverse of T_frame_tag (Leksell → tag frame)
+    cv::Mat R = tag.T_frame_tag.rowRange(0, 3).colRange(0, 3);
+    cv::Mat t = tag.T_frame_tag.rowRange(0, 3).col(3);
+    cv::Mat R_inv = R.t();
+    cv::Mat t_inv = -R_inv * t;
 
-    // Point relative to tag origin
-    cv::Mat p_rel = (cv::Mat_<double>(3, 1)
-        << point_leksell.x - t_tag.at<double>(0),
-           point_leksell.y - t_tag.at<double>(1),
-           point_leksell.z - t_tag.at<double>(2));
+    // Step 2: Transform point to tag frame
+    cv::Mat p_leksell = (cv::Mat_<double>(3, 1) << point_leksell.x, point_leksell.y, point_leksell.z);
+    cv::Mat p_tag = R_inv * p_leksell + t_inv;
 
-    // Apply rotation
-    cv::Mat p_rotated = tag.R_frame_tag * p_rel;
+    // Step 3: Apply rotation in tag frame
+    // R_frame_tag contains the combined rotation (rx, ry, rz) from tag configuration
+    cv::Mat p_tag_rotated = tag.R_frame_tag * p_tag;
 
-    // Transform back to absolute Leksell coordinates
-    cv::Mat p_final = p_rotated + t_tag;
+    // Step 4: Transform back to Leksell frame
+    cv::Mat p_final = R * p_tag_rotated + t;
 
     return cv::Point3d(p_final.at<double>(0),
                        p_final.at<double>(1),
