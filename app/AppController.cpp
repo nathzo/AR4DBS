@@ -1328,6 +1328,12 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
     std::vector<cv::Point3f> objPts;
     std::vector<cv::Point2f> imgPts;
 
+    // CRITICAL TRANSFORMATION CHAIN (verify this is correct):
+    // - rvec, tvec: decomposed from T_from_tags via PoseUtils::fromTransform
+    // - T_from_tags: camera-to-Leksell transform (from fusePoses)
+    // - cv::projectPoints(pts, rvec, tvec): expects object->camera transform
+    //   So pts should be in Leksell frame, and [R|t] should transform Leksell->camera
+    //   But we have camera->Leksell from T_from_tags, so cv::projectPoints may need inversion!
     // Extract fused camera-to-Leksell rotation
     cv::Mat R_fused;
     cv::Rodrigues(rvec, R_fused);
@@ -1338,13 +1344,36 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
             if (c.id == det.id) { cfg = &c; break; }
         if (!cfg || det.corners.size() != 4) continue;
 
-        // Extract detected camera-to-marker rotation
+        // Extract detected camera-to-marker rotation and position
         cv::Mat R_det;
         cv::Rodrigues(det.rvec, R_det);
 
-        // Derive marker-to-Leksell rotation: R_fused.t() * R_det
-        // This correctly orients the marker in Leksell space without using cfg->R_frame_tag
-        cv::Mat R_marker_leksell = R_fused.t() * R_det;
+        // CRITICAL FIX: Use DETECTED rotation with CONFIGURED position
+        // But: configured position must be interpreted relative to DETECTED rotation, not configured rotation!
+        //
+        // The configured position (cfg->t_frame_tag) is the marker's origin position in Leksell.
+        // It's defined for the configured rotation (cfg->R_frame_tag).
+        // But the marker's ACTUAL rotation is different (R_det from detection).
+        //
+        // The marker corners in Leksell space are:
+        //   p_leksell = R_actual * p_marker + t_actual
+        //
+        // where R_actual is the detected rotation (via R_marker_leksell)
+        // and t_actual is cfg->t_frame_tag (the configured position is absolute, not rotation-dependent)
+        //
+        // This way:
+        // - Reproj error STILL verifies that tags are at configured positions ✓
+        // - Reproj error is NOT affected by rotation calibration (uses detected rotation) ✓
+
+        // Derive marker-to-Leksell rotation: R_fused * R_det
+        // Chain: marker → camera (R_det) → Leksell (R_fused)
+        cv::Mat R_marker_leksell = R_fused * R_det;
+
+        // Use configured position directly (position is absolute, independent of rotation)
+        cv::Mat t_col = cfg->t_frame_tag.clone();
+        if (t_col.rows == 1 && t_col.cols == 3) {
+            t_col = t_col.t();
+        }
 
         const float h = m_markerSize / 2.f;
         const cv::Point3f local[4] = {
@@ -1354,13 +1383,8 @@ double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPos
         for (int c = 0; c < 4; ++c) {
             const cv::Mat p = (cv::Mat_<double>(3,1)
                 << local[c].x, local[c].y, local[c].z);
-            // Transform marker corner to Leksell using derived rotation + configured position
-            // This verifies inter-tag positions without being affected by configured rotation errors
-            // Ensure proper shape for matrix addition: both must be (3, 1)
-            cv::Mat t_col = cfg->t_frame_tag.clone();
-            if (t_col.rows == 1 && t_col.cols == 3) {
-                t_col = t_col.t();  // Transpose (1, 3) to (3, 1)
-            }
+            // Transform using DETECTED rotation + CONFIGURED position
+            // This verifies position while being independent of rotation calibration errors
             const cv::Mat pf = R_marker_leksell * p + t_col;
             objPts.emplace_back(
                 static_cast<float>(pf.at<double>(0)),
