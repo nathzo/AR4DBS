@@ -739,7 +739,7 @@ void AppController::onARFrame(const cv::Mat &frame,
 
             // Compute reproj error using individual camera-to-tag-marker poses (naturally unrotated)
             // This verifies position accuracy independent of frame rotation calibration
-            dbgReprojPx = computeReprojErrorNoFrameRotation(detections, cv::Mat(), cv::Mat());
+            dbgReprojPx = computeReprojErrorNoFrameRotation(detections);
 
             // Compute angle to the tag plane normal (completely configuration-independent)
             // Use individual camera-to-tag-marker poses and fuse rotations via SO(3) averaging
@@ -1262,7 +1262,7 @@ bool AppController::meetsInitConditions(const std::vector<TagPose> &detections,
 
     // Compute reproj error using individual camera-to-tag-marker poses (naturally unrotated)
     // This verifies position accuracy independent of frame rotation calibration
-    return computeReprojErrorNoFrameRotation(detections, cv::Mat(), cv::Mat()) <= m_maxInitReprojPx;
+    return computeReprojErrorNoFrameRotation(detections) <= m_maxInitReprojPx;
 }
 
 double AppController::computeReprojError(const std::vector<TagPose> &detections,
@@ -1309,9 +1309,7 @@ double AppController::computeReprojError(const std::vector<TagPose> &detections,
     return std::sqrt(err / projected.size());
 }
 
-double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections,
-                                                        const cv::Mat              &rvec,
-                                                        const cv::Mat              &tvec) const
+double AppController::computeReprojErrorNoFrameRotation(const std::vector<TagPose> &detections) const
 {
     // Use individual camera-to-tag-marker poses (det.rvec, det.tvec) which are naturally unrotated
     // Each detection has its own pose, so we compute error for each tag separately then combine
