@@ -1364,26 +1364,29 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
 
     const TagConfig &tag = m_tagConfigs[0]; // use first tag as reference frame
 
-    // Pipeline: Transform to tag frame → Apply all rotations in tag frame → Transform back to Leksell
-    // Apply all rotations (rx, ry-π, rz) as configured, with ry offset by -π
+    // T_frame_tag transforms from tag frame to Leksell frame
+    // We need the inverse: from Leksell to tag frame
+    cv::Mat T_inv = cv::Mat::zeros(4, 4, CV_64F);
+    T_inv.at<double>(3, 3) = 1.0;
 
-    // Step 1: Compute inverse of T_frame_tag (Leksell → tag frame)
+    // Invert: R_inv = R^T, t_inv = -R^T * t
     cv::Mat R = tag.T_frame_tag.rowRange(0, 3).colRange(0, 3);
     cv::Mat t = tag.T_frame_tag.rowRange(0, 3).col(3);
     cv::Mat R_inv = R.t();
     cv::Mat t_inv = -R_inv * t;
 
-    // Step 2: Transform point to tag frame
-    cv::Mat p_leksell = (cv::Mat_<double>(3, 1) << point_leksell.x, point_leksell.y, point_leksell.z);
-    cv::Mat p_tag = R_inv * p_leksell + t_inv;
+    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
+    t_inv.copyTo(T_inv.rowRange(0, 3).col(3));
 
-    // Step 3: Apply all rotations in tag frame (R_frame_tag already includes ry-π adjustment)
-    cv::Mat p_tag_rotated = tag.R_frame_tag * p_tag;
+    // Transform to tag frame
+    cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
+    cv::Mat p_tag = T_inv * p_leksell;
 
-    // Step 4: Transform back to Leksell frame
-    cv::Mat p_final = R * p_tag_rotated + t;
+    // Transform back to Leksell frame using T_frame_tag which includes all rotation/translation
+    // from the calibrated tag configuration (rx, ry-π, rz, tx, ty, tz)
+    cv::Mat p_final = tag.T_frame_tag * p_tag;
 
-    return cv::Point3d(p_final.at<double>(0),
-                       p_final.at<double>(1),
-                       p_final.at<double>(2));
+    return cv::Point3d(p_final.at<double>(0, 0),
+                       p_final.at<double>(1, 0),
+                       p_final.at<double>(2, 0));
 }
