@@ -123,23 +123,16 @@ void AppController::setTagRotation(int tagId, double rx_rad, double ry_rad, doub
 {
     for (auto &cfg : m_tagConfigs) {
         if (cfg.id != tagId) continue;
-        // Update stored rotation angles (as specified by user)
         cfg.rx_rad = rx_rad;
-        cfg.ry_rad = ry_rad;
-        cfg.rz_rad = rz_rad;
-        // Subtract π from ry systematically to remove the 180° offset
-        double ry_adjusted = ry_rad - M_PI;
-        cv::Mat rvec = (cv::Mat_<double>(3, 1) << rx_rad, ry_adjusted, rz_rad);
-        // Ensure position is always (3, 1) independent matrix
+        cv::Mat rvec = (cv::Mat_<double>(3, 1) << rx_rad, ry_rad, rz_rad);
         cv::Mat tvec = cfg.t_frame_tag.clone();
         if (tvec.rows == 1 && tvec.cols == 3) {
-            tvec = tvec.t();  // Transpose (1, 3) to (3, 1) if needed
+            tvec = tvec.t();
         }
-        cfg.t_frame_tag = tvec;  // Keep position as independent (3, 1)
-        // Reconstruct T_frame_tag from independent components (all rotations with ry offset by -π)
-        cfg.T_frame_tag = PoseUtils::toTransform(rvec, cfg.t_frame_tag);
-        // Update rotation matrix directly from adjusted rvec
-        cv::Rodrigues(rvec, cfg.R_frame_tag);
+        cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
+        cv::Mat r_tmp;
+        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
+        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
         break;
     }
 }
@@ -338,7 +331,6 @@ cv::Mat AppController::fusePoses(const std::vector<TagPose> &detections) const
 
         // Per-tag frame pose (IPPE_SQUARE result)
         const cv::Mat T_cam_tag = PoseUtils::toTransform(det.rvec, det.tvec);
-        // Use full T_frame_tag with all rotations (rx, ry-π, rz)
         framePoses.push_back(T_cam_tag * cfg->T_frame_tag.inv());
 
         // Leksell-frame 3-D positions of this tag's 4 corners.
@@ -1340,8 +1332,9 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
         const auto obj = entry.toObject();
         TagConfig cfg;
         cfg.id = obj["id"].toInt();
+        cfg.rx_rad = obj["rx_rad"].toDouble(0);
         cv::Mat rvec = (cv::Mat_<double>(3,1)
-            << obj["rx_rad"].toDouble(0), obj["ry_rad"].toDouble(0), obj["rz_rad"].toDouble(0));
+            << cfg.rx_rad, obj["ry_rad"].toDouble(0), obj["rz_rad"].toDouble(0));
         cv::Mat tvec = (cv::Mat_<double>(3,1)
             << obj["tx_m"].toDouble(0), obj["ty_m"].toDouble(0), obj["tz_m"].toDouble(0));
         cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
@@ -1377,8 +1370,8 @@ cv::Point3d AppController::applyTagFrameRotation(const cv::Point3d &point_leksel
     cv::Mat p_leksell = (cv::Mat_<double>(4, 1) << point_leksell.x, point_leksell.y, point_leksell.z, 1.0);
     cv::Mat p_tag = T_inv * p_leksell;
 
-    // Apply +45° rotation around X axis in tag frame
-    const double tiltAngle = 0.7853981633974483; // +45° in radians
+    // Apply rotation around X axis in tag frame using configured rx value
+    const double tiltAngle = tag.rx_rad;
     cv::Mat R_tilt = cv::Mat::eye(3, 3, CV_64F);
     double c = cos(tiltAngle), s = sin(tiltAngle);
     R_tilt.at<double>(1, 1) = c;   R_tilt.at<double>(1, 2) = -s;
