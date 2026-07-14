@@ -130,12 +130,16 @@ void AppController::setTagRotation(int tagId, double rx_rad, double ry_rad, doub
         if (cfg.id != tagId) continue;
         // Convert Euler angles to rotation matrix
         cv::Mat rvec = (cv::Mat_<double>(3, 1) << rx_rad, ry_rad, rz_rad);
-        // Preserve current position: only update rotation, not translation
+        // Ensure position is always (3, 1) independent matrix
         cv::Mat tvec = cfg.t_frame_tag.clone();
-        cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
-        // Update rotation matrix directly without re-extracting position
+        if (tvec.rows == 1 && tvec.cols == 3) {
+            tvec = tvec.t();  // Transpose (1, 3) to (3, 1) if needed
+        }
+        cfg.t_frame_tag = tvec;  // Keep position as independent (3, 1)
+        // Reconstruct T_frame_tag from independent components
+        cfg.T_frame_tag = PoseUtils::toTransform(rvec, cfg.t_frame_tag);
+        // Update rotation matrix directly from rvec
         cv::Rodrigues(rvec, cfg.R_frame_tag);
-        // Position remains unchanged — cfg.t_frame_tag is NOT re-extracted
         break;
     }
 }
@@ -1412,12 +1416,13 @@ std::vector<TagConfig> AppController::loadTagConfigs(const QString &path)
         cfg.id = obj["id"].toInt();
         cv::Mat rvec = (cv::Mat_<double>(3,1)
             << obj["rx_rad"].toDouble(0), obj["ry_rad"].toDouble(0), obj["rz_rad"].toDouble(0));
-        cv::Mat tvec = (cv::Mat_<double>(3,1)
+        // Load position as independent (3, 1) directly from JSON — NOT derived from T_frame_tag
+        cfg.t_frame_tag = (cv::Mat_<double>(3,1)
             << obj["tx_m"].toDouble(0), obj["ty_m"].toDouble(0), obj["tz_m"].toDouble(0));
-        cfg.T_frame_tag = PoseUtils::toTransform(rvec, tvec);
-        cv::Mat r_tmp;
-        PoseUtils::fromTransform(cfg.T_frame_tag, r_tmp, cfg.t_frame_tag);
-        cv::Rodrigues(r_tmp, cfg.R_frame_tag);
+        // Create T_frame_tag from independent components
+        cfg.T_frame_tag = PoseUtils::toTransform(rvec, cfg.t_frame_tag);
+        // Rotation matrix directly from rvec — NOT derived from T_frame_tag decomposition
+        cv::Rodrigues(rvec, cfg.R_frame_tag);
         configs.push_back(std::move(cfg));
     }
     return configs;
